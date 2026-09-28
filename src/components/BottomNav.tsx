@@ -12,6 +12,7 @@ import {
   ArrowDown,
   CreditCard,
   Plus,
+  Search,
 } from 'lucide-react'
 import TransferModal from './TransferModal'
 import FAB from './FAB'
@@ -124,7 +125,7 @@ export default function BottomNav() {
         aria-hidden={!isOpen}
       >
         <div className="rounded-[24px] border border-gray-200/80 bg-white/95 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.20)] backdrop-blur-xl dark:border-slate-700 dark:bg-slate-800/95">
-          <div className="grid grid-cols-4 gap-1">
+          <div className="grid grid-cols-5 gap-1">
             <button
               type="button"
               onClick={() => {
@@ -175,6 +176,10 @@ export default function BottomNav() {
               <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300">
                 Cartão
               </span>
+            </button>
+
+            <button type="button" onClick={() => handleNavigate('/search')} className="flex min-w-0 flex-col items-center gap-2 rounded-[18px] px-1 py-3 transition-colors active:scale-[0.96] active:bg-gray-100 dark:active:bg-slate-700" aria-label="Busca global">
+              <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-violet-50 dark:bg-violet-950/40"><Search size={21} className="text-violet-600 dark:text-violet-400" /></div><span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300">Buscar</span>
             </button>
 
             <button

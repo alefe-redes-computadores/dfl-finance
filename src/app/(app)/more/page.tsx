@@ -728,8 +728,10 @@ export default function MorePage() {
         <div>
           <SectionTitle>Aplicativo e dados</SectionTitle>
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 space-y-1">
+            <MenuItem iconName="search" label="Busca global" href="/search" colorClass="text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30" />
             <MenuItem iconName="settings" label="Configurações do App" onClick={() => setShowSettingsModal(true)} colorClass="text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-700" />
             <MenuItem iconName="download" label="Exportar Dados" onClick={() => setShowExportModal(true)} colorClass="text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700" />
+            <MenuItem iconName="shield-check" label="Backup e recuperação" href="/data-safety" colorClass="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
           </div>
         </div>
       </div>
