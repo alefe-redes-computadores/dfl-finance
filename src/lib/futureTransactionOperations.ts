@@ -45,113 +45,72 @@ function isRepairableFutureScheduledTransaction(
   )
 }
 
-export async function repairFutureScheduledTransactions(
-  userId: string
-) {
+const activeRepairs = new Map<
+  string,
+  Promise<{
+    repairedTransactions: number
+    repairedAccounts: number
+    restoredNetAmount: number
+  }>
+>()
+
+async function runFutureScheduledRepair(userId: string) {
   if (!userId) {
-    return {
-      repairedTransactions: 0,
-      repairedAccounts: 0,
-      restoredNetAmount: 0,
-    }
+    return { repairedTransactions: 0, repairedAccounts: 0, restoredNetAmount: 0 }
   }
 
   const todayIso = todayLocalIso()
-
-  const candidates = (
-    await db.transactions
-      .where('user_id')
-      .equals(userId)
-      .toArray()
-  ).filter((tx) =>
-    isRepairableFutureScheduledTransaction(
-      tx,
-      todayIso
-    )
+  const candidateIds = (
+    await db.transactions.where('user_id').equals(userId).toArray()
   )
+    .filter((tx) => isRepairableFutureScheduledTransaction(tx, todayIso))
+    .map((tx) => tx.id)
 
-  if (candidates.length === 0) {
-    return {
-      repairedTransactions: 0,
-      repairedAccounts: 0,
-      restoredNetAmount: 0,
-    }
+  if (candidateIds.length === 0) {
+    return { repairedTransactions: 0, repairedAccounts: 0, restoredNetAmount: 0 }
   }
 
-  const accountDeltaCents =
-    new Map<string, number>()
-
-  for (const tx of candidates) {
-    if (!tx.account_id) continue
-
-    const amountCents = cents(tx.amount)
-
-    const balanceDelta =
-      tx.type === 'income'
-        ? -amountCents
-        : amountCents
-
-    accountDeltaCents.set(
-      tx.account_id,
-      (accountDeltaCents.get(tx.account_id) || 0) +
-        balanceDelta
-    )
-  }
-
-  const accountIds =
-    Array.from(accountDeltaCents.keys())
-
-  const accounts = (
-    await Promise.all(
-      accountIds.map((id) =>
-        db.accounts.get(id)
-      )
-    )
-  ).filter(Boolean) as LocalAccount[]
-
-  const accountById = new Map(
-    accounts.map((account) => [
-      account.id,
-      account,
-    ])
-  )
-
-  for (const accountId of accountIds) {
-    const account = accountById.get(accountId)
-
-    if (
-      !account ||
-      account.user_id !== userId
-    ) {
-      throw new Error(
-        'Conta de um lançamento futuro não foi encontrada.'
-      )
-    }
-  }
-
-  const now = new Date().toISOString()
+  let repairedTransactions = 0
+  let repairedAccounts = 0
+  let restoredNetCents = 0
 
   await db.transaction(
     'rw',
-    [
-      db.accounts,
-      db.transactions,
-      db.syncQueue,
-    ],
+    [db.accounts, db.transactions, db.syncQueue],
     async () => {
-      for (const tx of candidates) {
-        const fresh =
-          await db.transactions.get(tx.id)
+      /*
+       * V61: o delta nasce SOMENTE após a releitura autoritativa.
+       * Assim, duas chamadas que enxerguem o mesmo candidato fora
+       * da transação não conseguem devolver o saldo duas vezes.
+       */
+      const committedDeltaCents = new Map<string, number>()
+      const now = new Date().toISOString()
+
+      for (const txId of candidateIds) {
+        const fresh = await db.transactions.get(txId)
 
         if (
           !fresh ||
-          !isRepairableFutureScheduledTransaction(
-            fresh,
-            todayIso
-          )
+          fresh.user_id !== userId ||
+          !isRepairableFutureScheduledTransaction(fresh, todayIso) ||
+          !fresh.account_id
         ) {
           continue
         }
+
+        const freshAccount = await db.accounts.get(fresh.account_id)
+        if (!freshAccount || freshAccount.user_id !== userId) {
+          throw new Error('Conta de um lançamento futuro não foi encontrada.')
+        }
+
+        const amountCents = cents(fresh.amount)
+        const balanceDelta =
+          fresh.type === 'income' ? -amountCents : amountCents
+
+        committedDeltaCents.set(
+          fresh.account_id,
+          (committedDeltaCents.get(fresh.account_id) || 0) + balanceDelta
+        )
 
         const updatedTransaction: LocalTransaction = {
           ...fresh,
@@ -161,10 +120,7 @@ export async function repairFutureScheduledTransactions(
           sync_status: 'pending',
         }
 
-        await db.transactions.put(
-          updatedTransaction
-        )
-
+        await db.transactions.put(updatedTransaction)
         await addToSyncQueue(
           userId,
           'transactions',
@@ -172,40 +128,23 @@ export async function repairFutureScheduledTransactions(
           fresh.id,
           updatedTransaction
         )
+        repairedTransactions += 1
       }
 
-      for (
-        const [accountId, deltaCents] of
-        Array.from(
-          accountDeltaCents.entries()
-        )
-      ) {
-        const freshAccount =
-          await db.accounts.get(accountId)
-
-        if (
-          !freshAccount ||
-          freshAccount.user_id !== userId
-        ) {
-          throw new Error(
-            'Conta de um lançamento futuro não foi encontrada.'
-          )
+      for (const [accountId, deltaCents] of Array.from(committedDeltaCents.entries())) {
+        const freshAccount = await db.accounts.get(accountId)
+        if (!freshAccount || freshAccount.user_id !== userId) {
+          throw new Error('Conta de um lançamento futuro não foi encontrada.')
         }
 
         const updatedAccount: LocalAccount = {
           ...freshAccount,
-          balance: money(
-            cents(freshAccount.balance) +
-              deltaCents
-          ),
+          balance: money(cents(freshAccount.balance) + deltaCents),
           updated_at: now,
           sync_status: 'pending',
         }
 
-        await db.accounts.put(
-          updatedAccount
-        )
-
+        await db.accounts.put(updatedAccount)
         await addToSyncQueue(
           userId,
           'accounts',
@@ -213,24 +152,34 @@ export async function repairFutureScheduledTransactions(
           accountId,
           updatedAccount
         )
+
+        repairedAccounts += 1
+        restoredNetCents += deltaCents
       }
     }
   )
 
-  const restoredNetCents =
-    Array.from(
-      accountDeltaCents.values()
-    ).reduce(
-      (sum, value) => sum + value,
-      0
-    )
-
   return {
-    repairedTransactions:
-      candidates.length,
-    repairedAccounts:
-      accountDeltaCents.size,
-    restoredNetAmount:
-      money(restoredNetCents),
+    repairedTransactions,
+    repairedAccounts,
+    restoredNetAmount: money(restoredNetCents),
   }
+}
+
+export function repairFutureScheduledTransactions(userId: string) {
+  /*
+   * Single-flight por usuário: Transações e Detalhes da Conta
+   * podem montar juntas, mas compartilham a mesma execução.
+   */
+  const running = activeRepairs.get(userId)
+  if (running) return running
+
+  const promise = runFutureScheduledRepair(userId).finally(() => {
+    if (activeRepairs.get(userId) === promise) {
+      activeRepairs.delete(userId)
+    }
+  })
+
+  activeRepairs.set(userId, promise)
+  return promise
 }

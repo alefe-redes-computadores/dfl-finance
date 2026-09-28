@@ -760,6 +760,74 @@ async function runSyncCycle(
             item.table
           )
 
+          /*
+           * V61 — accounts.balance é snapshot financeiro.
+           * Um snapshot remoto que mudou depois do início desta
+           * fila local nunca é sobrescrito silenciosamente.
+           */
+          if (
+            item.table === 'accounts' &&
+            item.operation === 'update'
+          ) {
+            const { data: remoteAccount, error: remoteReadError } =
+              await supabaseClient
+                .select('id, user_id, balance, updated_at')
+                .eq('id', item.record_id)
+                .eq('user_id', userId)
+                .maybeSingle()
+
+            if (remoteReadError) {
+              throw new Error(
+                `Não foi possível validar a versão remota da conta: ${remoteReadError.message}`
+              )
+            }
+
+            const remoteUpdatedAt =
+              typeof remoteAccount?.updated_at === 'string'
+                ? remoteAccount.updated_at
+                : ''
+            const localUpdatedAt =
+              typeof localRecord.updated_at === 'string'
+                ? localRecord.updated_at
+                : ''
+            const queueStartedAt =
+              typeof item.created_at === 'string'
+                ? item.created_at
+                : ''
+
+            const remoteUpdatedMs = Date.parse(remoteUpdatedAt)
+            const localUpdatedMs = Date.parse(localUpdatedAt)
+            const queueStartedMs = Date.parse(queueStartedAt)
+
+            const remoteChangedAfterQueue =
+              Number.isFinite(remoteUpdatedMs) &&
+              Number.isFinite(queueStartedMs) &&
+              remoteUpdatedMs > queueStartedMs
+
+            const remoteMatchesLocal =
+              Number.isFinite(remoteUpdatedMs) &&
+              Number.isFinite(localUpdatedMs) &&
+              remoteUpdatedMs === localUpdatedMs
+
+            if (
+              remoteChangedAfterQueue &&
+              !remoteMatchesLocal
+            ) {
+              const remoteBalance = Number(remoteAccount?.balance ?? 0)
+              const localBalance = Number(localRecord.balance ?? 0)
+
+              throw new Error(
+                [
+                  'BALANCE_SYNC_CONFLICT',
+                  `Conta ${item.record_id} mudou em outro cliente.`,
+                  `Local=${localBalance.toFixed(2)}`,
+                  `Remoto=${remoteBalance.toFixed(2)}`,
+                  'Saldo remoto preservado; conflito mantido na fila.',
+                ].join(' | ')
+              )
+            }
+          }
+
           const { error } = await supabaseClient.upsert(payload, {
             onConflict: 'id',
           })
