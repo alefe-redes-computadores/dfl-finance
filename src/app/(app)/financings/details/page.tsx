@@ -1,9 +1,7 @@
 // src/app/(app)/financings/details/page.tsx
 'use client'
 
-import { localISODate } from '@/lib/civilDate'
-
-import { useState, Suspense, useMemo } from "react"
+import { useState, Suspense, useMemo, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createPortal } from "react-dom"
 import {
@@ -33,6 +31,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import Skeleton from "@/components/Skeleton"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useSafeDb } from "@/hooks/useSafeDb"
+import { syncFinancingSchedule } from "@/lib/creditContractOperations"
 
 type Installment = {
   id: string
@@ -330,7 +329,7 @@ function FinancingDetailContent() {
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
-  const { safeUpdate, safeDelete } = useSafeDb()
+  const { safeDelete } = useSafeDb()
 
   const [deleteModal, setDeleteModal] = useState<string | null>(null)
   const [showDeleteFinancingConfirm, setShowDeleteFinancingConfirm] = useState(false)
@@ -349,6 +348,17 @@ function FinancingDetailContent() {
 
   // O hook já filtra exclusivamente as parcelas deste financiamento.
   const financingInstallments = installments as Installment[]
+
+  useEffect(() => {
+    if (!user?.id || !financingData?.id) return
+
+    syncFinancingSchedule({
+      userId: user.id,
+      financingId: financingData.id,
+    }).catch((error) => {
+      console.error('Falha ao reparar cronograma do financiamento:', error)
+    })
+  }, [user?.id, financingData?.id])
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", {
@@ -400,74 +410,24 @@ function FinancingDetailContent() {
   }
 
   const handlePayInstallment = async (installment: Installment) => {
-    if (!user) return
-
-    try {
-      const updateData = {
-        paid: true,
-        paid_date: localISODate(),
-        updated_at: new Date().toISOString(),
-      }
-
-      const res1 = await safeUpdate("transactions", installment.id, updateData)
-      if (!res1.success) throw new Error(res1.error)
-
-      const updatedInstallments = financingInstallments.map((i) =>
-        i.id === installment.id ? { ...i, paid: true } : i
-      )
-      const allPaid = updatedInstallments.every((i) => i.paid)
-
-      if (allPaid && financingData?.status !== "paid") {
-        const statusUpdate = {
-          status: "paid",
-          updated_at: new Date().toISOString(),
-        }
-        const res2 = await safeUpdate("financings", financingId, statusUpdate)
-        if (!res2.success) throw new Error(res2.error)
-      }
-
-      success()
-      showToast("Parcela marcada como paga.", "success")
-    } catch (err: any) {
-      errorHaptic()
-      showToast(`${err?.message || "Erro ao pagar parcela"}`, "error")
-    }
+    vibrate([10])
+    router.push(`/transactions/details?id=${installment.id}`)
   }
 
   const handleUndoPayment = async (installment: Installment) => {
-    if (!user) return
-
     vibrate([10])
-
-    try {
-      const updateData = {
-        paid: false,
-        paid_date: null,
-        updated_at: new Date().toISOString(),
-      }
-
-      const res1 = await safeUpdate("transactions", installment.id, updateData)
-      if (!res1.success) throw new Error(res1.error)
-
-      if (financingData?.status === "paid") {
-        const statusUpdate = {
-          status: "active",
-          updated_at: new Date().toISOString(),
-        }
-        const res2 = await safeUpdate("financings", financingId, statusUpdate)
-        if (!res2.success) throw new Error(res2.error)
-      }
-
-      success()
-      showToast("Pagamento desfeito. A parcela voltou para pendente.", "success")
-    } catch (err: any) {
-      errorHaptic()
-      showToast(`${err?.message || "Erro ao desfazer pagamento"}`, "error")
-    }
+    router.push(`/transactions/details?id=${installment.id}`)
   }
 
   const handleDeleteInstallment = async (installmentId: string) => {
     if (!user) return
+
+    const installment = financingInstallments.find((item) => item.id === installmentId)
+    if (installment?.paid) {
+      errorHaptic()
+      showToast('Desfaça o pagamento antes de excluir esta parcela.', 'warning')
+      return
+    }
 
     try {
       const res = await safeDelete("transactions", installmentId)
@@ -486,6 +446,13 @@ function FinancingDetailContent() {
     if (!user) return
 
     vibrate([10, 50])
+
+    if (financingInstallments.some((item) => item.paid)) {
+      errorHaptic()
+      showToast('Desfaça os pagamentos antes de excluir o financiamento.', 'warning')
+      setShowDeleteFinancingConfirm(false)
+      return
+    }
 
     try {
       for (const inst of financingInstallments) {

@@ -16,7 +16,8 @@ import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useLoanById } from '@/hooks/useLoanById'
 import { useLoanPayments } from '@/hooks/useLoanPayments'
 import { useContext_ } from '@/components/ContextToggle'
-import { useSafeDb } from '@/hooks/useSafeDb'
+import { useAccountsList } from '@/hooks/useAccountsList'
+import { deleteLoanWithLedger, settleLoanInFull } from '@/lib/creditContractOperations'
 import Skeleton from '@/components/Skeleton'
 
 // ============================================================
@@ -203,17 +204,25 @@ function LoanDetailContent() {
   const id = searchParams.get("id")
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
-  const { safeUpdate, safeDelete } = useSafeDb()
+  const { user } = useAuth()
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
   // HOOKS (mantidos exatamente iguais)
   const { data: loan, loading, notFound } = useLoanById(id)
   const { data: payments, loading: paymentsLoading } = useLoanPayments(id)
+  const { data: accounts } = useAccountsList(effectiveContext)
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showPayConfirm, setShowPayConfirm] = useState(false)
   const [processing, setProcessing] = useState(false)
+  const [paymentAccountId, setPaymentAccountId] = useState('')
+
+  useEffect(() => {
+    if (!paymentAccountId && accounts.length > 0) {
+      setPaymentAccountId(accounts[0].id)
+    }
+  }, [accounts, paymentAccountId])
 
   // FUNÇÕES AUXILIARES (mantidas exatamente iguais)
   const formatCurrency = (val: number) => 
@@ -274,37 +283,44 @@ function LoanDetailContent() {
     shadow: "shadow-orange-500/20",
   }
 
-  // HANDLERS (mantidos exatamente iguais)
+  // V56 — quitação e exclusão passam pelo ledger financeiro.
   const handlePay = async () => {
+    if (!user?.id) return
+    if (!paymentAccountId) {
+      errorHaptic()
+      showToast('Selecione a conta usada na quitação.', 'warning')
+      return
+    }
+
     setProcessing(true)
     try {
-      const res = await safeUpdate('loans', loan.id, {
-        status: 'paid',
-        remaining_amount: 0,
-        updated_at: new Date().toISOString(),
+      await settleLoanInFull({
+        userId: user.id,
+        loanId: loan.id,
+        accountId: paymentAccountId,
       })
-      if (!res.success) throw new Error(res.error)
       success()
-      showToast("Empréstimo marcado como quitado.", "success")
+      showToast("Empréstimo quitado e saldo da conta atualizado.", "success")
       setShowPayConfirm(false)
     } catch (err: any) {
       errorHaptic()
-      showToast(`Não foi possível atualizar o empréstimo: ${err.message}`, "error")
+      showToast(`Não foi possível quitar o empréstimo: ${err.message}`, "error")
     } finally {
       setProcessing(false)
     }
   }
 
   const handleDelete = async () => {
+    if (!user?.id) return
+
     setProcessing(true)
     try {
-      for (const p of (payments || [])) {
-        await safeDelete('transactions', p.id)
-      }
-      const res = await safeDelete('loans', loan.id)
-      if (!res.success) throw new Error(res.error)
+      await deleteLoanWithLedger({
+        userId: user.id,
+        loanId: loan.id,
+      })
       success()
-      showToast("Empréstimo excluído com sucesso.", "success")
+      showToast("Empréstimo excluído e efeitos financeiros revertidos.", "success")
       setShowDeleteConfirm(false)
       router.back()
     } catch (err: any) {
@@ -464,6 +480,29 @@ function LoanDetailContent() {
           )}
         </section>
 
+        {status !== 'paid' && remaining > 0 && (
+          <section className="rounded-3xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 p-5">
+            <SectionTitle
+              title="Conta da quitação"
+              description={isLent ? 'Onde o dinheiro recebido vai entrar.' : 'De onde o pagamento vai sair.'}
+            />
+            <select
+              value={paymentAccountId}
+              onChange={(event) => setPaymentAccountId(event.target.value)}
+              className="h-12 w-full rounded-2xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-4 text-sm font-semibold text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-teal-500/20"
+            >
+              <option value="">Selecione uma conta</option>
+              {accounts
+                .filter((account) => !account.is_archived)
+                .map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
+            </select>
+          </section>
+        )}
+
         {/* Ações */}
         <div className="space-y-3 pt-2">
           <button
@@ -489,7 +528,7 @@ function LoanDetailContent() {
       {showPayConfirm && (
         <ConfirmModal
           title="Marcar como pago?"
-          description="Essa ação vai zerar o valor restante e atualizar o status do empréstimo."
+          description="A quitação será registrada no histórico e o saldo da conta selecionada será atualizado."
           confirmLabel={processing ? 'Processando...' : 'Confirmar'}
           cancelLabel="Cancelar"
           onConfirm={handlePay}

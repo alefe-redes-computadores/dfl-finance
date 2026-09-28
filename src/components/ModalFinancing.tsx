@@ -14,6 +14,7 @@ import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { db } from '@/lib/db'
+import { syncFinancingSchedule } from '@/lib/creditContractOperations'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 
@@ -104,8 +105,25 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
 
     try {
       await db.transaction('rw', db.financings, db.syncQueue, async () => {
-        const result = await safeAdd('financings', payload)
+        const result = await safeAdd('financings', {
+          ...payload,
+          description: name.trim(),
+          installments_count: parseInt(totalInstallments),
+          installment_amount: installmentValueNum,
+          total_amount: installmentValueNum * parseInt(totalInstallments),
+          remaining_amount:
+            outstandingBalanceNum > 0
+              ? outstandingBalanceNum
+              : installmentValueNum * parseInt(totalInstallments),
+          first_due_date: nextDueDate || null,
+          bank: institution || null,
+        })
         if (!result.success) throw new Error(result.error)
+      })
+
+      await syncFinancingSchedule({
+        userId: user.id,
+        financingId: id,
       })
 
       success()

@@ -29,6 +29,7 @@ import { useAuth } from "@/lib/hooks/useAuth"
 import { useSafeDb } from "@/hooks/useSafeDb"
 import MoneyInput from "@/components/MoneyInput"
 import Skeleton from "@/components/Skeleton"
+import { assertFinancingStructureEditable, syncFinancingSchedule } from "@/lib/creditContractOperations"
 
 type FinancingStatus = "active" | "paid" | "overdue"
 type AssetType = "vehicle" | "property" | "other"
@@ -201,16 +202,34 @@ function NewFinancingContent() {
       }
 
       if (editId) {
+        await assertFinancingStructureEditable(editId, {
+          totalAmount: totalAmountNum,
+          installmentsCount: installmentsCountNum,
+          firstDueDate: firstDueDate || null,
+        })
+
         const res = await safeUpdate("financings", editId, payload)
         if (!res.success) throw new Error(res.error)
 
+        await syncFinancingSchedule({
+          userId: user!.id,
+          financingId: editId,
+          rewritePending: true,
+        })
+
         success()
-        showToast("Financiamento atualizado com sucesso.", "success")
+        showToast("Financiamento e cronograma atualizados.", "success")
       } else {
+        const id = crypto.randomUUID()
         const fullPayload = {
-          id: crypto.randomUUID(),
+          id,
           user_id: user!.id,
           ...payload,
+          name: trimmedDescription,
+          current_installment: 1,
+          total_installments: installmentsCountNum,
+          installment_value: installmentAmountNum,
+          next_due_date: firstDueDate || null,
           remaining_amount: totalAmountNum,
           created_at: new Date().toISOString(),
           sync_status: "pending",
@@ -220,8 +239,13 @@ function NewFinancingContent() {
         const res = await safeAdd("financings", fullPayload)
         if (!res.success) throw new Error(res.error)
 
+        await syncFinancingSchedule({
+          userId: user!.id,
+          financingId: id,
+        })
+
         success()
-        showToast("Financiamento criado com sucesso.", "success")
+        showToast("Financiamento criado com o cronograma de parcelas.", "success")
       }
 
       router.back()
