@@ -48,6 +48,7 @@ import {
   getReceiptStoragePath,
   normalizeReceiptDisplayName,
 } from '@/lib/receiptPresentation'
+import { removeReceiptFile, uploadReceiptFile } from '@/lib/receiptOperations'
 
 type ReceiptFilter = 'all' | 'image' | 'pdf'
 type LinkFilter = 'all' | 'linked' | 'loose'
@@ -408,48 +409,17 @@ export default function ReceiptsPage() {
     event.target.value = ''
     if (!file || !user?.id) return
 
-    const validTypes = [
-      'image/jpeg',
-      'image/png',
-      'image/webp',
-      'application/pdf',
-    ]
-
-    if (!validTypes.includes(file.type)) {
-      hapticError()
-      showToast('Use JPG, PNG, WEBP ou PDF.', 'warning')
-      return
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      hapticError()
-      showToast('O comprovante deve ter no máximo 10 MB.', 'warning')
-      return
-    }
-
     setUploading(true)
 
     try {
-      const path = `${user.id}/${buildReceiptStorageName(file)}`
-
-      const { error: uploadError } = await supabase.storage
-        .from('receipts')
-        .upload(path, file, {
-          contentType: file.type,
-          upsert: false,
-        })
-
-      if (uploadError) throw uploadError
-
+      await uploadReceiptFile({ userId: user.id, file })
       success()
       showToast('Comprovante adicionado.', 'success')
       await loadReceipts()
     } catch (uploadError: any) {
       hapticError()
       showToast(
-        uploadError?.message
-          ? `Erro ao enviar: ${uploadError.message}`
-          : 'Erro ao enviar comprovante.',
+        uploadError?.message || 'Erro ao enviar comprovante.',
         'error',
       )
     } finally {
@@ -517,11 +487,9 @@ export default function ReceiptsPage() {
         }
       }
 
-      const { error: deleteError } = await supabase.storage
-        .from('receipts')
-        .remove([receipt.path])
-
-      if (deleteError) {
+      try {
+        await removeReceiptFile(receipt.path)
+      } catch {
         // O vínculo já foi removido com segurança. Se o Storage falhar,
         // o arquivo permanece apenas como avulso e pode ser removido depois.
         throw new Error(

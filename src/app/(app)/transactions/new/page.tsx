@@ -1,11 +1,9 @@
 // src/app/(app)/transactions/new/page.tsx
 'use client'
 
-import { resolveApiUrl } from '@/lib/runtime/apiUrl'
-import { useState, useCallback, useEffect, Suspense, useMemo } from 'react'
+import { useState, useCallback, useEffect, Suspense, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Tag, Wallet, ChevronDown, ChevronUp, Check,
   Camera, Plus, ArrowRightLeft, Building, HandCoins, X,
@@ -15,7 +13,6 @@ import {
 } from 'lucide-react'
 import { addMonths, addWeeks, format, startOfMonth, endOfMonth } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
-import { buildReceiptStorageName, getReceiptStoragePath, normalizeReceiptDisplayName } from '@/lib/receiptPresentation'
 import CameraCapture from '@/components/CameraCapture'
 import QRCodeScanner from '@/components/QRCodeScanner'
 import { useLocalSync } from '@/hooks/useLocalSync'
@@ -43,6 +40,7 @@ import {
   filterTransactionCategories,
   findCompatibleCategory,
 } from '@/lib/transactionCategoryOperations'
+import { analyzeReceiptImage, findReceiptCategoryId, removeReceiptFileQuiet, uploadReceiptFile } from '@/lib/receiptOperations'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Repetition = 'once' | 'installments' | 'recurring'
@@ -97,6 +95,15 @@ function NewTransactionContent() {
   const [showDetails, setShowDetails] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  useEffect(() => {
+    return () => {
+      const staged = stagedReceiptUrlRef.current
+      if (staged && staged !== committedReceiptUrlRef.current) {
+        void removeReceiptFileQuiet(staged)
+      }
+    }
+  }, [])
+
   // NOVO: busca inteligente
   const [showSuggestions, setShowSuggestions] = useState(false)
   const suggestions = useSmartSearch(desc, effectiveContext as 'dfl' | 'personal', type === 'income' ? 'income' : 'expense')
@@ -127,6 +134,8 @@ function NewTransactionContent() {
   }
 
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null)
+  const stagedReceiptUrlRef = useRef<string | null>(null)
+  const committedReceiptUrlRef = useRef<string | null>(null)
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
   const [receiptName, setReceiptName] = useState<string>('')
   const [receiptType, setReceiptType] = useState<'image' | 'pdf' | null>(null)
@@ -380,88 +389,64 @@ function NewTransactionContent() {
   }, [categoryId, amountNum, type, budgets, budgetTransactions])
 
   const uploadFile = async (file: File) => {
-    if (!user) return
-
-    const isSupported = file.type.startsWith('image/') || file.type === 'application/pdf'
-    if (!isSupported) {
-      hapticError()
-      showToast('Use uma imagem ou um arquivo PDF.', 'warning')
-      return
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      hapticError()
-      showToast('O comprovante deve ter no máximo 10 MB.', 'warning')
-      return
-    }
+    if (!user?.id) return
 
     setUploading(true)
-    setReceiptName(normalizeReceiptDisplayName(file.name))
-
-    const isImage = file.type.startsWith('image/')
-    setReceiptType(isImage ? 'image' : 'pdf')
-
-    if (isImage) {
-      const reader = new FileReader()
-      reader.onload = (e) => setReceiptPreview(e.target?.result as string)
-      reader.readAsDataURL(file)
-    } else {
-      setReceiptPreview(null)
-    }
 
     try {
-      const path = `${user.id}/${buildReceiptStorageName(file)}`
-
-      const { error: uploadError } = await supabase.storage.from('receipts').upload(path, file, { upsert: false })
-      if (uploadError) throw uploadError
-
-      const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(path)
-      if (receiptUrl) {
-        const oldPath = getReceiptStoragePath(receiptUrl)
-        if (oldPath) {
-          await supabase.storage.from('receipts').remove([oldPath])
-        }
+      if (stagedReceiptUrlRef.current) {
+        await removeReceiptFileQuiet(stagedReceiptUrlRef.current)
       }
 
-      setReceiptUrl(urlData.publicUrl)
+      const uploaded = await uploadReceiptFile({ userId: user.id, file })
+      stagedReceiptUrlRef.current = uploaded.url
+      setReceiptUrl(uploaded.url)
+      setReceiptName(uploaded.displayName)
+      setReceiptType(uploaded.kind)
+
+      if (uploaded.kind === 'image') {
+        const reader = new FileReader()
+        reader.onload = (event) => setReceiptPreview(event.target?.result as string)
+        reader.readAsDataURL(file)
+      } else {
+        setReceiptPreview(null)
+      }
+
       success()
       showToast('Comprovante anexado.', 'success')
 
-      if (isImage) {
+      if (uploaded.kind === 'image') {
         try {
-          const {
-            data: { session: ocrSession },
-          } = await supabase.auth.getSession()
+          const ocrData = await analyzeReceiptImage(uploaded.url)
 
-          if (!ocrSession?.access_token) {
-            throw new Error('Sessão expirada. Entre novamente.')
+          if (Number(ocrData.amount) > 0) setAmountNum(Number(ocrData.amount))
+          if (typeof ocrData.date === 'string' && ocrData.date) setDate(ocrData.date)
+          if (typeof ocrData.description === 'string' && ocrData.description.trim()) {
+            setDesc(ocrData.description.trim())
           }
 
-          const ocrResponse = await fetch(resolveApiUrl('/api/ocr-receipt'), {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${ocrSession.access_token}`,
-            },
-            body: JSON.stringify({ imageUrl: urlData.publicUrl }),
-          })
-          const ocrData = await ocrResponse.json()
-          if (ocrData.success && ocrData.data) {
-            if (ocrData.data.amount > 0) {
-              setAmountNum(ocrData.data.amount)
-            }
-            if (ocrData.data.date) setDate(ocrData.data.date)
-            if (ocrData.data.description) setDesc(ocrData.data.description)
-            vibrate([50, 100, 50])
-            showToast('Dados extraídos da imagem.', 'success')
-          }
+          const suggestedCategoryId = findReceiptCategoryId(
+            localCategories || [],
+            typeof ocrData.suggested_category === 'string'
+              ? ocrData.suggested_category
+              : null,
+            type === 'income' ? 'income' : 'expense',
+            effectiveContext as 'dfl' | 'personal'
+          )
+          if (suggestedCategoryId) setCategoryId(suggestedCategoryId)
+
+          vibrate([50, 100, 50])
+          showToast('Sugestões extraídas. Revise antes de salvar.', 'success')
         } catch (ocrError) {
           console.error('Erro OCR:', ocrError)
+          showToast('Comprovante anexado. A leitura automática não ficou disponível.', 'warning')
         }
       }
     } catch (err: any) {
       hapticError()
       showToast(`Erro ao anexar comprovante: ${err.message}`, 'error')
+      setReceiptUrl(null)
+      stagedReceiptUrlRef.current = null
       setReceiptPreview(null)
       setReceiptName('')
       setReceiptType(null)
@@ -472,12 +457,10 @@ function NewTransactionContent() {
 
   const handleRemoveReceipt = async () => {
     vibrate([10])
-    if (receiptUrl) {
-      const path = getReceiptStoragePath(receiptUrl)
-      if (path) {
-        await supabase.storage.from('receipts').remove([path])
-      }
+    if (stagedReceiptUrlRef.current) {
+      await removeReceiptFileQuiet(stagedReceiptUrlRef.current)
     }
+    stagedReceiptUrlRef.current = null
     setReceiptUrl(null)
     setReceiptPreview(null)
     setReceiptName('')
@@ -932,6 +915,8 @@ function NewTransactionContent() {
         }
       })
 
+      committedReceiptUrlRef.current = receiptUrl
+      stagedReceiptUrlRef.current = null
       success()
       const transactionLabel = type === 'income' ? 'Receita' : 'Despesa'
       showToast(

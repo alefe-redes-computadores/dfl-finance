@@ -1,10 +1,8 @@
 // src/app/(app)/transactions/details/page.tsx
 'use client'
 
-import { resolveApiUrl } from '@/lib/runtime/apiUrl'
-import { useEffect, useState, useCallback, Suspense, useMemo } from 'react'
+import { useEffect, useState, useCallback, Suspense, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2,
@@ -13,7 +11,6 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
-import { buildReceiptStorageName, getReceiptStoragePath, normalizeReceiptDisplayName } from '@/lib/receiptPresentation'
 import CameraCapture from '@/components/CameraCapture'
 import QRCodeScanner from '@/components/QRCodeScanner'
 import ModalFinancing from '@/components/ModalFinancing'
@@ -41,6 +38,7 @@ import {
   filterTransactionCategories,
   findCompatibleCategory,
 } from '@/lib/transactionCategoryOperations'
+import { analyzeReceiptImage, removeReceiptFileQuiet, uploadReceiptFile } from '@/lib/receiptOperations'
 
 const safeNum = (val: any): number => {
   if (val === null || val === undefined || val === '') return 0
@@ -124,6 +122,8 @@ function EditTransactionContent() {
   const [isReimbursable, setIsReimbursable] = useState(false)
 
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null)
+  const originalReceiptUrlRef = useRef<string | null>(null)
+  const stagedReceiptUrlRef = useRef<string | null>(null)
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
   const [receiptName, setReceiptName] = useState<string>('')
   const [receiptType, setReceiptType] = useState<'image' | 'pdf' | null>(null)
@@ -167,6 +167,14 @@ function EditTransactionContent() {
   }, [confirmRequest])
 
   const [initialized, setInitialized] = useState(!id || id === 'new')
+
+  useEffect(() => {
+    return () => {
+      if (stagedReceiptUrlRef.current) {
+        void removeReceiptFileQuiet(stagedReceiptUrlRef.current)
+      }
+    }
+  }, [])
 
   // useMemo (hook) também no topo
   const categories = useMemo(
@@ -317,6 +325,15 @@ function EditTransactionContent() {
       receipt_url: receiptUrl,
       financing_id: financingId,
       loan_id: loanId,
+      ...(txType === 'financing_installment'
+        ? {
+            paid: payloadStatus === 'done',
+            paid_date:
+              payloadStatus === 'done'
+                ? (tx?.paid_date || date)
+                : null,
+          }
+        : {}),
       is_reimbursable: isReimbursable,
       context: isNew ? effectiveContext : (tx?.context || effectiveContext),
       updated_at: new Date().toISOString(),
@@ -330,11 +347,14 @@ function EditTransactionContent() {
     try {
       await db.transaction(
         'rw',
-        db.accounts,
-        db.credit_cards,
-        db.credit_invoices,
-        db.transactions,
-        db.syncQueue,
+        [
+          db.accounts,
+          db.credit_cards,
+          db.credit_invoices,
+          db.financings,
+          db.transactions,
+          db.syncQueue,
+        ],
         async () => {
         // 1) Reverte exatamente o efeito financeiro antigo.
         if (
@@ -451,6 +471,54 @@ function EditTransactionContent() {
             transactionDate:
               reference.date,
           })
+        }
+
+        if (financingId && txType === 'financing_installment') {
+          const financing = await db.financings.get(financingId)
+          if (!financing || financing.user_id !== user.id) {
+            throw new Error('Financiamento vinculado não encontrado.')
+          }
+
+          const installments = await db.transactions
+            .where('[user_id+financing_id]')
+            .equals([user.id, financingId])
+            .toArray()
+
+          const linked = installments.filter(
+            (item) => item.type === 'financing_installment'
+          )
+          const paidCents = linked.reduce(
+            (sum, item) =>
+              item.paid === true || item.status === 'done'
+                ? sum + Math.round(Number(item.amount || 0) * 100)
+                : sum,
+            0
+          )
+          const totalCents = Math.max(
+            0,
+            Math.round(Number(financing.total_amount || 0) * 100)
+          )
+          const remainingCents = Math.max(0, totalCents - paidCents)
+          const nextPending = linked
+            .filter((item) => item.paid !== true && item.status !== 'done')
+            .sort((a, b) =>
+              String(a.due_date || a.date).localeCompare(
+                String(b.due_date || b.date)
+              )
+            )[0]
+
+          requireSuccess(
+            await safeUpdate('financings', financingId, {
+              remaining_amount: remainingCents / 100,
+              next_due_date: nextPending?.due_date || nextPending?.date || null,
+              current_installment: nextPending
+                ? Number(nextPending.installment_number || nextPending.number || 1)
+                : Number(financing.installments_count || financing.total_installments || 0),
+              status: remainingCents <= 0 ? 'paid' : 'active',
+              updated_at: new Date().toISOString(),
+            }),
+            'Erro ao atualizar progresso do financiamento'
+          )
         }
 
         const otherContext = payload.context === 'dfl' ? 'personal' : 'dfl'
@@ -602,6 +670,13 @@ function EditTransactionContent() {
           })
       }
 
+      const originalReceiptUrl = originalReceiptUrlRef.current
+      if (originalReceiptUrl && originalReceiptUrl !== receiptUrl) {
+        await removeReceiptFileQuiet(originalReceiptUrl)
+      }
+      originalReceiptUrlRef.current = receiptUrl
+      stagedReceiptUrlRef.current = null
+
       vibrate([10, 50])
       setSaved(true)
 
@@ -708,6 +783,9 @@ function EditTransactionContent() {
       const amountSafe = Number(tx.amount) || 0
       setAmountInput(amountSafe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 
+      originalReceiptUrlRef.current = tx.receipt_url || null
+      stagedReceiptUrlRef.current = null
+
       if (tx.receipt_url) {
         setReceiptUrl(tx.receipt_url)
         const isPdf = tx.receipt_url.toLowerCase().includes('.pdf')
@@ -798,113 +876,39 @@ function EditTransactionContent() {
   }
 
   const uploadFile = async (file: File) => {
-    if (!user) return
-
-    const isSupported = file.type.startsWith('image/') || file.type === 'application/pdf'
-    if (!isSupported) {
-      hapticError()
-      showToast('Use uma imagem ou um arquivo PDF.', 'warning')
-      return
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      hapticError()
-      showToast('O comprovante deve ter no máximo 10 MB.', 'warning')
-      return
-    }
+    if (!user?.id) return
 
     setUploading(true)
-    setReceiptName(normalizeReceiptDisplayName(file.name))
-
-    const isImage = file.type.startsWith('image/')
-    setReceiptType(isImage ? 'image' : 'pdf')
-
-    if (isImage) {
-      const reader = new FileReader()
-      reader.onload = (e) => setReceiptPreview(e.target?.result as string)
-      reader.readAsDataURL(file)
-    } else {
-      setReceiptPreview(null)
-    }
 
     try {
-      const path = `${user.id}/${buildReceiptStorageName(file)}`
-
-      const { error: uploadError } = await supabase.storage.from('receipts').upload(path, file, { upsert: false })
-      if (uploadError) throw uploadError
-
-      const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(path)
-
-      if (receiptUrl) {
-        const oldPath = getReceiptStoragePath(receiptUrl)
-        if (oldPath) {
-          await supabase.storage.from('receipts').remove([oldPath])
-        }
+      if (stagedReceiptUrlRef.current) {
+        await removeReceiptFileQuiet(stagedReceiptUrlRef.current)
       }
 
-      setReceiptUrl(urlData.publicUrl)
-      showToast('Comprovante anexado.', 'success')
+      const uploaded = await uploadReceiptFile({ userId: user.id, file })
+      stagedReceiptUrlRef.current = uploaded.url
+      setReceiptUrl(uploaded.url)
+      setReceiptName(uploaded.displayName)
+      setReceiptType(uploaded.kind)
+
+      if (uploaded.kind === 'image') {
+        const reader = new FileReader()
+        reader.onload = (event) => setReceiptPreview(event.target?.result as string)
+        reader.readAsDataURL(file)
+      } else {
+        setReceiptPreview(null)
+      }
+
       success()
+      showToast('Comprovante anexado.', 'success')
 
-      if (isImage) {
+      if (uploaded.kind === 'image') {
         try {
-          const {
-            data: { session: ocrSession },
-          } = await supabase.auth.getSession()
-
-          if (!ocrSession?.access_token) {
-            throw new Error('Sessão expirada. Entre novamente.')
-          }
-
-          const ocrResponse = await fetch(resolveApiUrl('/api/ocr-receipt'), {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${ocrSession.access_token}`,
-            },
-            body: JSON.stringify({ imageUrl: urlData.publicUrl }),
-          })
-          const ocrData = await ocrResponse.json()
-          if (ocrData.success && ocrData.data) {
-            if (ocrData.data.amount > 0 && ocrData.data.date) {
-              const { data: similarTxs } = await supabase
-                .from('transactions')
-                .select('id, description, amount, date')
-                .eq('user_id', user.id)
-                .eq('status', 'pending')
-                .eq('type', 'expense')
-                .gte('amount', ocrData.data.amount - 1)
-                .lte('amount', ocrData.data.amount + 1)
-                .gte('date', ocrData.data.date)
-                .lte('date', ocrData.data.date)
-                .limit(3)
-
-              if (similarTxs && similarTxs.length > 0) {
-                const tx = similarTxs[0]
-                const confirmed = await requestConfirm(
-                  'Vincular comprovante?',
-                  `Encontramos uma despesa pendente parecida: “${tx.description}”. Deseja anexar este comprovante a ela?`,
-                  'Vincular'
-                )
-                if (confirmed) {
-                  await safeUpdate('transactions', tx.id, { receipt_url: urlData.publicUrl })
-                  showToast('Comprovante vinculado.', 'success')
-                  vibrate([50])
-                  return
-                }
-              }
-            }
-
-            if (ocrData.data.amount > 0) setAmountInput(ocrData.data.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
-            if (ocrData.data.date) setDate(ocrData.data.date)
-            if (ocrData.data.description) setDescription(ocrData.data.description)
-            if (ocrData.data.suggested_category) {
-              const matchedCat = categories.find((c: any) => c.name.toLowerCase() === ocrData.data.suggested_category.toLowerCase())
-              if (matchedCat) setCategoryId(matchedCat.id)
-            }
-            vibrate([50, 100, 50])
-            showToast('Dados extraídos do comprovante.', 'success')
-          }
+          await analyzeReceiptImage(uploaded.url)
+          showToast(
+            'Leitura concluída. Os dados atuais do lançamento foram preservados.',
+            'success'
+          )
         } catch (ocrError) {
           console.error('Erro OCR:', ocrError)
         }
@@ -912,6 +916,8 @@ function EditTransactionContent() {
     } catch (err: any) {
       showToast(`Erro ao anexar comprovante: ${err.message}`, 'error')
       hapticError()
+      setReceiptUrl(originalReceiptUrlRef.current)
+      stagedReceiptUrlRef.current = null
       setReceiptPreview(null)
       setReceiptName('')
       setReceiptType(null)
@@ -922,17 +928,15 @@ function EditTransactionContent() {
 
   const handleRemoveReceipt = async () => {
     vibrate([10])
-    if (receiptUrl) {
-      const path = getReceiptStoragePath(receiptUrl)
-      if (path) {
-        await supabase.storage.from('receipts').remove([path])
-      }
+    if (stagedReceiptUrlRef.current) {
+      await removeReceiptFileQuiet(stagedReceiptUrlRef.current)
     }
+    stagedReceiptUrlRef.current = null
     setReceiptUrl(null)
     setReceiptPreview(null)
     setReceiptName('')
     setReceiptType(null)
-    showToast('Comprovante removido.', 'success')
+    showToast('Comprovante será removido ao salvar.', 'success')
   }
 
   const handleCameraCapture = (file: File) => {

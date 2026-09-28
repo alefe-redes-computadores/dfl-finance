@@ -40,6 +40,15 @@ function moneyKey(value: unknown): string {
   return Math.round(Number(value || 0) * 100).toString()
 }
 
+function stableImportHash(value: string): string {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+  return hash.toString(36)
+}
+
 export function buildImportTransactionSignature(
   transaction: Pick<
     LocalTransaction,
@@ -109,6 +118,7 @@ export async function importAccountTransactions(
         .toArray()
 
       const existingCounts = new Map<string, number>()
+      const existingIdempotencyKeys = new Set<string>()
 
       for (const transaction of existing) {
         if (transaction.context !== context) continue
@@ -118,10 +128,15 @@ export async function importAccountTransactions(
           signature,
           (existingCounts.get(signature) || 0) + 1
         )
+
+        if (transaction.idempotency_key) {
+          existingIdempotencyKeys.add(transaction.idempotency_key)
+        }
       }
 
       const now = new Date().toISOString()
       const accepted: LocalTransaction[] = []
+      const batchOccurrences = new Map<string, number>()
       let duplicates = 0
 
       for (const item of input.transactions) {
@@ -162,14 +177,26 @@ export async function importAccountTransactions(
         }
 
         const signature = buildImportTransactionSignature(transaction)
-        const previousCount = existingCounts.get(signature) || 0
+        const occurrence = (batchOccurrences.get(signature) || 0) + 1
+        batchOccurrences.set(signature, occurrence)
 
+        const idempotencyKey =
+          `import:${source}:${stableImportHash(signature)}:${occurrence}`
+
+        if (existingIdempotencyKeys.has(idempotencyKey)) {
+          duplicates++
+          continue
+        }
+
+        const previousCount = existingCounts.get(signature) || 0
         if (previousCount > 0) {
           existingCounts.set(signature, previousCount - 1)
           duplicates++
           continue
         }
 
+        transaction.idempotency_key = idempotencyKey
+        existingIdempotencyKeys.add(idempotencyKey)
         accepted.push(transaction)
       }
 

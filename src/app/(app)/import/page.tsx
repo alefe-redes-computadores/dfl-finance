@@ -3,7 +3,6 @@
 
 import SelectField from '@/components/SelectField'
 
-import { resolveApiUrl } from '@/lib/runtime/apiUrl'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -31,7 +30,7 @@ import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { importAccountTransactions } from '@/lib/importOperations'
-import { supabase } from '@/lib/supabase'
+import { analyzeReceiptImage, removeReceiptFileQuiet, uploadReceiptFile } from '@/lib/receiptOperations'
 
 const SavingSkeleton = () => (
   <div className="flex flex-col items-center justify-center py-20 animate-in fade-in duration-300">
@@ -83,16 +82,24 @@ function ImportContent() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const stagedReceiptPathRef = useRef<string | null>(null)
+  const committedReceiptPathRef = useRef<string | null>(null)
 
   const removeUploadedReceipt = async (path: string | null) => {
-    if (!path) return
-
-    const { error } = await supabase.storage.from('receipts').remove([path])
-
-    if (error) {
-      console.error('Falha ao remover comprovante temporário:', error)
+    await removeReceiptFileQuiet(path)
+    if (stagedReceiptPathRef.current === path) {
+      stagedReceiptPathRef.current = null
     }
   }
+
+  useEffect(() => {
+    return () => {
+      const staged = stagedReceiptPathRef.current
+      if (staged && staged !== committedReceiptPathRef.current) {
+        void removeReceiptFileQuiet(staged)
+      }
+    }
+  }, [])
 
   const handleFileSelect = async (selectedFile: File | null) => {
     if (!selectedFile || !user?.id) return
@@ -100,12 +107,6 @@ function ImportContent() {
     if (!selectedFile.type.startsWith('image/')) {
       errorHaptic()
       showToast('Selecione uma imagem do comprovante.', 'warning')
-      return
-    }
-
-    if (selectedFile.size > 10 * 1024 * 1024) {
-      errorHaptic()
-      showToast('O comprovante deve ter no máximo 10 MB.', 'warning')
       return
     }
 
@@ -120,57 +121,21 @@ function ImportContent() {
     reader.readAsDataURL(selectedFile)
 
     try {
-      if (receiptPath) {
-        await removeUploadedReceipt(receiptPath)
+      if (stagedReceiptPathRef.current) {
+        await removeUploadedReceipt(stagedReceiptPathRef.current)
       }
 
-      const extension =
-        selectedFile.name.includes('.')
-          ? selectedFile.name.split('.').pop()?.toLowerCase() || 'jpg'
-          : 'jpg'
+      const uploaded = await uploadReceiptFile({
+        userId: user.id,
+        file: selectedFile,
+      })
 
-      const path = `${user.id}/${crypto.randomUUID()}.${extension}`
-
-      const { error: uploadError } = await supabase.storage
-        .from('receipts')
-        .upload(path, selectedFile, { upsert: false })
-
-      if (uploadError) throw uploadError
-
-      const { data: urlData } = supabase.storage
-        .from('receipts')
-        .getPublicUrl(path)
-
-      const publicUrl = urlData.publicUrl
-
-      setReceiptPath(path)
-      setReceiptUrl(publicUrl)
+      stagedReceiptPathRef.current = uploaded.path
+      setReceiptPath(uploaded.path)
+      setReceiptUrl(uploaded.url)
 
       try {
-        const {
-          data: { session: ocrSession },
-        } = await supabase.auth.getSession()
-
-        if (!ocrSession?.access_token) {
-          throw new Error('Sessão expirada. Entre novamente.')
-        }
-
-        const response = await fetch(resolveApiUrl('/api/ocr-receipt'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${ocrSession.access_token}`,
-          },
-          body: JSON.stringify({ imageUrl: publicUrl }),
-        })
-
-        const payload = await response.json()
-
-        if (!response.ok || !payload?.success || !payload?.data) {
-          throw new Error(payload?.error || 'Não foi possível analisar a imagem.')
-        }
-
-        const extracted = payload.data
+        const extracted = await analyzeReceiptImage(uploaded.url)
         setOcrResult(extracted)
 
         if (Number(extracted.amount) > 0) {
@@ -194,7 +159,7 @@ function ImportContent() {
         })
 
         success()
-        showToast('Dados extraídos. Revise antes de salvar.', 'success')
+        showToast('Sugestões extraídas. Revise antes de salvar.', 'success')
       } catch (ocrError: any) {
         console.error('Erro OCR:', ocrError)
         setOcrResult(null)
@@ -205,6 +170,7 @@ function ImportContent() {
         )
       }
     } catch (error: any) {
+      stagedReceiptPathRef.current = null
       setReceiptPath(null)
       setReceiptUrl(null)
       errorHaptic()
@@ -264,6 +230,7 @@ function ImportContent() {
         )
       }
 
+      committedReceiptPathRef.current = receiptPath
       success()
       showToast('Comprovante importado e saldo atualizado.', 'success')
       router.push('/home')
@@ -285,6 +252,8 @@ function ImportContent() {
     setPreviewUrl(null)
     setReceiptUrl(null)
     setReceiptPath(null)
+    stagedReceiptPathRef.current = null
+    committedReceiptPathRef.current = null
     setOcrResult(null)
     setAmountNum(0)
     setAccountId('')
