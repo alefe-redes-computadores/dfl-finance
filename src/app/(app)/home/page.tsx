@@ -111,6 +111,7 @@ function HomeContent() {
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [isClient, setIsClient] = useState(false)
   const [syncAttempted, setSyncAttempted] = useState(false)
+  const [showBalanceUpdated, setShowBalanceUpdated] = useState(false)
 
   const [showNotifications, setShowNotifications] = useState(false)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
@@ -136,6 +137,17 @@ function HomeContent() {
   useEffect(() => {
     setIsClient(true)
   }, [])
+
+  useEffect(() => {
+    if (!isOnline || isBalanceReconciling || !balanceVerifiedAt) {
+      setShowBalanceUpdated(false)
+      return
+    }
+
+    setShowBalanceUpdated(true)
+    const timer = window.setTimeout(() => setShowBalanceUpdated(false), 1500)
+    return () => window.clearTimeout(timer)
+  }, [balanceVerifiedAt, isBalanceReconciling, isOnline])
 
   useEffect(() => {
     const saved = localStorage.getItem('dfl_notifications_enabled')
@@ -1049,6 +1061,10 @@ function HomeContent() {
                   ) : !isOnline ? (
                     <p className="mt-1 text-[10px] font-medium normal-case tracking-normal text-gray-400 dark:text-gray-500">
                       Saldo salvo no dispositivo
+                    </p>
+                  ) : showBalanceUpdated ? (
+                    <p className="mt-1 text-[10px] font-medium normal-case tracking-normal text-emerald-600 dark:text-emerald-400">
+                      Saldo atualizado
                     </p>
                   ) : null}
                 </div>
