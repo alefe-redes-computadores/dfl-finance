@@ -53,9 +53,14 @@ export function useLocalSync() {
       }
     }
 
+    /*
+     * V65 — sincronização solicitada pelo usuário é reconciliação completa.
+     * O custo extra é intencional: o botão também recupera snapshots remotos
+     * antigos que um cursor incremental já tenha ultrapassado.
+     */
     const result =
       await processSyncQueue(
-        false,
+        true,
         true
       )
 

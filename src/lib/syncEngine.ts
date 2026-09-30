@@ -426,6 +426,7 @@ async function pullRemoteChanges(
       localStorage.getItem(lastPullKey) || '2000-01-01T00:00:00.000Z'
     const syncTime = new Date().toISOString()
     const failedTables: SyncTableName[] = []
+    let skippedProtectedRemoteRows = false
 
     /*
      * Snapshot único das mutações locais protegidas.
@@ -535,22 +536,24 @@ async function pullRemoteChanges(
           .map((item: any) => [item.id, item])
       )
 
-      const isLocallyProtected = (id: string) => {
-        if (pendingIds.has(id)) return true
-
-        const localItem: any = localRowsById.get(id)
-
-        return Boolean(
-          localItem &&
-            localItem.sync_status &&
-            localItem.sync_status !== 'synced'
-        )
-      }
+      /*
+       * V65 — a fila é a autoridade para proteção local.
+       *
+       * sync_status=pending/failed sem item correspondente na fila é
+       * estado órfão: não existe mutação capaz de ser enviada. Proteger
+       * esse registro para sempre impede o snapshot remoto de convergir.
+       */
+      const isLocallyProtected = (id: string) =>
+        pendingIds.has(id)
 
       const remoteDataSafeToApply = remoteData.filter(
         (item: any) =>
           typeof item?.id !== 'string' || !isLocallyProtected(item.id)
       )
+
+      if (remoteDataSafeToApply.length < remoteData.length) {
+        skippedProtectedRemoteRows = true
+      }
 
       if (remoteDataSafeToApply.length > 0) {
         const localData =
@@ -597,7 +600,21 @@ async function pullRemoteChanges(
     }
 
     if (failedTables.length === 0) {
-      localStorage.setItem(lastPullKey, syncTime)
+      /*
+       * Nunca avance o cursor além de uma linha remota que foi ignorada
+       * por existir mutação local na fila. Caso contrário, depois que a
+       * fila for resolvida, um pull incremental jamais verá essa versão
+       * remota novamente.
+       */
+      if (!skippedProtectedRemoteRows) {
+        localStorage.setItem(lastPullKey, syncTime)
+      } else {
+        renderLog(
+          'Recebimento remoto preservou o cursor porque há registros protegidos pela fila local.',
+          'info'
+        )
+      }
+
       renderLog('Recebimento remoto concluído.', 'success')
 
       return {
