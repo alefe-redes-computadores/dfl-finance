@@ -123,7 +123,15 @@ function HomeContent() {
   const [undoToast, setUndoToast] = useState<{ message: string; onUndo: () => void } | null>(null)
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false)
 
-  const { isOnline, pendingCount, isSyncing, forceSync } = useLocalSync()
+  const {
+    isOnline,
+    pendingCount,
+    isSyncing,
+    isBalanceReconciling,
+    balanceVerifiedAt,
+    forceSync,
+    reconcileBalance,
+  } = useLocalSync()
 
   useEffect(() => {
     setIsClient(true)
@@ -202,19 +210,26 @@ function HomeContent() {
 
   useEffect(() => {
     if (user?.id && isOnline && isClient && !syncAttempted) {
-      console.log('🏠 Home: Disparando sync automático...')
-      const timer = setTimeout(() => {
-        forceSync().then(() => {
-          console.log('✅ Home: Sync automático concluído')
-          setSyncAttempted(true)
-        }).catch((err) => {
-          console.error('❌ Home: Erro no sync automático:', err)
+      /*
+       * V68: não esperamos 1,5 s para validar o número mais crítico.
+       * accounts reconcilia primeiro; o sync completo continua depois.
+       */
+      reconcileBalance()
+        .then(() => forceSync())
+        .then(() => setSyncAttempted(true))
+        .catch((err) => {
+          console.error('Home: erro na sincronização de abertura:', err)
           setSyncAttempted(true)
         })
-      }, 1500)
-      return () => clearTimeout(timer)
     }
-  }, [user?.id, isOnline, isClient, syncAttempted, forceSync])
+  }, [
+    user?.id,
+    isOnline,
+    isClient,
+    syncAttempted,
+    reconcileBalance,
+    forceSync,
+  ])
 
   useEffect(() => {
     if (!isDataLoading) {
@@ -1027,6 +1042,15 @@ function HomeContent() {
                   <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
                     Saldo total
                   </span>
+                  {isOnline && (isBalanceReconciling || !balanceVerifiedAt) ? (
+                    <p className="mt-1 text-[10px] font-medium normal-case tracking-normal text-teal-600 dark:text-teal-400">
+                      Atualizando saldo…
+                    </p>
+                  ) : !isOnline ? (
+                    <p className="mt-1 text-[10px] font-medium normal-case tracking-normal text-gray-400 dark:text-gray-500">
+                      Saldo salvo no dispositivo
+                    </p>
+                  ) : null}
                 </div>
 
                 <button

@@ -10,6 +10,7 @@ import {
   getSyncQueueDiagnostics,
   getSyncSnapshot,
   processSyncQueue,
+  reconcileAccountBalancesFast,
   refreshPendingCount,
   subscribeSyncSnapshot,
   type SyncCycleResult,
@@ -35,6 +36,12 @@ export function useLocalSync() {
 
   useEffect(() => {
     configureSyncEngine(user?.id ?? null)
+  }, [user?.id])
+
+  const reconcileBalance = useCallback(async () => {
+    configureSyncEngine(user?.id ?? null)
+    if (!user?.id || !getSyncSnapshot().isOnline) return false
+    return reconcileAccountBalancesFast(user.id)
   }, [user?.id])
 
   const forceSync = useCallback(async (): Promise<SyncCycleResult> => {
@@ -170,6 +177,7 @@ export function useLocalSync() {
     ...syncSnapshot,
     forceSync,
     forceFullResync,
+    reconcileBalance,
     refreshPendingCount: refreshPendingCountForUser,
   }
 }

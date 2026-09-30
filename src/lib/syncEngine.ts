@@ -59,6 +59,8 @@ type SyncSnapshot = {
   isOnline: boolean
   pendingCount: number
   isSyncing: boolean
+  isBalanceReconciling: boolean
+  balanceVerifiedAt: string | null
 }
 
 const SERVER_SNAPSHOT: SyncSnapshot = {
@@ -66,6 +68,8 @@ const SERVER_SNAPSHOT: SyncSnapshot = {
   isOnline: true,
   pendingCount: 0,
   isSyncing: false,
+  isBalanceReconciling: false,
+  balanceVerifiedAt: null,
 }
 
 let snapshot: SyncSnapshot = {
@@ -97,7 +101,9 @@ function setSnapshot(patch: Partial<SyncSnapshot>) {
     next.syncStatus === snapshot.syncStatus &&
     next.isOnline === snapshot.isOnline &&
     next.pendingCount === snapshot.pendingCount &&
-    next.isSyncing === snapshot.isSyncing
+    next.isSyncing === snapshot.isSyncing &&
+    next.isBalanceReconciling === snapshot.isBalanceReconciling &&
+    next.balanceVerifiedAt === snapshot.balanceVerifiedAt
   ) {
     return
   }
@@ -204,7 +210,15 @@ export function configureSyncEngine(userId: string | null) {
   watchPendingCount(userId)
 
   if (userId && online) {
-    void processSyncQueue(false)
+    /*
+     * V68 — saldo é dado crítico de abertura.
+     * Reconciliamos somente accounts primeiro; o sync completo continua
+     * em seguida, sem bloquear a Home esperando todas as tabelas.
+     */
+    void reconcileAccountBalancesFast(userId)
+      .finally(() => {
+        void processSyncQueue(false)
+      })
   }
 }
 
@@ -402,6 +416,97 @@ function isRetryDue(item: LocalSyncQueue) {
   }
 
   return Date.now() - lastAttemptAt >= retryDelayMs(attempts)
+}
+
+export async function reconcileAccountBalancesFast(
+  userId = currentUserId
+): Promise<boolean> {
+  if (!userId || !snapshot.isOnline) {
+    return false
+  }
+
+  setSnapshot({ isBalanceReconciling: true })
+
+  try {
+    const [localAccounts, queueItems] = await Promise.all([
+      db.accounts.where('user_id').equals(userId).toArray(),
+      db.syncQueue.where('user_id').equals(userId).toArray(),
+    ])
+
+    const protectedAccountIds = new Set(
+      queueItems
+        .filter((item) => item.table === 'accounts')
+        .map((item) => item.record_id)
+    )
+
+    const { data, error } = await supabase
+      .from('accounts')
+      .select('*')
+      .eq('user_id', userId)
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    const remoteAccounts = data ?? []
+    const remoteIds = new Set(
+      remoteAccounts
+        .map((item: any) => item?.id)
+        .filter((id: any): id is string => typeof id === 'string')
+    )
+
+    await db.transaction('rw', db.accounts, db.syncQueue, async () => {
+      for (const remoteAccount of remoteAccounts) {
+        const activeQueue = await db.syncQueue
+          .where('user_id')
+          .equals(userId)
+          .filter(
+            (item) =>
+              item.table === 'accounts' &&
+              item.record_id === remoteAccount.id
+          )
+          .first()
+
+        if (activeQueue) continue
+
+        await db.accounts.put({
+          ...remoteAccount,
+          balance:
+            Math.round(Number(remoteAccount.balance ?? 0) * 100) / 100,
+          sync_status: 'synced',
+          sync_attempts: 0,
+          last_sync_error: null,
+        })
+      }
+
+      const staleIds = localAccounts
+        .filter(
+          (account: any) =>
+            account?.id &&
+            account.sync_status === 'synced' &&
+            !remoteIds.has(account.id) &&
+            !protectedAccountIds.has(account.id)
+        )
+        .map((account: any) => account.id)
+
+      if (staleIds.length > 0) {
+        await db.accounts.bulkDelete(staleIds)
+      }
+    })
+
+    const verifiedAt = new Date().toISOString()
+    setSnapshot({ balanceVerifiedAt: verifiedAt })
+    renderLog('Saldos das contas reconciliados com prioridade.', 'success')
+    return true
+  } catch (error: any) {
+    renderLog(
+      `Reconciliação prioritária de saldo falhou: ${error?.message || 'erro desconhecido'}`,
+      'error'
+    )
+    return false
+  } finally {
+    setSnapshot({ isBalanceReconciling: false })
+  }
 }
 
 async function healOrphanAccountSyncStates(
