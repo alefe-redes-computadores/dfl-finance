@@ -78,6 +78,23 @@ interface TransactionDiff {
   localOnlyDetails: TransactionInspection[]
 }
 
+interface AccountBalanceTomography {
+  id: string
+  name: string
+  localBalance: number | null
+  remoteBalance: number | null
+  localUpdatedAt: string
+  remoteUpdatedAt: string
+  localSyncStatus: string
+  queueItems: Array<{
+    id: string
+    operation: string
+    revision: number
+    attempts: number
+    lastError: string
+  }>
+}
+
 function Row({ label, value, ok }: { label: string; value: any; ok?: boolean }) {
   return (
     <div className="flex items-start justify-between gap-2 border-b border-gray-100 py-1.5 last:border-b-0 dark:border-slate-700/50">
@@ -112,11 +129,16 @@ export function AdminSyncDiagnostics() {
     useState<string | null>(null)
   const [orphanRepairMsg, setOrphanRepairMsg] = useState<string>('')
   const [repairingOrphans, setRepairingOrphans] = useState(false)
+  const [accountTomography, setAccountTomography] =
+    useState<AccountBalanceTomography[]>([])
+  const [accountTomographyError, setAccountTomographyError] =
+    useState<string | null>(null)
 
   const loadDiagnostics = async () => {
     setLoading(true)
     setTransactionDiff(null)
     setTransactionDiffError(null)
+    setAccountTomographyError(null)
 
     const { data: sessionData } = await supabase.auth.getSession()
     const uid = sessionData?.session?.user?.id || user?.id
@@ -320,6 +342,75 @@ export function AdminSyncDiagnostics() {
             'Falha ao comparar IDs de transactions.'
         )
       }
+    }
+
+    try {
+      const localAccounts = await db.accounts
+        .where('user_id')
+        .equals(uid)
+        .toArray()
+
+      const { data: remoteAccounts, error: remoteAccountsError } =
+        await supabase
+          .from('accounts')
+          .select('id, name, balance, updated_at')
+          .eq('user_id', uid)
+
+      if (remoteAccountsError) throw remoteAccountsError
+
+      const queueItems = await db.syncQueue
+        .where('user_id')
+        .equals(uid)
+        .toArray()
+
+      const remoteById = new Map(
+        (remoteAccounts || []).map((item: any) => [item.id, item])
+      )
+
+      const rows: AccountBalanceTomography[] = localAccounts
+        .map((local: any) => {
+          const remote: any = remoteById.get(local.id)
+          const relatedQueue = queueItems
+            .filter(
+              (item: any) =>
+                item.table === 'accounts' &&
+                item.record_id === local.id
+            )
+            .map((item: any) => ({
+              id: String(item.id || ''),
+              operation: String(item.operation || ''),
+              revision: Number(item.revision || 0),
+              attempts: Number(item.attempts || 0),
+              lastError: String(item.last_error || ''),
+            }))
+
+          return {
+            id: String(local.id),
+            name: String(local.name || '(sem nome)'),
+            localBalance: Number.isFinite(Number(local.balance))
+              ? Number(local.balance)
+              : null,
+            remoteBalance:
+              remote && Number.isFinite(Number(remote.balance))
+                ? Number(remote.balance)
+                : null,
+            localUpdatedAt: String(local.updated_at || ''),
+            remoteUpdatedAt: String(remote?.updated_at || ''),
+            localSyncStatus: String(local.sync_status || ''),
+            queueItems: relatedQueue,
+          }
+        })
+        .sort((a, b) => {
+          const aDiff = a.localBalance !== a.remoteBalance ? 1 : 0
+          const bDiff = b.localBalance !== b.remoteBalance ? 1 : 0
+          return bDiff - aDiff || a.name.localeCompare(b.name, 'pt-BR')
+        })
+
+      setAccountTomography(rows)
+    } catch (error: any) {
+      setAccountTomographyError(
+        error?.message || 'Falha ao comparar saldos local x remoto.'
+      )
     }
 
     setDiags(results)
@@ -542,6 +633,63 @@ export function AdminSyncDiagnostics() {
             </div>
           )
         })}
+      </div>
+
+      <div className="mb-4 rounded-[16px] border border-teal-200 bg-teal-50/60 p-3 dark:border-teal-900/40 dark:bg-teal-900/10">
+        <div className="mb-2">
+          <p className="text-[13px] font-semibold text-gray-900 dark:text-gray-100">
+            Tomografia de saldo
+          </p>
+          <p className="text-[10px] text-gray-500 dark:text-gray-400">
+            Dexie x Supabase x fila local. Somente leitura.
+          </p>
+        </div>
+
+        {accountTomographyError ? (
+          <p className="text-[11px] text-red-600 dark:text-red-400">
+            {accountTomographyError}
+          </p>
+        ) : accountTomography.length === 0 ? (
+          <p className="text-[11px] text-gray-500">Nenhuma conta encontrada.</p>
+        ) : (
+          <div className="space-y-2">
+            {accountTomography.map((item) => {
+              const mismatch = item.localBalance !== item.remoteBalance
+              return (
+                <div
+                  key={item.id}
+                  className={`rounded-[12px] border p-2.5 ${
+                    mismatch
+                      ? 'border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-900/10'
+                      : 'border-emerald-200 bg-white dark:border-emerald-900/40 dark:bg-slate-900/40'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-[12px] font-semibold text-gray-900 dark:text-gray-100">
+                      {item.name}
+                    </span>
+                    <span className={`text-[10px] font-semibold ${mismatch ? 'text-red-600' : 'text-emerald-600'}`}>
+                      {mismatch ? 'DIVERGENTE' : 'OK'}
+                    </span>
+                  </div>
+                  <div className="mt-1 space-y-0.5 font-mono text-[10px] text-gray-600 dark:text-gray-400">
+                    <p>local={String(item.localBalance)} · remoto={String(item.remoteBalance)}</p>
+                    <p>sync_status={item.localSyncStatus || '(vazio)'} · fila={item.queueItems.length}</p>
+                    <p className="break-all">local.updated_at={item.localUpdatedAt || '(vazio)'}</p>
+                    <p className="break-all">remote.updated_at={item.remoteUpdatedAt || '(vazio)'}</p>
+                    {item.queueItems.map((queue) => (
+                      <p key={queue.id} className="break-all text-orange-600 dark:text-orange-400">
+                        queue={queue.operation} rev={queue.revision} attempts={queue.attempts}
+                        {queue.lastError ? ` error=${queue.lastError}` : ''}
+                      </p>
+                    ))}
+                    <p className="break-all text-gray-400">id={item.id}</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {(schemaErrors.length > 0 || rlsErrors.length > 0 || outOfSync.length > 0) && (
