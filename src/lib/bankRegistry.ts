@@ -57,6 +57,8 @@ const asset = (
 })
 
 export const BANK_REGISTRY: readonly BankRegistryEntry[] = [
+  { id: 'wallet', name: 'Carteira', aliases: ['carteira', 'dinheiro', 'dinheiro físico', 'dinheiro fisico', 'cash'], color: '#0F766E', foreground: '#FFFFFF', sigla: 'CAR', kind: 'wallet', featured: true },
+
   { id: 'nubank', name: 'Nubank', aliases: ['nu', 'nu pagamentos', 'nu pagamentos s.a.'], color: '#820AD1', foreground: '#FFFFFF', sigla: 'nu', kind: 'nubank', featured: true },
   { id: 'inter', name: 'Inter', aliases: ['banco inter'], color: '#FF7A00', foreground: '#FFFFFF', sigla: 'inter', kind: 'inter', featured: true },
   { id: 'itau', name: 'Itaú', ispb: '60701190', regulatory: { ispb: '60701190', verifiedBy: 'bcb-sml' }, aliases: ['itau', 'itaú unibanco', 'itau unibanco'], color: '#EC7000', foreground: '#FFFFFF', sigla: 'itaú', kind: 'itau', featured: true },
@@ -89,7 +91,7 @@ export const BANK_REGISTRY: readonly BankRegistryEntry[] = [
     sigla: 'pag',
     kind: 'pagbank',
     featured: true,
-    asset: asset('/banks/pagbank.svg', '#FFFFFF', 'h-[72%] w-[72%] object-cover object-left'),
+    asset: asset('/banks/pagbank.svg', '#FFFFFF', 'h-[54%] w-[82%] object-contain'),
   },
 
   {
@@ -113,11 +115,17 @@ export const BANK_REGISTRY: readonly BankRegistryEntry[] = [
     sigla: 'stone',
     kind: 'stone',
     featured: true,
-    asset: asset('/banks/stone.svg', '#FFFFFF', 'h-[64%] w-[78%] object-cover object-left'),
+    asset: asset('/banks/stone.svg', '#FFFFFF', 'h-[52%] w-[80%] object-contain'),
   },
 
-  { id: 'ifood-pago', name: 'iFood Pago', aliases: ['ifood', 'ifood pagamentos'], color: '#EA1D2C', foreground: '#FFFFFF', sigla: 'iFood', kind: 'ifood', featured: true },
-  { id: 'infinitepay', name: 'InfinitePay', aliases: ['cloudwalk', 'infinite pay', 'infinitypay', 'infinitpay'], color: '#101827', foreground: '#FFFFFF', sigla: '∞', kind: 'cloudwalk', featured: true },
+  {
+    id: 'ifood-pago', name: 'iFood Pago', aliases: ['ifood', 'ifood pagamentos'],
+    color: '#EA1D2C', foreground: '#FFFFFF', sigla: 'iFood', kind: 'ifood', featured: true,
+  },
+  {
+    id: 'infinitepay', name: 'InfinitePay', aliases: ['cloudwalk', 'infinite pay', 'infinitypay', 'infinitpay'],
+    color: '#101827', foreground: '#FFFFFF', sigla: '∞', kind: 'cloudwalk', featured: true,
+  },
 
   { id: 'safra', name: 'Safra', aliases: ['banco safra'], color: '#0B1836', foreground: '#FFFFFF', sigla: 'SAF', kind: 'wordmark' },
   { id: 'original', name: 'Original', aliases: ['banco original'], color: '#00A651', foreground: '#FFFFFF', sigla: 'ORI', kind: 'wordmark' },
