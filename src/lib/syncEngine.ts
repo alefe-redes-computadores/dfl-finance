@@ -404,6 +404,142 @@ function isRetryDue(item: LocalSyncQueue) {
   return Date.now() - lastAttemptAt >= retryDelayMs(attempts)
 }
 
+async function healOrphanAccountSyncStates(
+  userId: string
+): Promise<number> {
+  /*
+   * V67 — autocura explícita de contas órfãs.
+   *
+   * Um registro pending/failed sem item correspondente na syncQueue
+   * não possui mutação local enviável. Nesse estado, o snapshot remoto
+   * é a única versão sincronizável e deve restaurar a convergência.
+   *
+   * A leitura remota é restrita ao usuário autenticado e a escrita
+   * ocorre somente no Dexie local. Nenhum saldo é recalculado.
+   */
+  const [localAccounts, queueItems] = await Promise.all([
+    db.accounts
+      .where('user_id')
+      .equals(userId)
+      .toArray(),
+    db.syncQueue
+      .where('user_id')
+      .equals(userId)
+      .toArray(),
+  ])
+
+  const queuedAccountIds = new Set(
+    queueItems
+      .filter((item) => item.table === 'accounts')
+      .map((item) => item.record_id)
+  )
+
+  const orphanIds = localAccounts
+    .filter(
+      (account: any) =>
+        (account.sync_status === 'pending' ||
+          account.sync_status === 'failed') &&
+        !queuedAccountIds.has(account.id)
+    )
+    .map((account: any) => account.id)
+    .filter(Boolean)
+
+  if (orphanIds.length === 0) {
+    return 0
+  }
+
+  const { data, error } = await supabase
+    .from('accounts')
+    .select('*')
+    .eq('user_id', userId)
+    .in('id', orphanIds)
+
+  if (error) {
+    throw new Error(
+      `Falha ao recuperar contas órfãs: ${error.message}`
+    )
+  }
+
+  const remoteAccounts = data ?? []
+
+  if (remoteAccounts.length === 0) {
+    return 0
+  }
+
+  await db.transaction(
+    'rw',
+    db.accounts,
+    db.syncQueue,
+    async () => {
+      for (const remoteAccount of remoteAccounts) {
+        /*
+         * Revalida dentro da transação: uma edição legítima pode ter
+         * criado fila entre a leitura inicial e a aplicação da cura.
+         */
+        const activeQueue = await db.syncQueue
+          .where('user_id')
+          .equals(userId)
+          .filter(
+            (item) =>
+              item.table === 'accounts' &&
+              item.record_id === remoteAccount.id
+          )
+          .first()
+
+        if (activeQueue) {
+          continue
+        }
+
+        const current = await db.accounts.get(remoteAccount.id)
+
+        if (
+          !current ||
+          current.user_id !== userId ||
+          (current.sync_status !== 'pending' &&
+            current.sync_status !== 'failed')
+        ) {
+          continue
+        }
+
+        await db.accounts.put({
+          ...remoteAccount,
+          balance:
+            Math.round(Number(remoteAccount.balance ?? 0) * 100) / 100,
+          sync_status: 'synced',
+          sync_attempts: 0,
+          last_sync_error: null,
+        })
+      }
+    }
+  )
+
+  let healed = 0
+
+  for (const remoteAccount of remoteAccounts) {
+    const current = await db.accounts.get(remoteAccount.id)
+    const expectedBalance =
+      Math.round(Number(remoteAccount.balance ?? 0) * 100) / 100
+    const currentBalance =
+      Math.round(Number(current?.balance ?? 0) * 100) / 100
+
+    if (
+      current?.sync_status === 'synced' &&
+      currentBalance === expectedBalance
+    ) {
+      healed += 1
+    }
+  }
+
+  if (healed > 0) {
+    renderLog(
+      `${healed} conta(s) com estado de sincronização órfão foram restauradas pelo snapshot remoto.`,
+      'success'
+    )
+  }
+
+  return healed
+}
+
 async function pullRemoteChanges(
   userId: string,
   force = false
@@ -933,6 +1069,23 @@ async function runSyncCycle(
     }
 
     const pullResult = await pullRemoteChanges(userId, forcePull)
+
+    /*
+     * V67 — segunda barreira determinística.
+     * Executada após o pull para reparar estados históricos em que
+     * sync_status ficou pending/failed sem qualquer operação na fila.
+     */
+    if (pullResult.success) {
+      try {
+        await healOrphanAccountSyncStates(userId)
+      } catch (error: any) {
+        renderLog(
+          `Autocura de contas não concluída: ${error?.message || 'erro desconhecido'}`,
+          'error'
+        )
+      }
+    }
+
     const remainingPendingCount = await refreshPendingCount(userId)
 
     const success =
