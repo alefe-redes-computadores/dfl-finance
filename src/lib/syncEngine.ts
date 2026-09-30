@@ -811,20 +811,64 @@ async function runSyncCycle(
 
             if (
               remoteChangedAfterQueue &&
-              !remoteMatchesLocal
+              !remoteMatchesLocal &&
+              remoteAccount
             ) {
-              const remoteBalance = Number(remoteAccount?.balance ?? 0)
+              const remoteBalance = Number(remoteAccount.balance ?? 0)
               const localBalance = Number(localRecord.balance ?? 0)
 
-              throw new Error(
-                [
-                  'BALANCE_SYNC_CONFLICT',
-                  `Conta ${item.record_id} mudou em outro cliente.`,
-                  `Local=${localBalance.toFixed(2)}`,
-                  `Remoto=${remoteBalance.toFixed(2)}`,
-                  'Saldo remoto preservado; conflito mantido na fila.',
-                ].join(' | ')
-              )
+              /*
+               * V64 — convergência multi-cliente de saldo.
+               *
+               * A V61 preservava corretamente o snapshot remoto mais novo,
+               * mas deixava a mutação local conflitante na fila. Como o pull
+               * protege registros pendentes/failed, esse cliente nunca mais
+               * aceitava o saldo remoto e podia permanecer divergente para
+               * sempre.
+               *
+               * Se o servidor mudou DEPOIS do início desta mutação local,
+               * o snapshot remoto é a versão vencedora. Aplicamos esse
+               * snapshot no Dexie e consumimos somente a revisão da fila que
+               * acabamos de validar. Se outra edição local ocorreu durante
+               * esta resolução, confirmSyncSuccessIfCurrent detecta a revisão
+               * nova e preserva a mutação mais recente.
+               */
+              await db.accounts.put({
+                ...localRecord,
+                ...remoteAccount,
+                sync_status: 'synced',
+                sync_attempts: 0,
+                last_sync_error: null,
+              })
+
+              const converged =
+                await confirmSyncSuccessIfCurrent(
+                  item.id,
+                  itemRevision
+                )
+
+              if (!converged) {
+                /*
+                 * Houve nova edição enquanto o conflito era resolvido.
+                 * Não apagamos a revisão nova; ela será tratada no próximo
+                 * ciclo de sincronização.
+                 */
+                renderLog(
+                  `Saldo da conta ${item.record_id} recebeu snapshot remoto, mas uma edição local mais nova foi preservada na fila.`,
+                  'info'
+                )
+              } else {
+                renderLog(
+                  [
+                    `Saldo convergido entre dispositivos: ${item.record_id}.`,
+                    `Local anterior=${localBalance.toFixed(2)}.`,
+                    `Remoto=${remoteBalance.toFixed(2)}.`,
+                  ].join(' '),
+                  'success'
+                )
+              }
+
+              continue
             }
           }
 
