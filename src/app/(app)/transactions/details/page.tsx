@@ -245,6 +245,16 @@ function EditTransactionContent() {
         tx?.context ||
           effectiveContext
       )
+    if (categoryId && !selectedCat) {
+      hapticError()
+      showToast(
+        'A categoria selecionada não é compatível com este tipo de transação.',
+        'warning'
+      )
+      setSaving(false)
+      return
+    }
+
     const finalDescription = description.trim() || selectedCat?.name || 'Transação sem nome'
 
     // Remove flags antigas antes de reconstruí-las para não duplicar a cada edição.

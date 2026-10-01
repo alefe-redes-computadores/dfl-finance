@@ -709,6 +709,15 @@ function NewTransactionContent() {
       return
     }
 
+    if (categoryId && !selectedCat) {
+      hapticError()
+      showToast(
+        'Categoria incompatível com o tipo da transação.',
+        'warning'
+      )
+      return
+    }
+
     setIsSubmitting(true)
     const finalDescription = desc.trim() || selectedCat?.name || 'Transação sem nome'
 

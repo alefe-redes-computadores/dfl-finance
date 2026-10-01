@@ -640,7 +640,11 @@ export default function CategoriesPage() {
                 <label className="mb-1.5 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">Ícone</label>
                 <button
                   type="button"
-                  onClick={() => { vibrate([5]); setShowIconModal(true) }}
+                  onClick={() => {
+                    vibrate([5])
+                    setShowForm(false)
+                    setShowIconModal(true)
+                  }}
                   className="flex w-full items-center gap-3 rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-3 text-left active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800"
                 >
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px]" style={{ backgroundColor: `${color}20`, color }}>
@@ -721,9 +725,10 @@ export default function CategoriesPage() {
 
       <IconPicker
         isOpen={showIconModal}
-        onClose={() =>
+        onClose={() => {
           setShowIconModal(false)
-        }
+          setShowForm(true)
+        }}
         selectedIcon={icon}
         onSelect={(iconName) => {
           setIcon(
@@ -732,6 +737,7 @@ export default function CategoriesPage() {
             ) || 'Tag'
           )
           setShowIconModal(false)
+          setShowForm(true)
         }}
       />
     </div>

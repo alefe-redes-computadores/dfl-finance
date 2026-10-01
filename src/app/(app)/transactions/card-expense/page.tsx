@@ -16,6 +16,7 @@ import MoneyInput from '@/components/MoneyInput'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useSafeDb } from '@/hooks/useSafeDb'
+import { filterTransactionCategories } from '@/lib/transactionCategoryOperations'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useToast } from '@/contexts/ToastContext'
 import { db } from '@/lib/db'
@@ -69,14 +70,15 @@ export default function CardExpensePage() {
 
   const loading = cardsLoading || catsLoading || tagsLoading
 
-  const categories = useMemo(() => {
-    return [...(localCategories || [])].sort((a: any, b: any) => {
-      const orderA = a.order_index ?? 9999
-      const orderB = b.order_index ?? 9999
-      if (orderA !== orderB) return orderA - orderB
-      return (a.name || '').localeCompare(b.name || '')
-    })
-  }, [localCategories])
+  const categories = useMemo(
+    () =>
+      filterTransactionCategories(
+        localCategories || [],
+        'expense',
+        effectiveContext
+      ),
+    [localCategories, effectiveContext]
+  )
 
   const handleSave = async () => {
     if (isSubmitting || saved) return

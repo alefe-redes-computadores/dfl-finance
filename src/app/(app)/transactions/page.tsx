@@ -592,6 +592,10 @@ export default function TransactionsPage() {
     useMemo(() => {
       if (!filterCategoryType) {
         return [...(localCategories || [])]
+          .filter(
+            (category: any) =>
+              category.is_archived !== true
+          )
           .sort((a: any, b: any) => {
             const typeCompare =
               String(a.type || '')
