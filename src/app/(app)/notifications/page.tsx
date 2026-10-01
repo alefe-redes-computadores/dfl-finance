@@ -21,6 +21,7 @@ import {
   normalizeNotificationReadState,
 } from '@/lib/notificationUtils'
 import { useIsAdmin } from '@/hooks/useAdmin'
+import NotificationPreferencesCard from '@/components/NotificationPreferencesCard'
 
 // SKELETON ATUALIZADO
 const NotificationsSkeleton = () => (
@@ -383,6 +384,7 @@ export default function NotificationsPage() {
       </div>
 
       <div className="px-4 pt-3">
+        <NotificationPreferencesCard />
         {loading ? (
           <NotificationsSkeleton />
         ) : filteredNotifications.length === 0 ? (

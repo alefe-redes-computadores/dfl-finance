@@ -28,6 +28,7 @@ import Skeleton from '@/components/Skeleton'
 import { UndoToast } from '@/components/ui/UndoToast'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import { useUserSettings } from '@/hooks/useUserSettings'
 import {
   safeNumber,
   safeDate,
@@ -114,7 +115,9 @@ function HomeContent() {
   const [showBalanceUpdated, setShowBalanceUpdated] = useState(false)
 
   const [showNotifications, setShowNotifications] = useState(false)
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+  const { settings: notificationSettings } = useUserSettings()
+  const notificationsEnabled =
+    notificationSettings?.preferences.push_notifications ?? false
 
   const [enabledSections, setEnabledSections] = useState<string[]>(DEFAULT_SECTION_ORDER)
   const [showPersonalizeModal, setShowPersonalizeModal] = useState(false)
@@ -148,11 +151,6 @@ function HomeContent() {
     const timer = window.setTimeout(() => setShowBalanceUpdated(false), 1500)
     return () => window.clearTimeout(timer)
   }, [balanceVerifiedAt, isBalanceReconciling, isOnline])
-
-  useEffect(() => {
-    const saved = localStorage.getItem('dfl_notifications_enabled')
-    setNotificationsEnabled(saved !== 'false')
-  }, [])
 
   const { data: rawTransactions, loading: txLoading } = useLocalData({
     table: 'transactions' as any,
