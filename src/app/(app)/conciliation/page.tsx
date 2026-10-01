@@ -1,28 +1,38 @@
-// src/app/(app)/conciliation/page.tsx
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
+  AlertCircle,
+  ArrowDownRight,
   ArrowLeft,
-  CheckCircle2,
+  ArrowUpRight,
+  CalendarDays,
+  Check,
+  ChevronRight,
+  CircleDollarSign,
+  Clock3,
   FileSearch,
-  ListChecks,
+  Inbox,
+  Landmark,
   Pencil,
+  ReceiptText,
   RefreshCcw,
+  SearchCheck,
   WalletCards,
+  X,
 } from 'lucide-react'
 import { db } from '@/lib/db'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { useContext_ } from '@/components/ContextToggle'
-import { useSafeDb } from '@/hooks/useSafeDb'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-import { useConciQueue } from '@/hooks/useConciQueue'
-import { ConciCard } from '@/components/conciliation/ConciCard'
-import { ConciProgress } from '@/components/conciliation/ConciProgress'
-import { ConciSummary } from '@/components/conciliation/ConciSummary'
+import {
+  conciliatePendingTransaction,
+  saveConciliationReview,
+} from '@/lib/conciliationOperations'
 import Skeleton from '@/components/Skeleton'
 
 function safeNum(value: unknown) {
@@ -30,11 +40,44 @@ function safeNum(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-function localIsoDate(date: Date) {
+function localIsoDate(date = new Date()) {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value)
+}
+
+function sourceMeta(source?: string | null) {
+  switch (source) {
+    case 'ai_ocr':
+      return { label: 'Comprovante', review: true, icon: ReceiptText }
+    case 'ofx_import':
+    case 'ofx_merged':
+      return { label: 'Importação', review: true, icon: FileSearch }
+    case 'whatsapp':
+      return { label: 'WhatsApp', review: true, icon: SearchCheck }
+    case 'recurring':
+      return { label: 'Recorrente', review: false, icon: RefreshCcw }
+    default:
+      return { label: 'Manual', review: false, icon: Pencil }
+  }
+}
+
+type ReviewDraft = {
+  id: string
+  description: string
+  amount: string
+  date: string
+  account_id: string
+  category_id: string
+  type: string
 }
 
 export default function ConciliationPage() {
@@ -42,473 +85,483 @@ export default function ConciliationPage() {
   const { user } = useAuth()
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
-  const { safeUpdate } = useSafeDb()
   const { showToast } = useToast()
-  const { vibrate, success, error: errorHaptic } = useHapticFeedback()
-  const [processing, setProcessing] = useState(false)
-
-  const {
-    queue,
-    current,
-    currentIndex,
-    total,
-    approved,
-    rejected,
-    pending,
-    processed,
-    hydrated,
-    isComplete,
-    approve,
-    reject,
-    skip,
-    reset,
-    clear,
-  } = useConciQueue()
+  const { light, success, error: errorHaptic } = useHapticFeedback()
+  const [processingId, setProcessingId] = useState<string | null>(null)
+  const [review, setReview] = useState<ReviewDraft | null>(null)
+  const [filter, setFilter] = useState<'all' | 'overdue' | 'today' | 'review'>('all')
 
   const data = useLiveQuery(async () => {
-    if (!user?.id) return { transactions: [], accounts: [] }
+    if (!user?.id) return { transactions: [], accounts: [], categories: [] }
 
-    const [transactions, accounts] = await Promise.all([
+    const [transactions, accounts, categories] = await Promise.all([
       db.transactions.where('user_id').equals(user.id).toArray(),
       db.accounts.where('user_id').equals(user.id).toArray(),
+      db.categories.where('user_id').equals(user.id).toArray(),
     ])
 
-    const conciliationCutoff = localIsoDate(new Date())
+    const today = localIsoDate()
 
     return {
       transactions: transactions
-        .filter((item: any) => {
-          if (
-            item.context !== effectiveContext ||
-            item.status !== 'pending'
-          ) {
-            return false
-          }
-
-          const date = String(item.date || '').slice(0, 10)
-
-          return Boolean(date) && date <= conciliationCutoff
+        .filter((tx: any) => {
+          if (tx.context !== effectiveContext || tx.status !== 'pending') return false
+          const date = String(tx.date || '').slice(0, 10)
+          return Boolean(date) && date <= today
         })
-        .sort((a: any, b: any) =>
-          String(a.date || '').localeCompare(
-            String(b.date || '')
-          )
-        ),
-      accounts: accounts.filter(
-        (item: any) =>
-          item.context === effectiveContext
-      ),
+        .sort((a: any, b: any) => {
+          const reviewDiff = Number(sourceMeta(b.source).review) - Number(sourceMeta(a.source).review)
+          if (reviewDiff) return reviewDiff
+          return String(a.date || '').localeCompare(String(b.date || ''))
+        }),
+      accounts: accounts.filter((item: any) => item.context === effectiveContext && !item.is_archived),
+      categories: categories.filter((item: any) => item.context === effectiveContext && !item.is_archived),
     }
   }, [user?.id, effectiveContext])
 
-  const pendingTransactions = useMemo(() => data?.transactions ?? [], [data?.transactions])
+  const transactions = useMemo(() => data?.transactions ?? [], [data?.transactions])
   const accounts = useMemo(() => data?.accounts ?? [], [data?.accounts])
-  const loading = !hydrated || data === undefined
+  const categories = useMemo(() => data?.categories ?? [], [data?.categories])
+  const loading = data === undefined
+  const today = localIsoDate()
 
-  const pendingBreakdown = useMemo(() => {
-    const today = localIsoDate(new Date())
-
-    return pendingTransactions.reduce(
-      (
-        acc: {
-          overdue: number
-          today: number
-          whatsapp: number
-          payableAmount: number
-          receivableAmount: number
-        },
-        tx: any
-      ) => {
-        const date =
-          String(tx.date || '').slice(0, 10)
-
-        const amount =
-          safeNum(tx.amount)
-
-        if (date && date < today) {
-          acc.overdue += 1
-        }
-
-        if (date === today) {
-          acc.today += 1
-        }
-
-        if (tx.type === 'income') {
-          acc.receivableAmount += amount
-        } else {
-          acc.payableAmount += amount
-        }
-
-        if (tx.source === 'whatsapp') {
-          acc.whatsapp += 1
-        }
-
+  const stats = useMemo(() => {
+    return transactions.reduce(
+      (acc, tx: any) => {
+        const date = String(tx.date || '').slice(0, 10)
+        const amount = safeNum(tx.amount)
+        if (date < today) acc.overdue++
+        if (date === today) acc.today++
+        if (sourceMeta(tx.source).review) acc.review++
+        if (tx.type === 'income') acc.receivable += amount
+        else acc.payable += amount
         return acc
       },
-      {
-        overdue: 0,
-        today: 0,
-        whatsapp: 0,
-        payableAmount: 0,
-        receivableAmount: 0,
-      }
+      { overdue: 0, today: 0, review: 0, payable: 0, receivable: 0 }
     )
-  }, [pendingTransactions])
+  }, [transactions, today])
 
-  const formatMoney = (value: number) =>
-    new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value)
+  const visible = useMemo(() => {
+    return transactions.filter((tx: any) => {
+      const date = String(tx.date || '').slice(0, 10)
+      if (filter === 'overdue') return date < today
+      if (filter === 'today') return date === today
+      if (filter === 'review') return sourceMeta(tx.source).review
+      return true
+    })
+  }, [transactions, filter, today])
 
   const accountMap = useMemo(
-    () => new Map(accounts.map((account: any) => [account.id, account])),
+    () => new Map(accounts.map((item: any) => [item.id, item])),
     [accounts]
   )
+  const categoryMap = useMemo(
+    () => new Map(categories.map((item: any) => [item.id, item])),
+    [categories]
+  )
 
-  useEffect(() => {
-    if (!hydrated || !user?.id || data === undefined) return
+  const openReview = (tx: any) => {
+    light()
+    setReview({
+      id: tx.id,
+      description: tx.description || '',
+      amount: String(safeNum(tx.amount)),
+      date: String(tx.date || '').slice(0, 10),
+      account_id: tx.account_id || '',
+      category_id: tx.category_id || '',
+      type: tx.type,
+    })
+  }
 
-    const eligibleIds = new Set(
-      pendingTransactions.map(
-        (tx: any) => String(tx.id)
-      )
-    )
-
-    const queueIds = queue
-      .map((item: any) =>
-        String(item?.originalData?.id || '')
-      )
-      .filter(Boolean)
-
-    const queueMatchesScope =
-      queueIds.length === eligibleIds.size &&
-      queueIds.every((id) => eligibleIds.has(id))
-
-    if (pendingTransactions.length === 0) {
-      if (queue.length > 0) clear()
-      return
-    }
-
-    if (queue.length > 0 && queueMatchesScope) {
-      return
-    }
-
-    if (queue.length > 0) {
-      clear()
-    }
-
-    reset(
-      pendingTransactions.map((tx: any) => ({
-        date: tx.date,
-        description: tx.description || 'Transação sem descrição',
-        amount: safeNum(tx.amount),
-        type: tx.type === 'income' ? 'income' : 'expense',
-        accountName: tx.account_id ? accountMap.get(tx.account_id)?.name : undefined,
-        accountId: tx.account_id || undefined,
-        context: tx.context,
-        source:
-          tx.source === 'whatsapp'
-            ? ('whatsapp' as const)
-            : tx.source === 'ofx_import' || tx.source === 'ofx_merged'
-              ? ('csv' as const)
-              : tx.source === 'ai_ocr'
-                ? ('ocr' as const)
-                : ('manual' as const),
-        originalData: {
-          id: tx.id,
-          account_id: tx.account_id || null,
-          credit_card_id: tx.credit_card_id || null,
-          source: tx.source || null,
-        },
-      }))
-    )
-  }, [
-    hydrated,
-    user?.id,
-    data,
-    queue,
-    pendingTransactions,
-    accountMap,
-    reset,
-    clear,
-  ])
-
-  const sourceTransactionId = current?.originalData?.id as string | undefined
-
-  const handleConciliate = async () => {
-    if (!user?.id || !current || !sourceTransactionId || processing) return
-
-    setProcessing(true)
-
+  const saveReview = async () => {
+    if (!user?.id || !review || processingId) return
+    setProcessingId(review.id)
     try {
-      const tx = await db.transactions.get(sourceTransactionId)
-
-      if (!tx) {
-        approve()
-        showToast('Esta pendência não existe mais e foi removida da revisão.', 'warning')
-        return
-      }
-
-      if (tx.user_id !== user.id) {
-        throw new Error('A transação pertence a outro usuário.')
-      }
-
-      if (tx.status !== 'pending') {
-        approve()
-        showToast('Esta transação já foi concluída.', 'success')
-        return
-      }
-
-      if (!tx.account_id) {
-        errorHaptic()
-        showToast('Escolha uma conta para concluir esta pendência.', 'warning')
-        router.push(`/transactions/details?id=${tx.id}`)
-        return
-      }
-
-      const account = await db.accounts.get(tx.account_id)
-      if (!account || account.user_id !== user.id) {
-        throw new Error('A conta vinculada não foi encontrada.')
-      }
-
-      const currentBalance = safeNum(account.balance)
-      const amount = safeNum(tx.amount)
-
-      // affects_balance=true significa que o valor já está refletido no saldo.
-      // Uma pendência importada/legada nesse estado deve apenas ser concluída;
-      // somá-la novamente causaria dupla contabilização.
-      const shouldApplyBalance = tx.affects_balance !== true
-      const nextBalance = tx.type === 'income'
-        ? currentBalance + amount
-        : currentBalance - amount
-
-      await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
-        if (shouldApplyBalance) {
-          const accountResult = await safeUpdate('accounts', account.id, {
-            balance: nextBalance,
-            updated_at: new Date().toISOString(),
-          })
-
-          if (!accountResult.success) {
-            throw new Error(accountResult.error || 'Não foi possível atualizar o saldo da conta.')
-          }
-        }
-
-        const txResult = await safeUpdate('transactions', tx.id, {
-          status: 'done',
-          affects_balance: true,
-          updated_at: new Date().toISOString(),
-        })
-
-        if (!txResult.success) {
-          throw new Error(txResult.error || 'Não foi possível concluir a transação.')
-        }
+      await saveConciliationReview(user.id, review.id, {
+        description: review.description,
+        amount: Number(review.amount.replace(',', '.')),
+        date: review.date,
+        account_id: review.account_id,
+        category_id: review.category_id || null,
       })
-
-      approve()
       success()
-      showToast(tx.type === 'income' ? 'Recebimento conciliado' : 'Pagamento conciliado', 'success')
-    } catch (err: any) {
+      showToast('Revisão salva. Agora você pode conciliar com segurança.', 'success')
+      setReview(null)
+    } catch (error: any) {
       errorHaptic()
-      showToast(err?.message || 'Não foi possível conciliar esta pendência.', 'error')
+      showToast(error?.message || 'Não foi possível salvar a revisão.', 'error')
     } finally {
-      setProcessing(false)
+      setProcessingId(null)
     }
   }
 
-  const handleReject = () => {
-    if (!current || processing) return
-    vibrate([10])
-    reject()
-    showToast('Pendência adiada nesta revisão', 'info')
-  }
+  const conciliate = async (tx: any) => {
+    if (!user?.id || processingId) return
+    if (!tx.account_id) {
+      openReview(tx)
+      showToast('Escolha a conta antes de conciliar.', 'warning')
+      return
+    }
 
-  const handleReset = () => {
-    clear()
-    reset(
-      pendingTransactions.map((tx: any) => ({
-        date: tx.date,
-        description: tx.description || 'Transação sem descrição',
-        amount: safeNum(tx.amount),
-        type: tx.type === 'income' ? 'income' : 'expense',
-        accountName: tx.account_id ? accountMap.get(tx.account_id)?.name : undefined,
-        accountId: tx.account_id || undefined,
-        context: tx.context,
-        source:
-          tx.source === 'whatsapp'
-            ? ('whatsapp' as const)
-            : ('manual' as const),
-        originalData: {
-          id: tx.id,
-          account_id: tx.account_id || null,
-          source: tx.source || null,
-        },
-      }))
-    )
+    setProcessingId(tx.id)
+    try {
+      const result = await conciliatePendingTransaction(user.id, tx.id)
+      success()
+      showToast(
+        result.alreadyDone
+          ? 'Esta transação já estava concluída.'
+          : tx.type === 'income'
+            ? 'Recebimento conciliado e saldo atualizado.'
+            : 'Pagamento conciliado e saldo atualizado.',
+        'success'
+      )
+    } catch (error: any) {
+      errorHaptic()
+      showToast(error?.message || 'Não foi possível conciliar.', 'error')
+    } finally {
+      setProcessingId(null)
+    }
   }
 
   if (loading) {
     return (
-      <div className="min-h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 px-4 pt-6">
+      <div className="min-h-[100dvh] bg-[#f6f7f8] px-4 pt-6 dark:bg-slate-950">
         <Skeleton count={6} />
       </div>
     )
   }
 
   return (
-    <div className="max-w-md mx-auto min-h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 pb-28 transition-colors">
-      <header className="sticky top-0 z-30 bg-[#f6f7f8]/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-black/5 dark:border-white/5 px-4 pt-5 pb-4">
-        <div className="flex items-center justify-between gap-3">
-          <button onClick={() => router.push('/more')} className="h-10 w-10 rounded-[16px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 flex items-center justify-center active:scale-95 transition-transform">
-            <ArrowLeft size={20} />
+    <div className="mx-auto min-h-[100dvh] max-w-md bg-[#f6f7f8] pb-28 transition-colors dark:bg-slate-950">
+      <header className="sticky top-0 z-30 border-b border-black/5 bg-[#f6f7f8]/92 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-white/5 dark:bg-slate-950/92">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.push('/more')}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border border-black/5 bg-white text-gray-600 active:scale-95 dark:border-white/5 dark:bg-slate-900 dark:text-gray-300"
+          >
+            <ArrowLeft size={19} />
           </button>
-          <div className="text-center">
-            <h1 className="text-[18px] font-bold text-gray-900 dark:text-white">Conciliação</h1>
-            <p className="text-[11px] font-medium text-gray-400">Revisão de valores a pagar e a receber</p>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-[20px] font-black tracking-tight text-gray-900 dark:text-white">
+              Conciliação
+            </h1>
+            <p className="text-[11px] font-medium text-gray-400">
+              Confirme antes de movimentar seu saldo
+            </p>
           </div>
-          <button onClick={handleReset} disabled={pendingTransactions.length === 0 || processing} className="h-10 w-10 rounded-[16px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 flex items-center justify-center text-gray-500 dark:text-gray-400 disabled:opacity-40 active:scale-95 transition-transform">
-            <RefreshCcw size={18} />
-          </button>
+          <div className="flex h-10 min-w-10 items-center justify-center rounded-[16px] bg-sky-50 px-3 text-[12px] font-black text-sky-700 dark:bg-sky-500/10 dark:text-sky-400">
+            {transactions.length}
+          </div>
         </div>
       </header>
 
-      <main className="px-4 pt-5 space-y-4">
-        <section className="rounded-[22px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.13em] font-bold text-gray-400">Fila de revisão</p>
-              <p className="mt-1.5 text-[26px] leading-none font-black text-gray-900 dark:text-white">{pendingTransactions.length}</p>
-              <p className="mt-2 text-[11px] leading-4 text-gray-500 dark:text-gray-400">Somente vencidas e com vencimento até hoje.</p>
+      <main className="space-y-4 px-4 pt-4">
+        <section className="overflow-hidden rounded-[26px] border border-black/5 bg-white shadow-sm dark:border-white/5 dark:bg-slate-900">
+          <div className="p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400">
+                <Inbox size={21} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] font-black text-gray-900 dark:text-white">Caixa de revisão financeira</p>
+                <p className="mt-0.5 text-[11px] leading-4 text-gray-400">
+                  Futuras ficam no planejamento. Aqui entram somente vencidas, hoje e itens importados que já podem ser revisados.
+                </p>
+              </div>
             </div>
-            <div className="w-11 h-11 rounded-[16px] bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center">
-              <ListChecks size={20} className="text-sky-600 dark:text-sky-400" />
-            </div>
-          </div>
 
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <div className="rounded-[15px] bg-red-50/80 px-3 py-2.5 dark:bg-red-500/10">
-              <p className="text-[18px] font-black text-red-600 dark:text-red-400">{pendingBreakdown.overdue}</p>
-              <p className="text-[9.5px] font-bold uppercase tracking-wide text-red-500/70 dark:text-red-400/70">Atrasadas</p>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {[
+                { label: 'Atrasadas', value: stats.overdue, icon: AlertCircle, cls: 'text-red-600 bg-red-50 dark:bg-red-500/10 dark:text-red-400' },
+                { label: 'Hoje', value: stats.today, icon: Clock3, cls: 'text-amber-700 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400' },
+                { label: 'Revisar', value: stats.review, icon: SearchCheck, cls: 'text-violet-700 bg-violet-50 dark:bg-violet-500/10 dark:text-violet-400' },
+              ].map(({ label, value, icon: Icon, cls }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setFilter(label === 'Atrasadas' ? 'overdue' : label === 'Hoje' ? 'today' : 'review')}
+                  className={`min-w-0 rounded-[17px] p-3 text-left active:scale-[0.98] ${cls}`}
+                >
+                  <Icon size={16} />
+                  <p className="mt-2 text-[19px] font-black leading-none">{value}</p>
+                  <p className="mt-1 truncate text-[9px] font-black uppercase tracking-wide opacity-70">{label}</p>
+                </button>
+              ))}
             </div>
-            <div className="rounded-[15px] bg-amber-50/80 px-3 py-2.5 dark:bg-amber-500/10">
-              <p className="text-[18px] font-black text-amber-700 dark:text-amber-400">
-                {pendingBreakdown.today}
-              </p>
 
-              <p className="text-[9.5px] font-bold uppercase tracking-wide text-amber-600/70 dark:text-amber-400/70">
-                Hoje
-              </p>
-            </div>
-            <div className="rounded-[15px] bg-emerald-50/80 px-3 py-2.5 dark:bg-emerald-500/10">
-              <p className="text-[18px] font-black text-emerald-700 dark:text-emerald-400">{pendingBreakdown.whatsapp}</p>
-              <p className="text-[9.5px] font-bold uppercase tracking-wide text-emerald-600/70 dark:text-emerald-400/70">WhatsApp</p>
-            </div>
-          </div>
-
-          {pendingTransactions.length > 0 && (
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <div className="rounded-[15px] border border-red-100 bg-red-50/45 px-3 py-2.5 dark:border-red-500/10 dark:bg-red-500/5">
-                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-red-500/70">
-                  A pagar
-                </p>
-
-                <p className="mt-1 truncate text-[12px] font-black text-red-600 dark:text-red-400">
-                  {formatMoney(
-                    pendingBreakdown.payableAmount
-                  )}
-                </p>
+              <div className="min-w-0 rounded-[17px] border border-red-100 bg-red-50/40 p-3 dark:border-red-500/10 dark:bg-red-500/5">
+                <p className="text-[9px] font-black uppercase tracking-wide text-red-500/70">A pagar</p>
+                <p className="mt-1 truncate text-[13px] font-black text-red-600 dark:text-red-400">{formatMoney(stats.payable)}</p>
               </div>
-
-              <div className="rounded-[15px] border border-emerald-100 bg-emerald-50/45 px-3 py-2.5 dark:border-emerald-500/10 dark:bg-emerald-500/5">
-                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-emerald-600/70">
-                  A receber
-                </p>
-
-                <p className="mt-1 truncate text-[12px] font-black text-emerald-700 dark:text-emerald-400">
-                  {formatMoney(
-                    pendingBreakdown.receivableAmount
-                  )}
-                </p>
+              <div className="min-w-0 rounded-[17px] border border-emerald-100 bg-emerald-50/40 p-3 dark:border-emerald-500/10 dark:bg-emerald-500/5">
+                <p className="text-[9px] font-black uppercase tracking-wide text-emerald-600/70">A receber</p>
+                <p className="mt-1 truncate text-[13px] font-black text-emerald-700 dark:text-emerald-400">{formatMoney(stats.receivable)}</p>
               </div>
             </div>
-          )}
+          </div>
 
-          {pendingBreakdown.whatsapp > 0 && (
-            <p className="mt-3 text-[10.5px] leading-4 text-gray-400 dark:text-gray-500">
-              Itens do WhatsApp permanecem fora do saldo até você revisar e conciliar.
-            </p>
-          )}
+          <div className="flex gap-2 overflow-x-auto border-t border-gray-100 px-4 py-3 scrollbar-hide dark:border-slate-800">
+            {[
+              ['all', 'Todas'],
+              ['overdue', 'Atrasadas'],
+              ['today', 'Hoje'],
+              ['review', 'Para revisar'],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => { light(); setFilter(key as typeof filter) }}
+                className={`shrink-0 rounded-full border px-3 py-2 text-[11px] font-bold ${
+                  filter === key
+                    ? 'border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-gray-900'
+                    : 'border-gray-200 bg-white text-gray-500 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-400'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </section>
 
-        {queue.length > 0 && !isComplete && (
-          <ConciProgress
-            current={Math.min(processed + 1, total)}
-            total={total}
-            approved={approved}
-            rejected={rejected}
-          />
-        )}
-
-        {isComplete ? (
-          <ConciSummary
-            total={total}
-            approved={approved}
-            rejected={rejected}
-            onReset={handleReset}
-            onFinish={() => clear()}
-          />
-        ) : current ? (
-          <>
-            <ConciCard
-              transaction={current}
-              onApprove={() => void handleConciliate()}
-              onReject={handleReject}
-              onTap={() => {
-                if (sourceTransactionId) router.push(`/transactions/details?id=${sourceTransactionId}`)
-              }}
-              isLast={pending <= 1}
-              isLoading={processing}
-            />
-
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => sourceTransactionId && router.push(`/transactions/details?id=${sourceTransactionId}`)}
-                className="h-12 rounded-[18px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 text-gray-700 dark:text-gray-300 font-bold text-[13px] flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-              >
-                <Pencil size={16} /> Editar antes
-              </button>
-              <button
-                onClick={skip}
-                className="h-12 rounded-[18px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 text-gray-700 dark:text-gray-300 font-bold text-[13px] flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-              >
-                <FileSearch size={16} /> Ver depois
-              </button>
+        {visible.length === 0 ? (
+          <section className="flex flex-col items-center justify-center rounded-[26px] border border-black/5 bg-white px-6 py-14 text-center shadow-sm dark:border-white/5 dark:bg-slate-900">
+            <div className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+              <Check size={24} />
             </div>
-
-            {!current.accountId && (
-              <div className="rounded-[18px] bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20 p-4 flex gap-3">
-                <WalletCards size={19} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-[13px] font-bold text-amber-800 dark:text-amber-300">Conta necessária para concluir</p>
-                  <p className="mt-1 text-[12px] leading-5 text-amber-700/80 dark:text-amber-300/70">Pendências podem existir sem conta. Ao conciliar, escolha a conta que receberá o impacto no saldo.</p>
-                </div>
-              </div>
-            )}
-          </>
+            <h2 className="mt-4 text-[16px] font-black text-gray-900 dark:text-white">
+              {transactions.length === 0 ? 'Tudo conciliado' : 'Nada neste filtro'}
+            </h2>
+            <p className="mt-1 max-w-[250px] text-[11px] leading-5 text-gray-400">
+              {transactions.length === 0
+                ? 'Não há pendências vencidas ou de hoje aguardando sua revisão.'
+                : 'As outras pendências continuam preservadas na caixa de revisão.'}
+            </p>
+          </section>
         ) : (
-          <section className="rounded-[20px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 p-5 text-center">
-            <div className="w-16 h-16 rounded-[18px] bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 size={29} className="text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <h2 className="text-[19px] font-black text-gray-900 dark:text-white">Nada para conciliar</h2>
-            <p className="mt-2 text-[13px] leading-5 text-gray-500 dark:text-gray-400">Não há pendências vencidas ou com vencimento hoje. Lançamentos futuros ficam fora desta revisão.</p>
-            <button onClick={() => router.push('/transactions/new')} className="mt-5 h-12 px-5 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white font-bold text-[14px] active:scale-[0.98] transition-transform">
-              Nova transação
-            </button>
+          <section className="space-y-2.5">
+            {visible.map((tx: any) => {
+              const account = tx.account_id ? accountMap.get(tx.account_id) : null
+              const category = tx.category_id ? categoryMap.get(tx.category_id) : null
+              const meta = sourceMeta(tx.source)
+              const SourceIcon = meta.icon
+              const overdue = String(tx.date || '').slice(0, 10) < today
+              const isIncome = tx.type === 'income'
+              const busy = processingId === tx.id
+
+              return (
+                <article
+                  key={tx.id}
+                  className="overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-sm dark:border-white/5 dark:bg-slate-900"
+                >
+                  <button
+                    type="button"
+                    onClick={() => openReview(tx)}
+                    className="w-full p-4 text-left active:bg-gray-50 dark:active:bg-slate-800"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] ${
+                        isIncome
+                          ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
+                          : 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400'
+                      }`}>
+                        {isIncome ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-black text-gray-900 dark:text-white">
+                              {tx.description || 'Transação sem descrição'}
+                            </p>
+                            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] font-semibold text-gray-400">
+                              <SourceIcon size={12} className="shrink-0" />
+                              <span className="truncate">{meta.label}</span>
+                              <span>•</span>
+                              <span className={overdue ? 'text-red-500' : ''}>
+                                {String(tx.date || '').slice(0, 10).split('-').reverse().join('/')}
+                              </span>
+                            </div>
+                          </div>
+                          <p className={`shrink-0 text-[14px] font-black ${isIncome ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-white'}`}>
+                            {formatMoney(safeNum(tx.amount))}
+                          </p>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          <span className={`max-w-full truncate rounded-full px-2.5 py-1 text-[9.5px] font-bold ${
+                            account
+                              ? 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400'
+                              : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
+                          }`}>
+                            {account?.name || 'Conta pendente'}
+                          </span>
+                          <span className="max-w-full truncate rounded-full bg-gray-50 px-2.5 py-1 text-[9.5px] font-bold text-gray-500 dark:bg-slate-800 dark:text-gray-400">
+                            {category?.name || 'Sem categoria'}
+                          </span>
+                          {meta.review && (
+                            <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[9.5px] font-bold text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">
+                              Revisão recomendada
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight size={16} className="mt-1 shrink-0 text-gray-300" />
+                    </div>
+                  </button>
+
+                  <div className="grid grid-cols-2 gap-2 border-t border-gray-100 p-2.5 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => openReview(tx)}
+                      disabled={busy}
+                      className="flex h-10 items-center justify-center gap-2 rounded-[15px] bg-gray-50 text-[11px] font-black text-gray-600 active:scale-[0.98] disabled:opacity-50 dark:bg-slate-800 dark:text-gray-300"
+                    >
+                      <Pencil size={14} /> Revisar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void conciliate(tx)}
+                      disabled={busy}
+                      className="flex h-10 items-center justify-center gap-2 rounded-[15px] bg-gray-900 text-[11px] font-black text-white active:scale-[0.98] disabled:opacity-50 dark:bg-white dark:text-gray-900"
+                    >
+                      <Check size={14} /> {busy ? 'Conciliando…' : 'Conciliar'}
+                    </button>
+                  </div>
+                </article>
+              )
+            })}
           </section>
         )}
       </main>
+
+      {review && createPortal(
+        <div
+          className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => !processingId && setReview(null)}
+        >
+          <div
+            className="max-h-[88dvh] w-full max-w-lg overflow-y-auto rounded-t-[32px] bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-3 shadow-2xl dark:bg-slate-900"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 h-1.5 w-11 rounded-full bg-slate-200 dark:bg-slate-700" />
+
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+                <SearchCheck size={20} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[17px] font-black text-gray-900 dark:text-white">Revisar pendência</h2>
+                <p className="mt-0.5 text-[11px] leading-4 text-gray-400">
+                  Corrija os dados antes de movimentar o saldo.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReview(null)}
+                className="flex h-9 w-9 items-center justify-center rounded-[14px] bg-gray-50 text-gray-400 dark:bg-slate-800"
+              >
+                <X size={17} />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              <label className="block">
+                <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-gray-400">Descrição</span>
+                <input
+                  value={review.description}
+                  onChange={(e) => setReview({ ...review, description: e.target.value })}
+                  className="h-12 w-full rounded-[17px] border border-gray-200 bg-gray-50 px-3.5 text-[13px] font-semibold text-gray-800 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100"
+                />
+              </label>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block min-w-0">
+                  <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-gray-400">Valor</span>
+                  <div className="relative">
+                    <CircleDollarSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      inputMode="decimal"
+                      value={review.amount}
+                      onChange={(e) => setReview({ ...review, amount: e.target.value })}
+                      className="h-12 w-full min-w-0 rounded-[17px] border border-gray-200 bg-gray-50 pl-9 pr-3 text-[13px] font-black text-gray-800 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100"
+                    />
+                  </div>
+                </label>
+
+                <label className="block min-w-0">
+                  <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-gray-400">Data</span>
+                  <div className="relative">
+                    <CalendarDays size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="date"
+                      value={review.date}
+                      onChange={(e) => setReview({ ...review, date: e.target.value })}
+                      className="h-12 w-full min-w-0 rounded-[17px] border border-gray-200 bg-gray-50 pl-9 pr-2 text-[12px] font-bold text-gray-800 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100"
+                    />
+                  </div>
+                </label>
+              </div>
+
+              <label className="block">
+                <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-gray-400">Conta</span>
+                <div className="relative">
+                  <Landmark size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <select
+                    value={review.account_id}
+                    onChange={(e) => setReview({ ...review, account_id: e.target.value })}
+                    className="h-12 w-full appearance-none rounded-[17px] border border-gray-200 bg-gray-50 pl-9 pr-8 text-[12px] font-bold text-gray-800 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100"
+                  >
+                    <option value="">Escolha uma conta</option>
+                    {accounts.map((account: any) => (
+                      <option key={account.id} value={account.id}>{account.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-gray-400">Categoria</span>
+                <div className="relative">
+                  <WalletCards size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <select
+                    value={review.category_id}
+                    onChange={(e) => setReview({ ...review, category_id: e.target.value })}
+                    className="h-12 w-full appearance-none rounded-[17px] border border-gray-200 bg-gray-50 pl-9 pr-8 text-[12px] font-bold text-gray-800 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100"
+                  >
+                    <option value="">Sem categoria</option>
+                    {categories
+                      .filter((category: any) => category.type === (review.type === 'income' ? 'income' : 'expense'))
+                      .map((category: any) => (
+                        <option key={category.id} value={category.id}>{category.name}</option>
+                      ))}
+                  </select>
+                </div>
+              </label>
+            </div>
+
+            <div className="sticky bottom-0 mt-5 grid grid-cols-2 gap-3 bg-white pb-1 pt-2 dark:bg-slate-900">
+              <button
+                type="button"
+                disabled={Boolean(processingId)}
+                onClick={() => setReview(null)}
+                className="h-12 rounded-[18px] bg-gray-100 text-[12px] font-black text-gray-600 disabled:opacity-50 dark:bg-slate-800 dark:text-gray-300"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(processingId)}
+                onClick={() => void saveReview()}
+                className="flex h-12 items-center justify-center gap-2 rounded-[18px] bg-teal-600 text-[12px] font-black text-white disabled:opacity-50"
+              >
+                <Check size={15} /> {processingId ? 'Salvando…' : 'Salvar revisão'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

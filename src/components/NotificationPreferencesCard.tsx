@@ -254,8 +254,8 @@ export default function NotificationPreferencesCard() {
             Antecedência
           </p>
 
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            {leadOptions.map((option) => {
+          <div className="grid grid-cols-6 gap-2">
+            {leadOptions.map((option, index) => {
               const active = selectedLeadDays.includes(option.value)
 
               return (
@@ -264,16 +264,18 @@ export default function NotificationPreferencesCard() {
                   type="button"
                   disabled={saving}
                   onClick={() => toggleLead(option.value)}
-                  className={`shrink-0 rounded-full border px-3 py-2 text-[11px] font-bold transition active:scale-95 ${
+                  className={`min-w-0 rounded-[16px] border px-2 py-2.5 text-[11px] font-bold leading-none transition active:scale-95 ${
+                    index < 3 ? 'col-span-2' : 'col-span-3'
+                  } ${
                     active
                       ? 'border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300'
                       : 'border-gray-200 text-gray-500 dark:border-slate-700 dark:text-gray-400'
                   }`}
                 >
-                  {active && (
-                    <Check size={12} className="mr-1 inline" />
-                  )}
-                  {option.label}
+                  <span className="flex items-center justify-center gap-1 whitespace-nowrap">
+                    {active && <Check size={12} className="shrink-0" />}
+                    <span>{option.label}</span>
+                  </span>
                 </button>
               )
             })}

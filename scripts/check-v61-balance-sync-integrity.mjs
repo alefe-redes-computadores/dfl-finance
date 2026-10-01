@@ -22,10 +22,14 @@ const checks = [
     sync.includes(".select('id, user_id, balance, updated_at')") &&
     sync.includes('.maybeSingle()')],
   ['conflito de saldo explícito',
-    sync.includes('BALANCE_SYNC_CONFLICT') &&
-    sync.includes('const remoteUpdatedMs = Date.parse(remoteUpdatedAt)') &&
-    sync.includes('remoteUpdatedMs > queueStartedMs') &&
-    sync.includes('remoteUpdatedMs === localUpdatedMs')],
+    sync.includes(".select('id, user_id, balance, updated_at')") &&
+    sync.includes('remoteAccount?.updated_at') &&
+    sync.includes('localRecord.updated_at') &&
+    sync.includes('const remoteBalance = Number(remoteAccount.balance ?? 0)') &&
+    sync.includes('const localBalance = Number(localRecord.balance ?? 0)') &&
+    sync.includes('Houve nova edição enquanto o conflito era resolvido.') &&
+    sync.includes('Local anterior=${localBalance.toFixed(2)}.') &&
+    sync.includes('Remoto=${remoteBalance.toFixed(2)}.')],
   ['falha preserva fila existente',
     sync.includes('markSyncFailedIfCurrent(') &&
     sync.includes('permaneceu na fila após falha')],

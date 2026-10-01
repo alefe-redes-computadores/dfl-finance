@@ -367,13 +367,13 @@ export default function ImportCSVPage() {
       if (failCount === 0) {
         success()
         showToast(
-          `${successCount} transações importadas com sucesso.`,
+          `${successCount} transações enviadas para revisão. O saldo ainda não foi alterado.`,
           'success'
         )
       } else {
         vibrate([20, 40, 20])
         showToast(
-          `${successCount} importadas e ${failCount} ignoradas. Linhas inválidas, transferências ou duplicidades não foram criadas.`,
+          `${successCount} enviadas para revisão e ${failCount} ignoradas. O saldo ainda não foi alterado.`,
           'warning'
         )
       }

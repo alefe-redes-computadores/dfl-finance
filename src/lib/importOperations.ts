@@ -162,8 +162,8 @@ export async function importAccountTransactions(
           amount,
           description,
           date: item.date,
-          status: 'done',
-          affects_balance: true,
+          status: 'pending',
+          affects_balance: false,
           category_id: item.category_id ?? null,
           account_id: accountId,
           credit_card_id: null,
@@ -174,6 +174,7 @@ export async function importAccountTransactions(
           updated_at: now,
           sync_status: 'pending',
           sync_attempts: 0,
+          source: source === 'receipt' ? 'ai_ocr' : 'ofx_import',
         }
 
         const signature = buildImportTransactionSignature(transaction)
@@ -200,14 +201,7 @@ export async function importAccountTransactions(
         accepted.push(transaction)
       }
 
-      let balanceDelta = 0
-
       for (const transaction of accepted) {
-        balanceDelta +=
-          transaction.type === 'income'
-            ? transaction.amount
-            : -transaction.amount
-
         await db.transactions.add(transaction)
 
         await addToSyncQueue(
@@ -219,24 +213,9 @@ export async function importAccountTransactions(
         )
       }
 
-      if (accepted.length > 0) {
-        const updatedAccount = {
-          ...account,
-          balance: Number(account.balance || 0) + balanceDelta,
-          updated_at: now,
-          sync_status: 'pending' as const,
-        }
-
-        await db.accounts.put(updatedAccount)
-
-        await addToSyncQueue(
-          userId,
-          'accounts',
-          'update',
-          account.id,
-          updatedAccount
-        )
-      }
+      // V71: importações entram na Caixa de Revisão.
+      // O saldo só é alterado quando a pendência for conciliada.
+      const balanceDelta = 0
 
       console.info(
         `[import:${source}] ${accepted.length} importadas, ${duplicates} duplicadas ignoradas`

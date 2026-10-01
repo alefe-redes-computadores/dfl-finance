@@ -232,8 +232,8 @@ function ImportContent() {
 
       committedReceiptPathRef.current = receiptPath
       success()
-      showToast('Comprovante importado e saldo atualizado.', 'success')
-      router.push('/home')
+      showToast('Comprovante enviado para revisão. O saldo será atualizado após a conciliação.', 'success')
+      router.push('/conciliation')
     } catch (error: any) {
       errorHaptic()
       showToast(error?.message || 'Erro ao salvar a transação.', 'error')
