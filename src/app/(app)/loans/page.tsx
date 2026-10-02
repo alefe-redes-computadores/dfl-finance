@@ -15,8 +15,8 @@ import { useContext_ } from '@/components/ContextToggle'
 import ContextToggle from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { useSafeDb } from '@/hooks/useSafeDb'
 import { useLocalData } from '@/hooks/useLocalData'
+import { deleteLoanWithLedger } from '@/lib/creditContractOperations'
 
 type Payment = { id: string, loan_id: string, amount: number, date: string }
 
@@ -29,8 +29,6 @@ export default function LoansPage() {
   
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
-
-  const { safeDelete } = useSafeDb()
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -61,24 +59,37 @@ export default function LoansPage() {
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     vibrate([10, 50])
+
     try {
-      const payments = (paymentsByLoan[deleteModal] || [])
-      
-      for (const p of payments) {
-        const res1 = await safeDelete('transactions', p.id)
-        if (!res1.success) throw new Error(res1.error)
-      }
-      
-      const res2 = await safeDelete('loans', deleteModal)
-      if (!res2.success) throw new Error(res2.error)
+      await deleteLoanWithLedger({
+        userId: user.id,
+        loanId: deleteModal,
+      })
 
       success()
-      showToast("Empréstimo excluído com sucesso.", "success")
+      showToast("Empréstimo excluído e efeitos financeiros revertidos.", "success")
       setDeleteModal(null)
     } catch (err: any) {
       errorHaptic()
       showToast(`Não foi possível excluir o empréstimo: ${err.message}`, "error")
     }
+  }
+
+  const loanLedger = (loan: any) => {
+    const payments = paymentsByLoan[loan.id] || []
+    const paid = payments
+      .filter((payment: any) => !payment.status || payment.status === 'done')
+      .reduce((sum: number, payment: Payment) => sum + Number(payment.amount || 0), 0)
+    const principal = Number(loan.amount || 0)
+    const remaining = Math.max(0, principal - paid)
+    const status =
+      remaining <= 0
+        ? 'paid'
+        : loan.status === 'overdue'
+          ? 'overdue'
+          : 'active'
+
+    return { paid, principal, remaining, status }
   }
 
   const filteredLoans = (loans || []).filter((loan: any) => {
@@ -88,9 +99,24 @@ export default function LoansPage() {
   })
 
   const sortedLoans = [...filteredLoans].sort((a: any, b: any) => {
-    let valA = a[sortBy] || ""; let valB = b[sortBy] || ""
-    if (sortBy === "amount" || sortBy === "remaining_amount") return sortOrder === "desc" ? Number(b[sortBy]) - Number(a[sortBy]) : Number(a[sortBy]) - Number(b[sortBy])
-    return sortOrder === "desc" ? String(valB).localeCompare(String(valA)) : String(valA).localeCompare(String(valB))
+    if (sortBy === "remaining_amount") {
+      const valA = loanLedger(a).remaining
+      const valB = loanLedger(b).remaining
+      return sortOrder === "desc" ? valB - valA : valA - valB
+    }
+
+    let valA = a[sortBy] || ""
+    let valB = b[sortBy] || ""
+
+    if (sortBy === "amount") {
+      return sortOrder === "desc"
+        ? Number(valB) - Number(valA)
+        : Number(valA) - Number(valB)
+    }
+
+    return sortOrder === "desc"
+      ? String(valB).localeCompare(String(valA))
+      : String(valA).localeCompare(String(valB))
   })
 
   const formatCurrency = (val: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
@@ -102,13 +128,11 @@ export default function LoansPage() {
 
   const summary = (loans || []).reduce(
     (acc: { active: number; principal: number; paid: number; open: number }, loan: any) => {
-      const payments = paymentsByLoan[loan.id] || []
-      const paid = payments.reduce((sum: number, payment: Payment) => sum + Number(payment.amount || 0), 0)
-      const principal = Number(loan.amount || 0)
-      acc.principal += principal
-      acc.paid += paid
-      acc.open += Math.max(0, principal - paid)
-      if (loan.status === 'active') acc.active += 1
+      const ledger = loanLedger(loan)
+      acc.principal += ledger.principal
+      acc.paid += ledger.paid
+      acc.open += ledger.remaining
+      if (ledger.status === 'active' || ledger.status === 'overdue') acc.active += 1
       return acc
     },
     { active: 0, principal: 0, paid: 0, open: 0 }
@@ -244,8 +268,10 @@ export default function LoansPage() {
           <div className="space-y-4 animate-in fade-in duration-500">
             {sortedLoans.map((loan: any) => {
               const payments = (paymentsByLoan[loan.id] || [])
-              const totalPaid = payments.reduce((sum: number, p: Payment) => sum + (p.amount || 0), 0)
-              const remaining = (loan.amount || 0) - totalPaid
+              const ledger = loanLedger(loan)
+              const totalPaid = ledger.paid
+              const remaining = ledger.remaining
+              const visualStatus = ledger.status
               const isExpanded = expandedId === loan.id
 
               return (
@@ -265,13 +291,13 @@ export default function LoansPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 mt-3">
-                          {getStatusBadge(loan.status)}
+                          {getStatusBadge(visualStatus)}
                           <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500">{formatDate(loan.date)}</span>
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <p className="font-black text-[18px] text-gray-800 dark:text-gray-100">{formatCurrency(loan.amount || 0)}</p>
-                        {loan.status === "active" && <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 mt-1">Resta: {formatCurrency(Math.max(0, remaining))}</p>}
+                        {visualStatus !== "paid" && <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 mt-1">Resta: {formatCurrency(remaining)}</p>}
                       </div>
                     </div>
                     {loan.lender && <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mt-3">{loan.direction === "lent" ? "Devedor" : "Credor"}: <span className="font-bold text-gray-700 dark:text-gray-300">{loan.lender}</span></p>}
@@ -312,7 +338,7 @@ export default function LoansPage() {
                   </button>
 
                   <div className="px-5 pb-5 pt-0 flex gap-2">
-                    {loan.status === "active" && (
+                    {visualStatus !== "paid" && (
                       <button onClick={() => { vibrate([5]); router.push(`/loans/details?id=${loan.id}`); }} className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-[16px] bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 font-bold text-[13px] active:scale-95 transition-transform">
                         <ArrowLeftRight size={16} /> Ver Detalhes
                       </button>

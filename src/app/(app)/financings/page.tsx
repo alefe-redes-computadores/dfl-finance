@@ -92,6 +92,19 @@ export default function FinancingsPage() {
 
     try {
       const installments = installmentsByFinancing[deleteModal] || []
+      const hasPaidInstallment = installments.some(
+        (item: any) => item.paid || item.status === 'done'
+      )
+
+      if (hasPaidInstallment) {
+        errorHaptic()
+        showToast(
+          'Desfaça os pagamentos antes de excluir o financiamento.',
+          'warning'
+        )
+        setDeleteModal(null)
+        return
+      }
 
       for (const inst of installments) {
         const res1 = await safeDelete('transactions', inst.id)
@@ -110,6 +123,27 @@ export default function FinancingsPage() {
     }
   }
 
+  const financingLedger = (fin: any) => {
+    const installments = installmentsByFinancing[fin.id] || []
+    const paidInstallments = installments.filter(
+      (item: any) => item.paid || item.status === 'done'
+    )
+    const paid = paidInstallments.reduce(
+      (sum: number, item: Installment) => sum + Number(item.amount || 0),
+      0
+    )
+    const total = Number(fin.total_amount || 0)
+    const remaining = Math.max(0, total - paid)
+    const status =
+      remaining <= 0
+        ? 'paid'
+        : fin.status === 'overdue'
+          ? 'overdue'
+          : 'active'
+
+    return { installments, paidInstallments, paid, total, remaining, status }
+  }
+
   const filteredFinancings = (financings || []).filter((fin: any) => {
     if (!search) return true
     const s = search.toLowerCase()
@@ -121,10 +155,16 @@ export default function FinancingsPage() {
   })
 
   const sortedFinancings = [...filteredFinancings].sort((a: any, b: any) => {
-    if (sortBy === "total_amount" || sortBy === "remaining_amount") {
+    if (sortBy === "remaining_amount") {
+      const valA = financingLedger(a).remaining
+      const valB = financingLedger(b).remaining
+      return sortOrder === "desc" ? valB - valA : valA - valB
+    }
+
+    if (sortBy === "total_amount") {
       return sortOrder === "desc"
-        ? Number(b[sortBy] || 0) - Number(a[sortBy] || 0)
-        : Number(a[sortBy] || 0) - Number(b[sortBy] || 0)
+        ? Number(b.total_amount || 0) - Number(a.total_amount || 0)
+        : Number(a.total_amount || 0) - Number(b.total_amount || 0)
     }
 
     const valA = a[sortBy] || ""
@@ -182,8 +222,8 @@ export default function FinancingsPage() {
 
   const summary = (financings || []).reduce(
     (acc: { active: number; principal: number; paid: number; open: number }, fin: any) => {
-      const installments = installmentsByFinancing[fin.id] || []
-      const paid = installments.filter((item: Installment) => item.paid).reduce((sum: number, item: Installment) => sum + Number(item.amount || 0), 0)
+      const ledger = financingLedger(fin)
+      const paid = ledger.paid
       const principal = Number(fin.total_amount || 0)
       acc.principal += principal
       acc.paid += paid
@@ -382,13 +422,12 @@ export default function FinancingsPage() {
         ) : (
           <div className="animate-in fade-in space-y-2.5 duration-500">
             {sortedFinancings.map((fin: any) => {
-              const installments = installmentsByFinancing[fin.id] || []
-              const paidInstallments = installments.filter((i: Installment) => i.paid)
-              const totalPaid = paidInstallments.reduce(
-                (sum: number, i: Installment) => sum + (i.amount || 0),
-                0
-              )
-              const remaining = (fin.total_amount || 0) - totalPaid
+              const ledger = financingLedger(fin)
+              const installments = ledger.installments
+              const paidInstallments = ledger.paidInstallments
+              const totalPaid = ledger.paid
+              const remaining = ledger.remaining
+              const visualStatus = ledger.status
               const isExpanded = expandedId === fin.id
 
               return (
@@ -422,7 +461,7 @@ export default function FinancingsPage() {
                           )}
 
                           <div className="mt-2 flex flex-wrap items-center gap-2">
-                            {getStatusBadge(fin.status)}
+                            {getStatusBadge(visualStatus)}
                             <span className="text-[12px] text-gray-400 dark:text-gray-500">
                               {formatDate(fin.start_date)}
                             </span>
@@ -434,7 +473,7 @@ export default function FinancingsPage() {
                         <p className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
                           {formatCurrency(fin.total_amount || 0)}
                         </p>
-                        {fin.status === "active" && (
+                        {visualStatus !== "paid" && (
                           <p className="mt-1 text-[12px] text-gray-400 dark:text-gray-500">
                             Falta {formatCurrency(Math.max(0, remaining))}
                           </p>

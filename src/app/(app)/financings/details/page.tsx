@@ -526,7 +526,16 @@ function FinancingDetailContent() {
 
   if (!financingData) return null
 
-  const remaining = (financingData.total_amount || 0) - totalPaid
+  const remaining = Math.max(
+    0,
+    Number(financingData.total_amount || 0) - totalPaid
+  )
+  const visualStatus =
+    remaining <= 0
+      ? "paid"
+      : financingData.status === "overdue"
+        ? "overdue"
+        : "active"
   const progressPercent = financingData.total_amount
     ? (totalPaid / financingData.total_amount) * 100
     : 0
@@ -541,7 +550,7 @@ function FinancingDetailContent() {
 
       <FinancingHeader
         title={financingData.description || "Financiamento"}
-        status={financingData.status}
+        status={visualStatus}
         getStatusBadge={getStatusBadge}
         onBack={() => {
           vibrate([5])

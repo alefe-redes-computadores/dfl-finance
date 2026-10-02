@@ -265,7 +265,12 @@ function LoanDetailContent() {
   const totalPaid = (payments || []).reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0)
   const remaining = Math.max(0, amount - totalPaid)
   const interestRate = Number(loan.interest_rate) || 0
-  const status = loan.status || "active"
+  const status =
+    remaining <= 0
+      ? "paid"
+      : loan.status === "overdue"
+        ? "overdue"
+        : "active"
 
   const accent = isLent ? {
     text: "text-teal-600 dark:text-teal-400",
