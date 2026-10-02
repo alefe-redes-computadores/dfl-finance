@@ -1,73 +1,156 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 import { supabase } from '@/lib/supabase'
 
-export function useAuth() {
-  const [user, setUser] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+type AuthSnapshot = {
+  user: any | null
+  loading: boolean
+}
 
-  useEffect(() => {
-    let mounted = true
+const SERVER_SNAPSHOT: AuthSnapshot = {
+  user: null,
+  loading: true,
+}
 
-    const initializeAuth = async () => {
-      // 1. Verificação Agressiva Offline
-      if (typeof window !== 'undefined' && !window.navigator.onLine) {
-        try {
-          // Procura a chave do Supabase salva no celular
-          const storageKey = Object.keys(window.localStorage).find(key => 
-            key.startsWith('sb-') && key.endsWith('-auth-token')
-          )
-          
-          if (storageKey) {
-            const sessionStr = window.localStorage.getItem(storageKey)
-            if (sessionStr) {
-              const sessionData = JSON.parse(sessionStr)
-              if (sessionData?.user) {
-                if (mounted) {
-                  setUser(sessionData.user)
-                  setLoading(false)
-                }
-                // Aborta a requisição para o servidor e confia no cache
-                return 
-              }
-            }
-          }
-        } catch (err) {
-          console.error('Erro ao ler autenticação offline:', err)
+let snapshot: AuthSnapshot = SERVER_SNAPSHOT
+let initialized = false
+let authSubscription: { unsubscribe: () => void } | null = null
+const listeners = new Set<() => void>()
+
+function emit() {
+  listeners.forEach((listener) => listener())
+}
+
+function setSnapshot(next: AuthSnapshot) {
+  if (
+    snapshot.user?.id === next.user?.id &&
+    snapshot.user === next.user &&
+    snapshot.loading === next.loading
+  ) {
+    return
+  }
+
+  snapshot = next
+  emit()
+}
+
+function readCachedUser() {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const storageKey = Object.keys(window.localStorage).find(
+      (key) => key.startsWith('sb-') && key.endsWith('-auth-token')
+    )
+
+    if (!storageKey) return null
+
+    const raw = window.localStorage.getItem(storageKey)
+    if (!raw) return null
+
+    const parsed = JSON.parse(raw)
+    return parsed?.user ?? null
+  } catch (error) {
+    console.error('Erro ao ler autenticação offline:', error)
+    return null
+  }
+}
+
+function ensureAuthRuntime() {
+  if (initialized || typeof window === 'undefined') return
+  initialized = true
+
+  const cachedUser = readCachedUser()
+
+  /*
+   * Local-first: se existe sessão persistida, liberamos a primeira pintura
+   * imediatamente. O getSession abaixo confirma/atualiza a sessão sem
+   * transformar rede lenta em tela de carregamento infinita.
+   */
+  if (cachedUser) {
+    setSnapshot({
+      user: cachedUser,
+      loading: false,
+    })
+  }
+
+  void supabase.auth
+    .getSession()
+    .then(({ data: { session } }) => {
+      /*
+       * Offline + sessão vazia não derruba uma identidade local válida.
+       */
+      if (!window.navigator.onLine && !session && snapshot.user) {
+        if (snapshot.loading) {
+          setSnapshot({ user: snapshot.user, loading: false })
         }
+        return
       }
 
-      // 2. Fluxo Normal (Online)
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (mounted) {
-          setUser(session?.user ?? null)
-          setLoading(false)
-        }
+      setSnapshot({
+        user: session?.user ?? cachedUser ?? null,
+        loading: false,
       })
-    }
-
-    initializeAuth()
-
-    // 3. Listener protegido contra falso-negativo de rede
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (mounted) {
-        // Se a internet cair e o Supabase disparar um evento vazio por erro de rede, ignoramos.
-        // Isso evita deslogar o usuário indevidamente.
-        if (typeof window !== 'undefined' && !window.navigator.onLine && !session) {
-          return
-        }
-        
-        setUser(session?.user ?? null)
-        setLoading(false)
-      }
+    })
+    .catch((error) => {
+      console.error('Falha ao restaurar sessão:', error)
+      setSnapshot({
+        user: snapshot.user ?? cachedUser,
+        loading: false,
+      })
     })
 
-    return () => {
-      mounted = false
-      subscription.unsubscribe()
+  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    /*
+     * Eventos vazios durante perda de rede não deslogam o usuário.
+     */
+    if (!window.navigator.onLine && !session && snapshot.user) {
+      return
     }
-  }, [])
 
-  return { user, loading }
+    setSnapshot({
+      user: session?.user ?? null,
+      loading: false,
+    })
+  })
+
+  authSubscription = data.subscription
+}
+
+function subscribe(listener: () => void) {
+  ensureAuthRuntime()
+  listeners.add(listener)
+
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+function getSnapshot() {
+  ensureAuthRuntime()
+  return snapshot
+}
+
+function getServerSnapshot() {
+  return SERVER_SNAPSHOT
+}
+
+export function useAuth() {
+  return useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getServerSnapshot
+  )
+}
+
+/*
+ * Mantido somente para diagnóstico/testes futuros.
+ * A assinatura é singleton e não é desmontada por consumidores individuais.
+ */
+export function getAuthRuntimeDiagnostics() {
+  return {
+    initialized,
+    hasSubscription: Boolean(authSubscription),
+    listenerCount: listeners.size,
+  }
 }

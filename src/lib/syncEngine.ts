@@ -85,6 +85,9 @@ let pendingSubscription: { unsubscribe: () => void } | null = null
 let activeSyncPromise: Promise<SyncCycleResult> | null = null
 let queuedForcePromise: Promise<SyncCycleResult> | null = null
 let periodicSyncTimer: ReturnType<typeof setInterval> | null = null
+let lastPassiveSyncAt = 0
+
+const PASSIVE_SYNC_INTERVAL_MS = 5 * 60_000
 
 function emit() {
   listeners.forEach(
@@ -155,11 +158,44 @@ function ensureRuntime() {
     renderLog('Dispositivo offline.', 'error')
   }
 
+  const handleVisibilityChange = () => {
+    if (
+      document.visibilityState !== 'visible' ||
+      !currentUserId ||
+      !snapshot.isOnline
+    ) {
+      return
+    }
+
+    /*
+     * Ao voltar ao app, buscamos mudanças remotas sem esperar o relógio
+     * periódico. O single-flight existente impede ciclos concorrentes.
+     */
+    lastPassiveSyncAt = Date.now()
+    void processSyncQueue(false)
+  }
+
   window.addEventListener('online', handleOnline)
   window.addEventListener('offline', handleOffline)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 
   periodicSyncTimer = setInterval(() => {
     if (!currentUserId || !snapshot.isOnline) return
+
+    /*
+     * Fila local pendente continua recebendo oportunidade a cada minuto.
+     * Sem fila, o pull passivo cai para 5 minutos. Isso reduz consultas
+     * remotas em repouso sem sacrificar retomada, foco ou sincronização manual.
+     */
+    if (snapshot.pendingCount > 0) {
+      void processSyncQueue(false)
+      return
+    }
+
+    const now = Date.now()
+    if (now - lastPassiveSyncAt < PASSIVE_SYNC_INTERVAL_MS) return
+
+    lastPassiveSyncAt = now
     void processSyncQueue(false)
   }, 60_000)
 }
@@ -210,6 +246,8 @@ export function configureSyncEngine(userId: string | null) {
   watchPendingCount(userId)
 
   if (userId && online) {
+    lastPassiveSyncAt = Date.now()
+
     /*
      * V68 — saldo é dado crítico de abertura.
      * Reconciliamos somente accounts primeiro; o sync completo continua
