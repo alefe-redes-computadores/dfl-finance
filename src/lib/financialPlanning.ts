@@ -21,6 +21,8 @@ export interface FinancialPlanSnapshot {
   committedPayables: number
   probableReceivables: number
   estimatedRemainingExpense: number
+  estimatedRemainingIncome: number
+  knownCommitmentNet: number
   recurringMonthly: number
   cardExposure: number
   creditCommitments: number
@@ -66,10 +68,32 @@ export function buildFinancialPlan(
     tx.type === 'expense' || tx.type === 'sangria' ? sum + Math.abs(n(tx.amount)) : sum, 0)
   const probableReceivables = pending.reduce((sum, tx) =>
     tx.type === 'income' ? sum + Math.abs(n(tx.amount)) : sum, 0)
+  const projectedMonthIncome =
+    n(snapshot.projectedMonthNet) +
+    n(snapshot.projectedMonthExpense)
+
   const estimatedRemainingExpense = Math.max(
     0,
-    n(snapshot.projectedMonthExpense) - n(snapshot.currentMonthExpense)
+    n(snapshot.projectedMonthExpense) -
+      n(snapshot.currentMonthExpense) -
+      committedPayables
   )
+
+  const estimatedRemainingIncome = Math.max(
+    0,
+    projectedMonthIncome -
+      n(snapshot.currentMonthIncome) -
+      probableReceivables
+  )
+
+  const knownCommitmentNet =
+    probableReceivables - committedPayables
+
+  const futureNet =
+    knownCommitmentNet +
+    estimatedRemainingIncome -
+    estimatedRemainingExpense
+
   const creditCommitments =
     n(snapshot.activeLoanRemaining) + n(snapshot.activeFinancingRemaining)
 
@@ -80,14 +104,20 @@ export function buildFinancialPlan(
     committedPayables: money(committedPayables),
     probableReceivables: money(probableReceivables),
     estimatedRemainingExpense: money(estimatedRemainingExpense),
+    estimatedRemainingIncome: money(estimatedRemainingIncome),
+    knownCommitmentNet: money(knownCommitmentNet),
     recurringMonthly: money(snapshot.recurringMonthlyEquivalent),
     cardExposure: money(snapshot.creditCardOpenExposure),
     creditCommitments: money(creditCommitments),
     availableAfterKnownCommitments: money(
       snapshot.accountBalance - committedPayables + probableReceivables
     ),
-    projectedMonthNet: money(snapshot.projectedMonthNet),
-    projectedMonthEndCash: money(snapshot.accountBalance + snapshot.projectedMonthNet),
+    projectedMonthNet: money(
+      n(snapshot.currentMonthNet) + futureNet
+    ),
+    projectedMonthEndCash: money(
+      n(snapshot.accountBalance) + futureNet
+    ),
     confidence: snapshot.confidence,
     sampleSize: snapshot.sampleSize,
   }

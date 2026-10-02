@@ -2,7 +2,7 @@
 'use client'
 
 import { useLiveQuery } from 'dexie-react-hooks'
-import { differenceInCalendarDays, format, subMonths } from 'date-fns'
+import { addDays, differenceInCalendarDays, format, subMonths } from 'date-fns'
 import { db } from '@/lib/db'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
@@ -20,6 +20,9 @@ export interface ProjectionData {
   currentBalance: number
   projectedEndBalance: number
   dailyAverage: number
+  estimatedDailyExpense: number
+  knownPayables30: number
+  knownReceivables30: number
   pendingDebts: number
   isAtRisk: boolean
   riskLevel: 'low' | 'medium' | 'high' | 'critical'
@@ -91,6 +94,10 @@ export function useProjection(
 
     const now = new Date()
     const today = format(now, 'yyyy-MM-dd')
+    const futureEnd = format(
+      addDays(now, 29),
+      'yyyy-MM-dd'
+    )
     const historyStart = format(
       subMonths(now, 3),
       'yyyy-MM-dd'
@@ -107,16 +114,18 @@ export function useProjection(
         .toArray(),
 
       /*
-       * O Dexie já possui [user_id+context+date].
-       * A projeção usa somente a janela histórica de 3 meses,
-       * então não há motivo para materializar todo o ledger do
-       * contexto e descartar o restante em JavaScript.
+       * Uma única leitura indexada cobre:
+       * - histórico realizado dos últimos 3 meses;
+       * - compromissos pendentes conhecidos dos próximos 30 dias.
+       *
+       * O histórico continua filtrado abaixo por transação realizada.
+       * Pendências futuras entram somente como fluxo conhecido.
        */
       db.transactions
         .where('[user_id+context+date]')
         .between(
           [userId, context, historyStart],
-          [userId, context, today],
+          [userId, context, futureEnd],
           true,
           true
         )
@@ -266,6 +275,78 @@ export function useProjection(
           : 'low'
 
     /*
+     * V74 — conhecido x estimado.
+     *
+     * Pendências com conta definida são compromissos de caixa conhecidos.
+     * Elas entram na data exata. Para impedir dupla contagem, a tendência
+     * estatística cobre somente a parcela residual da despesa de 30 dias
+     * que ainda não está representada por compromissos conhecidos.
+     *
+     * Compras de cartão sem conta de liquidação não são debitadas aqui:
+     * a fatura/baixa continua sendo a autoridade do caixa.
+     */
+    const knownFlowsByDay = new Map<
+      string,
+      { income: number; expense: number }
+    >()
+
+    for (const transaction of transactions) {
+      const date = String(transaction.date || '').slice(0, 10)
+
+      if (
+        transaction.status !== 'pending' ||
+        !transaction.account_id ||
+        !date ||
+        date < today ||
+        date > futureEnd
+      ) {
+        continue
+      }
+
+      const current =
+        knownFlowsByDay.get(date) || {
+          income: 0,
+          expense: 0,
+        }
+
+      if (transaction.type === 'income') {
+        current.income +=
+          Math.abs(safeNumber(transaction.amount))
+      } else if (
+        transaction.type === 'expense' ||
+        transaction.type === 'sangria'
+      ) {
+        current.expense +=
+          Math.abs(safeNumber(transaction.amount))
+      }
+
+      knownFlowsByDay.set(date, current)
+    }
+
+    const knownPayables30 =
+      Array.from(knownFlowsByDay.values())
+        .reduce(
+          (sum, flow) => sum + flow.expense,
+          0
+        )
+
+    const knownReceivables30 =
+      Array.from(knownFlowsByDay.values())
+        .reduce(
+          (sum, flow) => sum + flow.income,
+          0
+        )
+
+    const estimatedExpense30 =
+      Math.max(
+        0,
+        dailyAverage * 30 - knownPayables30
+      )
+
+    const estimatedDailyExpense =
+      estimatedExpense30 / 30
+
+    /*
      * "Quem me deve" é recebível.
      * Mantemos a métrica no contrato legado `pendingDebts` para não
      * quebrar consumidores atuais, porém o valor NÃO é subtraído da
@@ -306,15 +387,27 @@ export function useProjection(
         12
       )
 
+      const day =
+        format(date, 'yyyy-MM-dd')
+
+      const known =
+        knownFlowsByDay.get(day) || {
+          income: 0,
+          expense: 0,
+        }
+
       /*
-       * Sem hipótese artificial.
-       * Se não houver amostra, o saldo permanece estável e a
-       * confiança baixa deixa explícita a limitação.
+       * Tendência residual + fatos conhecidos.
+       * A parte já conhecida foi retirada da estimativa de 30 dias,
+       * portanto não é cobrada duas vezes.
        */
-      runningBalance -= dailyAverage
+      runningBalance +=
+        known.income -
+        known.expense -
+        estimatedDailyExpense
 
       dailyProjection.push({
-        day: format(date, 'yyyy-MM-dd'),
+        day,
         balance: roundMoney(runningBalance),
       })
     }
@@ -395,6 +488,15 @@ export function useProjection(
 
       dailyAverage:
         roundMoney(dailyAverage),
+
+      estimatedDailyExpense:
+        roundMoney(estimatedDailyExpense),
+
+      knownPayables30:
+        roundMoney(knownPayables30),
+
+      knownReceivables30:
+        roundMoney(knownReceivables30),
 
       pendingDebts:
         roundMoney(pendingDebts),
