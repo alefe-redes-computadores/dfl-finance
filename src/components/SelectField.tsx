@@ -59,7 +59,7 @@ export default function SelectField({
     open && typeof document !== 'undefined'
       ? createPortal(
           <div
-            className="fixed inset-0 z-[1000] flex items-end justify-center"
+            className="fixed inset-0 z-[1000] flex items-end justify-center sm:items-center sm:px-4"
             onClick={() => setOpen(false)}
           >
             <div className="app-overlay absolute inset-0" />
@@ -67,7 +67,7 @@ export default function SelectField({
               role="dialog"
               aria-modal="true"
               aria-labelledby={titleId}
-              className="app-sheet-panel relative z-10 max-h-[78dvh] overflow-y-auto overscroll-contain p-5 animate-in slide-in-from-bottom-6"
+              className="app-sheet-panel relative z-10 max-h-[78dvh] overflow-y-auto overscroll-contain p-5 animate-in slide-in-from-bottom-6 sm:rounded-[30px] sm:border-b"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />

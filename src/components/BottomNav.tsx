@@ -35,8 +35,8 @@ export default function BottomNav() {
   const [quickActionOpen, setQuickActionOpen] = useState(false)
   const [quickActionType, setQuickActionType] = useState<'expense' | 'income'>('expense')
 
-  // ✅ CORRIGIDO: visibilidade agora vem de um hook compartilhado
-  // (useBottomNavVisible), a mesma fonte de verdade usada pelo AppLayout
+  // Visibilidade vem do hook compartilhado.
+  // É a mesma fonte de verdade usada pelo AppLayout
   // pra decidir o padding-bottom. Antes essa lógica vivia só aqui dentro,
   // duplicada e sem sincronia com o layout.
   const isVisible = useBottomNavVisible()
@@ -124,7 +124,7 @@ export default function BottomNav() {
         }`}
         aria-hidden={!isOpen}
       >
-        <div className="rounded-[24px] border border-gray-200/80 bg-white/95 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.20)] backdrop-blur-xl dark:border-slate-700 dark:bg-slate-800/95">
+        <div className="app-nav-quick-panel">
           <div className="grid grid-cols-5 gap-1">
             <button
               type="button"
@@ -134,7 +134,7 @@ export default function BottomNav() {
                 setQuickActionType('income')
                 setQuickActionOpen(true)
               }}
-              className="flex min-w-0 flex-col items-center gap-2 rounded-[18px] px-1 py-3 transition-colors active:scale-[0.96] active:bg-gray-100 dark:active:bg-slate-700"
+              className="app-nav-quick-action"
               aria-label="Nova receita"
             >
               <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-emerald-50 dark:bg-emerald-950/40">
@@ -153,7 +153,7 @@ export default function BottomNav() {
                 setQuickActionType('expense')
                 setQuickActionOpen(true)
               }}
-              className="flex min-w-0 flex-col items-center gap-2 rounded-[18px] px-1 py-3 transition-colors active:scale-[0.96] active:bg-gray-100 dark:active:bg-slate-700"
+              className="app-nav-quick-action"
               aria-label="Nova despesa"
             >
               <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-red-50 dark:bg-red-950/40">
@@ -167,7 +167,7 @@ export default function BottomNav() {
             <button
               type="button"
               onClick={handleCardClick}
-              className="flex min-w-0 flex-col items-center gap-2 rounded-[18px] px-1 py-3 transition-colors active:scale-[0.96] active:bg-gray-100 dark:active:bg-slate-700"
+              className="app-nav-quick-action"
               aria-label="Lançar cartão"
             >
               <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-orange-50 dark:bg-orange-950/40">
@@ -178,14 +178,14 @@ export default function BottomNav() {
               </span>
             </button>
 
-            <button type="button" onClick={() => handleNavigate('/search')} className="flex min-w-0 flex-col items-center gap-2 rounded-[18px] px-1 py-3 transition-colors active:scale-[0.96] active:bg-gray-100 dark:active:bg-slate-700" aria-label="Busca global">
+            <button type="button" onClick={() => handleNavigate('/search')} className="app-nav-quick-action" aria-label="Busca global">
               <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-violet-50 dark:bg-violet-950/40"><Search size={21} className="text-violet-600 dark:text-violet-400" /></div><span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300">Buscar</span>
             </button>
 
             <button
               type="button"
               onClick={handleOpenTransfer}
-              className="flex min-w-0 flex-col items-center gap-2 rounded-[18px] px-1 py-3 transition-colors active:scale-[0.96] active:bg-gray-100 dark:active:bg-slate-700"
+              className="app-nav-quick-action"
               aria-label="Transferir"
             >
               <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-teal-50 dark:bg-teal-950/40">
@@ -199,12 +199,9 @@ export default function BottomNav() {
         </div>
       </div>
 
-      <div
-        className="fixed bottom-0 left-0 right-0 z-[40] h-[calc(68px+var(--safe-area-bottom))] border-t border-gray-200/60 bg-white/90 shadow-[0_-6px_24px_rgba(15,23,42,0.06)] backdrop-blur-2xl transition-colors duration-300 dark:border-white/10 dark:bg-slate-900/90 dark:shadow-[0_-8px_28px_rgba(0,0,0,0.22)]"
-        style={{
-          paddingBottom:
-            'var(--safe-area-bottom)',
-        }}
+      <nav
+        className="app-nav-shell"
+        aria-label="Navegação principal"
       >
         <div className="relative mx-auto grid h-[68px] max-w-md grid-cols-5 items-center px-2">
           {tabs.slice(0, 2).map((tab) => {
@@ -229,12 +226,12 @@ export default function BottomNav() {
                     ? 'page'
                     : undefined
                 }
-                className="group relative flex min-w-0 flex-col items-center gap-1 px-1 py-1 transition-transform active:scale-[0.95]"
+                className="app-nav-tab"
               >
                 <div
-                  className={`flex h-7 min-w-9 items-center justify-center rounded-full px-2 transition-colors ${
+                  className={`app-nav-tab-icon ${
                     active
-                      ? 'bg-teal-50 dark:bg-teal-950/40'
+                      ? 'app-nav-tab-icon-active'
                       : ''
                   }`}
                 >
@@ -285,12 +282,12 @@ export default function BottomNav() {
                     ? 'page'
                     : undefined
                 }
-                className="group relative flex min-w-0 flex-col items-center gap-1 px-1 py-1 transition-transform active:scale-[0.95]"
+                className="app-nav-tab"
               >
                 <div
-                  className={`flex h-7 min-w-9 items-center justify-center rounded-full px-2 transition-colors ${
+                  className={`app-nav-tab-icon ${
                     active
-                      ? 'bg-teal-50 dark:bg-teal-950/40'
+                      ? 'app-nav-tab-icon-active'
                       : ''
                   }`}
                 >
@@ -346,7 +343,7 @@ export default function BottomNav() {
             </div>
           </div>
         </div>
-      </div>
+      </nav>
 
       <FAB
         isOpen={quickActionOpen}

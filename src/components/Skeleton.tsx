@@ -17,7 +17,7 @@ export default function Skeleton({
   count = 1,
   borderRadius,
 }: SkeletonProps) {
-  const baseClass = 'animate-pulse bg-gray-200/85 dark:bg-slate-700/85 rounded'
+  const baseClass = 'animate-pulse bg-gray-200/85 dark:bg-slate-700/85 rounded motion-reduce:animate-none'
 
   const variantClass = {
     text: 'h-4 w-full rounded-md',

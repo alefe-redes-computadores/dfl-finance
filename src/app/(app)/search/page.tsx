@@ -362,10 +362,24 @@ export default function Page() {
     setActiveFilters([])
   }
 
+  useEffect(() => {
+    if (!filtersOpen) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setFiltersOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [filtersOpen])
+
   return (
-    <div className="min-h-full bg-slate-50 px-4 pb-10 pt-3 dark:bg-slate-950">
+    <div className="app-premium-page px-4 pb-10 pt-3">
       <div className="mx-auto max-w-2xl">
-        <header className="mb-5 flex items-center gap-3">
+        <header className="app-premium-header mb-5">
           <button
             type="button"
             onClick={() => {
@@ -373,23 +387,23 @@ export default function Page() {
               router.back()
             }}
             aria-label="Voltar"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] border border-white bg-white shadow-sm shadow-slate-200/50 transition active:scale-95 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none"
+            className="app-premium-back"
           >
             <ArrowLeft size={20} className="text-slate-800 dark:text-slate-100" />
           </button>
 
           <div className="min-w-0">
-            <h1 className="text-[22px] font-black tracking-[-0.035em] text-slate-950 dark:text-white">
+            <h1 className="app-premium-title">
               Busca global
             </h1>
-            <p className="mt-0.5 text-[12px] font-medium text-slate-500 dark:text-slate-400">
+            <p className="app-premium-subtitle">
               Encontre qualquer coisa nas suas finanças.
             </p>
           </div>
         </header>
 
         <div className="sticky top-0 z-20 -mx-1 bg-slate-50/95 px-1 pb-3 backdrop-blur-xl dark:bg-slate-950/95">
-          <div className="flex h-[52px] items-center gap-3 rounded-[18px] border border-slate-200/80 bg-white px-3.5 shadow-[0_8px_30px_rgba(15,23,42,0.05)] transition focus-within:border-teal-500/60 focus-within:ring-4 focus-within:ring-teal-500/10 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+          <div className="app-premium-search">
             {loading ? (
               <LoaderCircle
                 size={19}
@@ -403,6 +417,11 @@ export default function Page() {
             )}
 
             <input
+              type="search"
+              enterKeyHint="search"
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="Buscar nas finanças"
               autoFocus
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -465,6 +484,12 @@ export default function Page() {
           )}
         </div>
 
+        <div className="sr-only" aria-live="polite" aria-atomic="true">
+          {trimmedQuery.length >= 2 && !loading
+            ? `${visibleItems.length} ${visibleItems.length === 1 ? 'resultado encontrado' : 'resultados encontrados'}`
+            : loading ? 'Buscando' : ''}
+        </div>
+
         {trimmedQuery.length < 2 ? (
           <div className="mt-10 flex flex-col items-center px-7 text-center">
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[20px] bg-teal-50 text-teal-600 dark:bg-teal-950/40 dark:text-teal-400">
@@ -508,7 +533,7 @@ export default function Page() {
               </p>
             </div>
 
-            <div className="space-y-1 rounded-[26px] border border-slate-200/70 bg-white p-1.5 shadow-[0_14px_40px_rgba(15,23,42,0.045)] dark:border-slate-800 dark:bg-slate-900/80 dark:shadow-none">
+            <div className="app-premium-card space-y-1 p-1.5">
               {visibleItems.map((item) => (
                 <SearchResultRow
                   key={`${item.kind}:${item.id}`}
@@ -527,15 +552,15 @@ export default function Page() {
       </div>
 
       {filtersOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
+        <div className="fixed inset-0 z-[1000] flex items-end justify-center sm:items-center sm:px-4">
           <button
             type="button"
             aria-label="Fechar filtros"
             onClick={() => setFiltersOpen(false)}
-            className="absolute inset-0 bg-slate-950/35 backdrop-blur-[2px]"
+            className="app-overlay absolute inset-0"
           />
 
-          <div className="relative w-full max-w-2xl rounded-t-[30px] border-t border-slate-200 bg-white px-4 pb-[max(24px,env(safe-area-inset-bottom))] pt-3 shadow-[0_-20px_60px_rgba(15,23,42,0.16)] dark:border-slate-800 dark:bg-slate-900">
+          <div className="app-premium-sheet max-h-[86dvh] overflow-y-auto overscroll-contain">
             <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-slate-200 dark:bg-slate-700" />
 
             <div className="mb-4 flex items-start justify-between gap-3 px-1">
