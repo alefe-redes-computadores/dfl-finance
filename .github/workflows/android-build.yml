@@ -345,6 +345,96 @@ jobs:
             exit 1
           fi
 
+      # DFL_FINANCE_STABLE_SIGNING_V1
+      - name: Restore stable Android signing and version APK
+        env:
+          DFL_FINANCE_KEYSTORE_BASE64: ${{ secrets.DFL_FINANCE_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          set -Eeuo pipefail
+
+          if [ -z "${DFL_FINANCE_KEYSTORE_BASE64:-}" ]; then
+            echo "ERRO: secret DFL_FINANCE_DEBUG_KEYSTORE_BASE64 ausente."
+            exit 1
+          fi
+
+          KEYSTORE="android/app/dfl-finance-debug.keystore"
+
+          printf '%s' "$DFL_FINANCE_KEYSTORE_BASE64" \
+            | tr -d '\r\n' \
+            | base64 --decode \
+            > "$KEYSTORE"
+
+          test -s "$KEYSTORE"
+          chmod 600 "$KEYSTORE"
+
+          keytool -list \
+            -keystore "$KEYSTORE" \
+            -storepass android \
+            -alias dflfinancekey \
+            -keypass android \
+            >/dev/null
+
+          python3 <<'PYGRADLE'
+          from pathlib import Path
+
+          path = Path("android/app/build.gradle")
+          text = path.read_text(encoding="utf-8")
+
+          marker = "DFL_FINANCE_STABLE_SIGNING_V1"
+
+          if marker not in text:
+              opening = "android {\n"
+
+              signing = """android {
+              // DFL_FINANCE_STABLE_SIGNING_V1
+              signingConfigs {
+                  debug {
+                      storeFile file('dfl-finance-debug.keystore')
+                      storePassword 'android'
+                      keyAlias 'dflfinancekey'
+                      keyPassword 'android'
+                  }
+              }
+          """
+
+              if text.count(opening) != 1:
+                  raise SystemExit(
+                      "Bloco android não encontrado exatamente uma vez."
+                  )
+
+              text = text.replace(
+                  opening,
+                  signing,
+                  1,
+              )
+
+          import re
+
+          text, count = re.subn(
+              r"(?m)^(\s*)versionCode\s+\d+\s*$",
+              r'\1versionCode Integer.parseInt('
+              r'System.getenv("GITHUB_RUN_NUMBER") ?: "1")',
+              text,
+              count=1,
+          )
+
+          if count != 1:
+              raise SystemExit(
+                  "versionCode não encontrado exatamente uma vez."
+              )
+
+          path.write_text(text, encoding="utf-8")
+          PYGRADLE
+
+          grep -q 'DFL_FINANCE_STABLE_SIGNING_V1' \
+            android/app/build.gradle
+
+          grep -q 'GITHUB_RUN_NUMBER' \
+            android/app/build.gradle
+
+          echo "Assinatura estável restaurada."
+          echo "versionCode=${GITHUB_RUN_NUMBER}"
+
       - name: Build debug APK
         run: |
           set -Eeuo pipefail
