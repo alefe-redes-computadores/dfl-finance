@@ -31,7 +31,7 @@ import {
 } from '@/lib/cardOperations'
 
 // ========== CHAVE PARA LOCALSTORAGE ==========
-const STORAGE_KEY = 'dfl_cards_order'
+const STORAGE_KEY_PREFIX = 'dfl_cards_order'
 
 const CardsSkeleton = () => (
   <div className="space-y-4 animate-pulse pt-2">
@@ -87,7 +87,9 @@ export default function CardsPage() {
   // ========== CARREGAR ORDEM SALVA ==========
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY)
+      const saved = localStorage.getItem(
+        `${STORAGE_KEY_PREFIX}_${effectiveContext}`
+      )
       if (saved) {
         const parsed = JSON.parse(saved)
         if (parsed.order && Array.isArray(parsed.order)) {
@@ -97,17 +99,20 @@ export default function CardsPage() {
     } catch (e) {
       console.warn('Erro ao carregar ordem de cartões:', e)
     }
-  }, [])
+  }, [effectiveContext])
 
   // ========== SALVAR ORDEM ==========
   const saveOrder = useCallback((order: string[]) => {
     setCardOrder(order)
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ order }))
+      localStorage.setItem(
+        `${STORAGE_KEY_PREFIX}_${effectiveContext}`,
+        JSON.stringify({ order })
+      )
     } catch (e) {
       console.warn('Erro ao salvar ordem de cartões:', e)
     }
-  }, [])
+  }, [effectiveContext])
 
   // ========== HANDLER DO DRAG & DROP ==========
   const handleDragEnd = (result: DropResult) => {

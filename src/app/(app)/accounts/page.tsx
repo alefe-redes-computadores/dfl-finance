@@ -219,10 +219,10 @@ function AccountsContent() {
     accountId: string,
     direction: 'up' | 'down'
   ) => {
-    const ids = filteredAccounts.map(
+    const visibleIds = filteredAccounts.map(
       (account: any) => String(account.id)
     )
-    const index = ids.indexOf(accountId)
+    const index = visibleIds.indexOf(accountId)
     if (index < 0) return
 
     const target =
@@ -230,13 +230,29 @@ function AccountsContent() {
         ? index - 1
         : index + 1
 
-    if (target < 0 || target >= ids.length) return
+    if (target < 0 || target >= visibleIds.length) return
 
-    const next = [...ids]
-    ;[next[index], next[target]] = [
-      next[target],
-      next[index],
+    const reorderedVisible = [...visibleIds]
+    ;[reorderedVisible[index], reorderedVisible[target]] = [
+      reorderedVisible[target],
+      reorderedVisible[index],
     ]
+
+    // V73: filtro/busca é só uma janela visual; não apaga contas escondidas.
+    const allActiveIds = activeAccounts.map(
+      (account: any) => String(account.id)
+    )
+    const knownOrder = [
+      ...manualOrder.filter((id) => allActiveIds.includes(id)),
+      ...allActiveIds.filter((id) => !manualOrder.includes(id)),
+    ]
+    const visibleSet = new Set(visibleIds)
+    let visibleIndex = 0
+    const next = knownOrder.map((id) =>
+      visibleSet.has(id)
+        ? reorderedVisible[visibleIndex++]
+        : id
+    )
 
     persistManualOrder(next)
     changeAccountSort('manual')
