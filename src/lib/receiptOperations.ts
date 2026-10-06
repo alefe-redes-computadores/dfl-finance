@@ -7,6 +7,36 @@ import {
 } from '@/lib/receiptPresentation'
 
 export const RECEIPT_MAX_BYTES = 10 * 1024 * 1024
+const RECEIPT_SIGNED_URL_TTL_SECONDS = 60 * 60
+const receiptUrlCache = new Map<string, { url: string; expiresAt: number }>()
+
+export async function resolveReceiptUrl(value?: string | null, expiresIn = RECEIPT_SIGNED_URL_TTL_SECONDS) {
+  const path = getReceiptStoragePath(value)
+  if (!path) return ''
+
+  const cached = receiptUrlCache.get(path)
+  if (cached && cached.expiresAt > Date.now() + 60_000) return cached.url
+
+  const { data, error } = await supabase.storage
+    .from('receipts')
+    .createSignedUrl(path, expiresIn)
+
+  if (error || !data?.signedUrl) {
+    if (error) console.error('Falha ao assinar comprovante:', error)
+    return ''
+  }
+
+  receiptUrlCache.set(path, {
+    url: data.signedUrl,
+    expiresAt: Date.now() + expiresIn * 1000,
+  })
+  return data.signedUrl
+}
+
+export function invalidateReceiptUrl(value?: string | null) {
+  const path = getReceiptStoragePath(value)
+  if (path) receiptUrlCache.delete(path)
+}
 
 const RECEIPT_MIME_TYPES = new Set([
   'image/jpeg',
@@ -59,15 +89,15 @@ export async function uploadReceiptFile({
 
   if (error) throw error
 
-  const { data } = supabase.storage.from('receipts').getPublicUrl(path)
-  if (!data?.publicUrl) {
+  const signedUrl = await resolveReceiptUrl(path)
+  if (!signedUrl) {
     await supabase.storage.from('receipts').remove([path]).catch(() => undefined)
-    throw new Error('Não foi possível gerar a URL do comprovante.')
+    throw new Error('Não foi possível preparar o comprovante com segurança.')
   }
 
   return {
     path,
-    url: data.publicUrl,
+    url: signedUrl,
     displayName: normalizeReceiptDisplayName(file.name),
     kind: file.type === 'application/pdf' ? 'pdf' : 'image',
   }
@@ -79,6 +109,7 @@ export async function removeReceiptFile(value?: string | null) {
 
   const { error } = await supabase.storage.from('receipts').remove([path])
   if (error) throw error
+  invalidateReceiptUrl(path)
   return true
 }
 

@@ -16,6 +16,7 @@ import {
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
+import BankLogo from '@/components/BankLogo'
 import { useTransactionsList } from '@/hooks/useTransactionsList'
 import { useDebtsList } from '@/hooks/useDebtsList'
 import { useLocalSync } from '@/hooks/useLocalSync'
@@ -375,6 +376,29 @@ function TransactionItem({ transaction, index, totalItems }: { transaction: any;
     transaction.categories?.name,
     transaction.accounts?.name,
   ].filter(Boolean)
+
+  if (isTransfer && transaction._transferView) {
+    const from = transaction._fromAccount
+    const to = transaction._toAccount
+    return (
+      <button type="button" onClick={() => transaction.id && router.push(`/transactions/details?id=${transaction.id}`)} className={`w-full px-4 py-4 text-left transition active:bg-slate-100/70 dark:active:bg-slate-700/50 ${index !== totalItems - 1 ? 'border-b border-gray-100 dark:border-slate-700/55' : ''}`}>
+        <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center -space-x-2">
+            <div className="relative z-10 rounded-[14px] bg-white p-0.5 shadow-sm dark:bg-slate-800"><BankLogo color={from?.color} name={from?.name || 'Conta'} size="sm" /></div>
+            <div className="rounded-[14px] bg-white p-0.5 shadow-sm dark:bg-slate-800"><BankLogo color={to?.color} name={to?.name || 'Conta'} size="sm" /></div>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2"><p className="truncate text-[14px] font-bold text-gray-900 dark:text-gray-100">{from?.name || 'Origem'} <span className="text-gray-400">→</span> {to?.name || 'Destino'}</p></div>
+            <p className="mt-1 truncate text-[11px] font-medium text-gray-400 dark:text-gray-500">Transferência · {transaction.description || 'Movimentação entre contas'}</p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-[14px] font-black tabular-nums text-gray-900 dark:text-gray-100">{formatCurrency(amount)}</p>
+            <div className="mt-1 flex items-center justify-end gap-2 text-[10px] font-bold"><span className="text-rose-500">− saída</span><ArrowLeftRight size={11} className="text-gray-400"/><span className="text-emerald-500">+ entrada</span></div>
+          </div>
+        </div>
+      </button>
+    )
+  }
 
   return (
     <button
@@ -971,7 +995,33 @@ export default function TransactionsPage() {
   const pendingTxs = filtered.filter(
     (tx: any) => tx.status === 'pending'
   )
-  const displayTxs = filtered
+  // V80 — o ledger preserva duas pernas; o extrato apresenta uma transferência.
+  const displayTxs = useMemo(() => {
+    const seen = new Set<string>()
+    const byGroup = new Map<string, any[]>()
+    filtered.forEach((tx: any) => {
+      if (tx.type === 'transfer' && tx.transfer_group_id) {
+        const rows = byGroup.get(tx.transfer_group_id) || []
+        rows.push(tx)
+        byGroup.set(tx.transfer_group_id, rows)
+      }
+    })
+    return filtered.filter((tx: any) => {
+      if (tx.type !== 'transfer' || !tx.transfer_group_id) return true
+      if (seen.has(tx.transfer_group_id)) return false
+      seen.add(tx.transfer_group_id)
+      const legs = byGroup.get(tx.transfer_group_id) || [tx]
+      const out = legs.find((leg: any) => String(leg.idempotency_key || '').endsWith(':out')) || legs.find((leg: any) => /^Transferência para\b/i.test(String(leg.description || ''))) || legs[0]
+      const incoming = legs.find((leg: any) => leg.id !== out.id)
+      Object.assign(tx, {
+        ...out,
+        _transferView: true,
+        _fromAccount: accountById.get(out.account_id) || null,
+        _toAccount: accountById.get(out.to_account_id) || accountById.get(incoming?.account_id) || null,
+      })
+      return true
+    })
+  }, [filtered, accountById])
   const grouped = groupByDate(displayTxs)
 
   const debtSearchTerm = search

@@ -38,7 +38,8 @@ import {
   filterTransactionCategories,
   findCompatibleCategory,
 } from '@/lib/transactionCategoryOperations'
-import { analyzeReceiptImage, removeReceiptFileQuiet, uploadReceiptFile } from '@/lib/receiptOperations'
+import { analyzeReceiptImage, removeReceiptFileQuiet, resolveReceiptUrl, uploadReceiptFile } from '@/lib/receiptOperations'
+import { getReceiptStoragePath } from '@/lib/receiptPresentation'
 
 const safeNum = (val: any): number => {
   if (val === null || val === undefined || val === '') return 0
@@ -798,10 +799,15 @@ function EditTransactionContent() {
 
       if (tx.receipt_url) {
         setReceiptUrl(tx.receipt_url)
-        const isPdf = tx.receipt_url.toLowerCase().includes('.pdf')
+        const receiptPath = getReceiptStoragePath(tx.receipt_url)
+        const isPdf = receiptPath.toLowerCase().includes('.pdf')
         setReceiptType(isPdf ? 'pdf' : 'image')
         setReceiptName('Comprovante')
-        if (!isPdf) setReceiptPreview(tx.receipt_url)
+        if (!isPdf) {
+          void resolveReceiptUrl(tx.receipt_url).then((url) => {
+            if (url) setReceiptPreview(url)
+          })
+        }
       }
 
       setInitialized(true)
@@ -896,8 +902,8 @@ function EditTransactionContent() {
       }
 
       const uploaded = await uploadReceiptFile({ userId: user.id, file })
-      stagedReceiptUrlRef.current = uploaded.url
-      setReceiptUrl(uploaded.url)
+      stagedReceiptUrlRef.current = uploaded.path
+      setReceiptUrl(uploaded.path)
       setReceiptName(uploaded.displayName)
       setReceiptType(uploaded.kind)
 

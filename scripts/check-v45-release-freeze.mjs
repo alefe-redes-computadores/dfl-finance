@@ -86,8 +86,10 @@ ok(
 ok(
   receipts.includes('ReceiptViewer') &&
   receipts.includes('getReceiptStoragePath') &&
-  receipts.includes('10 * 1024 * 1024'),
-  'Central de Comprovantes perdeu contrato final'
+  receipts.includes('listReceiptStorageTree') &&
+  receipts.includes('resolveReceiptUrl') &&
+  !receipts.includes('.getPublicUrl('),
+  'Central de Comprovantes perdeu contrato privado V77'
 )
 
 ok(

@@ -399,8 +399,8 @@ function NewTransactionContent() {
       }
 
       const uploaded = await uploadReceiptFile({ userId: user.id, file })
-      stagedReceiptUrlRef.current = uploaded.url
-      setReceiptUrl(uploaded.url)
+      stagedReceiptUrlRef.current = uploaded.path
+      setReceiptUrl(uploaded.path)
       setReceiptName(uploaded.displayName)
       setReceiptType(uploaded.kind)
 
@@ -1601,8 +1601,8 @@ function NewTransactionContent() {
       
       {/* MODAL CATEGORIA */}
       {showCatModal && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCatModal(false)}>
-          <div className="relative flex max-h-[82dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[24px] bg-white shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800" onClick={(e) => e.stopPropagation()}>
+        <div className="app-overlay z-[150000] flex items-end justify-center overscroll-contain" onClick={() => setShowCatModal(false)}>
+          <div className="relative flex max-h-[min(82dvh,calc(100dvh-var(--safe-area-top)-12px))] w-full max-w-lg flex-col overflow-hidden rounded-t-[24px] bg-white shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800" onClick={(e) => e.stopPropagation()}>
             <div className="shrink-0 px-6 pt-3">
               <div className="app-sheet-handle" />
               <div className="flex items-center justify-between gap-3 pb-4 pt-1">
@@ -1654,8 +1654,8 @@ function NewTransactionContent() {
 
       {/* MODAL SUBCATEGORIA */}
       {showSubCatModal && selectedParentCat && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowSubCatModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-right-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="app-overlay z-[150000] flex items-end justify-center overscroll-contain" onClick={() => setShowSubCatModal(false)}>
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-right-8 duration-300 max-h-[min(82dvh,calc(100dvh-var(--safe-area-top)-12px))] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="app-sheet-handle" />
             <div className="flex items-center gap-3 mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <button onClick={() => { vibrate([5]); setShowSubCatModal(false) }} className="p-2.5 -ml-2 bg-gray-100 dark:bg-slate-700 rounded-full active:scale-95 transition-transform"><ChevronLeft size={20} /></button>
@@ -1688,8 +1688,8 @@ function NewTransactionContent() {
 
       {/* MODAL CONTA */}
       {showAccModal && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowAccModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="app-overlay z-[150000] flex items-end justify-center overscroll-contain" onClick={() => setShowAccModal(false)}>
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[min(82dvh,calc(100dvh-var(--safe-area-top)-12px))] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Contas</h3>
@@ -1717,8 +1717,8 @@ function NewTransactionContent() {
 
       {/* MODAL CARTÃO */}
       {showCardModal && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCardModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="app-overlay z-[150000] flex items-end justify-center overscroll-contain" onClick={() => setShowCardModal(false)}>
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[min(82dvh,calc(100dvh-var(--safe-area-top)-12px))] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Cartão de crédito</h3>
@@ -1743,8 +1743,8 @@ function NewTransactionContent() {
 
       {/* MODAL CONTATO */}
       {showContactModal && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowContactModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="app-overlay z-[150000] flex items-end justify-center overscroll-contain" onClick={() => setShowContactModal(false)}>
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[min(82dvh,calc(100dvh-var(--safe-area-top)-12px))] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Contatos</h3>
@@ -1773,8 +1773,8 @@ function NewTransactionContent() {
 
       {/* MODAL TAGS */}
       {showTagModal && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowTagModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="app-overlay z-[150000] flex items-end justify-center overscroll-contain" onClick={() => setShowTagModal(false)}>
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[min(82dvh,calc(100dvh-var(--safe-area-top)-12px))] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Tags</h3>
@@ -1837,8 +1837,8 @@ function NewTransactionContent() {
 
       {/* MODAIS DE CRIAÇÃO */}
       {showCreateCatModal && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCreateCatModal(false)}>
-          <div className="relative flex max-h-[82dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[24px] bg-white dark:bg-slate-800 animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
+        <div className="app-overlay z-[150000] flex items-end justify-center overscroll-contain" onClick={() => setShowCreateCatModal(false)}>
+          <div className="relative flex max-h-[min(82dvh,calc(100dvh-var(--safe-area-top)-12px))] w-full max-w-lg flex-col overflow-hidden rounded-t-[24px] bg-white dark:bg-slate-800 animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
             <div className="shrink-0 px-6 pt-3">
               <div className="app-sheet-handle" />
               <div className="flex items-center justify-between pb-4 pt-1">
@@ -1872,8 +1872,8 @@ function NewTransactionContent() {
       )}
 
       {showCreateAccModal && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCreateAccModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 max-h-[82dvh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
+        <div className="app-overlay z-[150000] flex items-end justify-center overscroll-contain" onClick={() => setShowCreateAccModal(false)}>
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 max-h-[min(82dvh,calc(100dvh-var(--safe-area-top)-12px))] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
             <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Nova Conta</h3>
@@ -1895,8 +1895,8 @@ function NewTransactionContent() {
       )}
 
       {showCreateTagModal && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCreateTagModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 max-h-[82dvh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
+        <div className="app-overlay z-[150000] flex items-end justify-center overscroll-contain" onClick={() => setShowCreateTagModal(false)}>
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 max-h-[min(82dvh,calc(100dvh-var(--safe-area-top)-12px))] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
             <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Nova Tag</h3>
@@ -1918,7 +1918,7 @@ function NewTransactionContent() {
       )}
 
       {showCustomRecurrenceModal && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCustomRecurrenceModal(false)}>
+        <div className="app-overlay z-[150000] flex items-end justify-center overscroll-contain" onClick={() => setShowCustomRecurrenceModal(false)}>
           <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 animate-in slide-in-from-bottom-4 shadow-[0_-8px_30px_rgba(0,0,0,0.12)]" onClick={(e) => e.stopPropagation()}>
             <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-6">

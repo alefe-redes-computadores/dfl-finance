@@ -48,7 +48,7 @@ import {
   getReceiptStoragePath,
   normalizeReceiptDisplayName,
 } from '@/lib/receiptPresentation'
-import { removeReceiptFile, uploadReceiptFile } from '@/lib/receiptOperations'
+import { removeReceiptFile, resolveReceiptUrl, uploadReceiptFile } from '@/lib/receiptOperations'
 
 type ReceiptFilter = 'all' | 'image' | 'pdf'
 type LinkFilter = 'all' | 'linked' | 'loose'
@@ -84,6 +84,40 @@ const formatFileSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+type StorageReceiptEntry = {
+  name: string
+  path: string
+  created_at?: string | null
+  metadata?: Record<string, any> | null
+}
+
+async function listReceiptStorageTree(userId: string) {
+  const found: StorageReceiptEntry[] = []
+  const queue = [userId]
+  const visited = new Set<string>()
+
+  while (queue.length) {
+    const prefix = queue.shift()!
+    if (visited.has(prefix)) continue
+    visited.add(prefix)
+
+    const { data, error } = await supabase.storage.from('receipts').list(prefix, {
+      limit: 1000,
+      sortBy: { column: 'created_at', order: 'desc' },
+    })
+    if (error) throw error
+
+    for (const item of data || []) {
+      const path = `${prefix}/${item.name}`
+      const isFolder = !item.metadata && !item.created_at && !(item as any).id
+      if (isFolder) queue.push(path)
+      else found.push({ ...item, path })
+    }
+  }
+
+  return found
 }
 
 function ReceiptViewer({
@@ -304,16 +338,7 @@ export default function ReceiptsPage() {
     setError('')
 
     try {
-      const { data: files, error: listError } = await supabase.storage
-        .from('receipts')
-        .list(user.id, {
-          limit: 1000,
-          sortBy: { column: 'created_at', order: 'desc' },
-        })
-
-      if (listError) throw listError
-
-      const rawFiles = files || []
+      const rawFiles = await listReceiptStorageTree(user.id)
 
       const [transactions, accounts] = await Promise.all([
         db.transactions
@@ -336,23 +361,13 @@ export default function ReceiptsPage() {
 
       const hydrated = await Promise.all(
         rawFiles.map(async (file) => {
-          const path = `${user.id}/${file.name}`
+          const path = file.path
           const transaction = transactionByPath.get(path)
           const account: any = transaction?.account_id
             ? accountById.get(transaction.account_id)
             : null
 
-          const { data: signedData } = await supabase.storage
-            .from('receipts')
-            .createSignedUrl(path, 60 * 60)
-
-          let url = signedData?.signedUrl || ''
-          if (!url) {
-            const { data: publicData } = supabase.storage
-              .from('receipts')
-              .getPublicUrl(path)
-            url = publicData?.publicUrl || ''
-          }
+          const url = await resolveReceiptUrl(path)
 
           const displayName = normalizeReceiptDisplayName(
             file.name,

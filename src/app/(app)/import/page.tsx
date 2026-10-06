@@ -219,7 +219,7 @@ function ImportContent() {
             description: formData.description || 'Comprovante importado',
             category_id: null,
             notes: formData.notes || null,
-            receipt_url: receiptUrl,
+            receipt_url: receiptPath,
           },
         ],
       })

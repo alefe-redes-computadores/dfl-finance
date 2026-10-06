@@ -89,7 +89,8 @@ export default function MoneyInput({
       spellCheck={false}
       value={displayValue}
       onChange={handleChange}
-      className={className}
+      data-premium-input="true"
+      className={`border-0 outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 ${className}`}
       placeholder={placeholder}
       disabled={disabled}
       autoFocus={autoFocus}

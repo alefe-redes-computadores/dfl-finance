@@ -552,3 +552,16 @@ html[data-native-shell='true'] .app-header {
 @media (min-width: 640px) {
   .app-premium-sheet { @apply mb-5 rounded-[30px] border; }
 }
+
+
+/* DFL_FINANCE_V80_PREMIUM_INPUT_RESET */
+input[data-premium-input="true"],
+input[data-premium-input="true"]:focus,
+input[data-premium-input="true"]:focus-visible {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
