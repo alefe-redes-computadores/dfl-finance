@@ -369,7 +369,7 @@ export default function FAB({
                       }}
                       className={`flex flex-col items-center gap-2 p-3 rounded-[20px] transition-all active:scale-95 ${
                         selected
-                          ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-200 dark:border-teal-800 shadow-sm'
+                          ? 'bg-teal-50 dark:bg-teal-500/15 border border-teal-500/60 dark:border-teal-400/45 shadow-[0_0_0_3px_rgba(20,184,166,0.08)] ring-1 ring-teal-500/15'
                           : 'bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 border border-transparent'
                       }`}
                     >
@@ -379,9 +379,18 @@ export default function FAB({
                       >
                         <Icon size={20} />
                       </div>
-                      <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 truncate w-full text-center">
+                      <span
+                        className={`text-[10px] font-bold truncate w-full text-center ${
+                          selected
+                            ? 'text-teal-800 dark:text-teal-300'
+                            : 'text-gray-600 dark:text-gray-400'
+                        }`}
+                      >
                         {c.label}
                       </span>
+                      {selected && (
+                        <span className="sr-only">Selecionada</span>
+                      )}
                     </button>
                   )
                 })}

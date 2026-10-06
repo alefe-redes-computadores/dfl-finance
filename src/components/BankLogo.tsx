@@ -81,9 +81,11 @@ export default function BankLogo({
         <img
           src={asset.src}
           alt={`${canonicalName} logo`}
-          className={
-            asset.imageClassName
-          }
+          className={asset.imageClassName}
+          style={{
+            transform: `translate(${optical.x ?? 0}px, ${optical.y ?? 0}px) scale(${optical.scale})`,
+            transformOrigin: 'center center',
+          }}
           draggable={false}
         />
       </div>

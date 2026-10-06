@@ -359,8 +359,17 @@ export default function ReceiptsPage() {
         accounts.map((account: any) => [account.id, account]),
       )
 
+      // V79: a pasta whatsapp também é usada pelo pipeline de mídia.
+      // Uma mídia conversacional só pertence à Central financeira quando
+      // efetivamente foi vinculada a uma transação. Arquivos normais enviados
+      // pela própria Central continuam aparecendo como comprovantes avulsos.
+      const galleryFiles = rawFiles.filter((file) => {
+        const isWhatsappMedia = file.path.startsWith(`${user.id}/whatsapp/`)
+        return !isWhatsappMedia || transactionByPath.has(file.path)
+      })
+
       const hydrated = await Promise.all(
-        rawFiles.map(async (file) => {
+        galleryFiles.map(async (file) => {
           const path = file.path
           const transaction = transactionByPath.get(path)
           const account: any = transaction?.account_id
@@ -481,7 +490,23 @@ export default function ReceiptsPage() {
     if (!receiptToDelete?.path) return
 
     const receipt = receiptToDelete
+    const previousReceipts = receipts
+    const previousViewer = viewerReceipt
+    const previousReceiptUrl = receipt.path
+
     setReceiptToDelete(null)
+
+    // V79: resposta instantânea. Contadores são derivados de receipts,
+    // portanto acompanham a remoção sem refresh/reload ou salto de scroll.
+    setReceipts((current) =>
+      current.filter((item) => item.path !== receipt.path),
+    )
+    if (viewerReceipt?.path === receipt.path) {
+      setViewerReceipt(null)
+    }
+    vibrate([8])
+
+    let transactionUnlinked = false
 
     try {
       if (receipt.transaction_id) {
@@ -500,22 +525,40 @@ export default function ReceiptsPage() {
               'Não foi possível limpar o vínculo com o lançamento.',
           )
         }
+
+        transactionUnlinked = true
       }
 
-      try {
-        await removeReceiptFile(receipt.path)
-      } catch {
-        // O vínculo já foi removido com segurança. Se o Storage falhar,
-        // o arquivo permanece apenas como avulso e pode ser removido depois.
-        throw new Error(
-          'O vínculo foi removido, mas o arquivo ainda está no armazenamento. Atualize a Central e tente excluir o avulso novamente.',
-        )
-      }
+      await removeReceiptFile(receipt.path)
 
       success()
       showToast('Comprovante excluído.', 'success')
-      await loadReceipts()
     } catch (deleteError: any) {
+      // Se o Storage falhar depois do unlink, tentamos devolver o vínculo
+      // antes de restaurar visualmente o card.
+      if (transactionUnlinked && receipt.transaction_id) {
+        try {
+          await safeUpdate(
+            'transactions',
+            receipt.transaction_id,
+            {
+              receipt_url: previousReceiptUrl,
+              updated_at: new Date().toISOString(),
+            },
+          )
+        } catch (rollbackError) {
+          console.error(
+            'Falha ao restaurar vínculo do comprovante:',
+            rollbackError,
+          )
+        }
+      }
+
+      setReceipts(previousReceipts)
+      if (previousViewer?.path === receipt.path) {
+        setViewerReceipt(previousViewer)
+      }
+
       hapticError()
       showToast(
         deleteError?.message || 'Erro ao excluir comprovante.',

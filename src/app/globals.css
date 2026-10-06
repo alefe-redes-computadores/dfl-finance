@@ -254,7 +254,16 @@ html {
   }
 }
 button, a, input, select, textarea { touch-action: manipulation; }
-:focus-visible { outline: 2px solid rgb(13 148 136 / 0.75); outline-offset: 2px; }
+/* V79: foco de teclado permanece explícito em controles acionáveis.
+ * Inputs já possuem tratamento de foco no próprio componente/surface;
+ * não recebem o retângulo global adicional no Android.
+ */
+button:focus-visible,
+a:focus-visible,
+[role='button']:focus-visible {
+  outline: 2px solid rgb(13 148 136 / 0.75);
+  outline-offset: 2px;
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     scroll-behavior: auto !important;

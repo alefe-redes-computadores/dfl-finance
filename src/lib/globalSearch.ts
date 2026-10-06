@@ -48,6 +48,60 @@ const MONTHS: Record<string, number> = {
   outubro: 10, out: 10, novembro: 11, nov: 11, dezembro: 12, dez: 12,
 }
 
+function editDistanceAtMostOne(a: string, b: string) {
+  if (a === b) return true
+  if (Math.abs(a.length - b.length) > 1) return false
+
+  let i = 0
+  let j = 0
+  let edits = 0
+
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i += 1
+      j += 1
+      continue
+    }
+
+    edits += 1
+    if (edits > 1) return false
+
+    if (a.length > b.length) i += 1
+    else if (b.length > a.length) j += 1
+    else {
+      i += 1
+      j += 1
+    }
+  }
+
+  if (i < a.length || j < b.length) edits += 1
+  return edits <= 1
+}
+
+function fuzzyTokenMatch(token: string, haystack: string) {
+  if (haystack.includes(token)) return true
+  if (token.length < 4) return false
+
+  return haystack
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length >= 4)
+    .some((word) => editDistanceAtMostOne(token, word))
+}
+
+function resolveMonthIntentToken(token: string) {
+  if (MONTHS[token]) return { token, month: MONTHS[token] }
+
+  if (token.length < 4) return null
+
+  const candidate = Object.entries(MONTHS)
+    .filter(([name]) => name.length >= 4)
+    .find(([name]) => editDistanceAtMostOne(token, name))
+
+  return candidate
+    ? { token, month: candidate[1] }
+    : null
+}
+
 type DateIntent = { start: string; end: string; consumed: string[] }
 
 function isoLocal(date: Date) {
@@ -81,6 +135,35 @@ function parseDateIntent(query: string): DateIntent | null {
     const end = `${year}-${String(month).padStart(2, '0')}-${String(last).padStart(2, '0')}`
     return { start, end, consumed: match[0].split(/\s+/) }
   }
+
+  // V79: tolerância de uma edição somente para nomes de mês com
+  // quatro ou mais caracteres. Ex.: outubr -> outubro.
+  const queryParts = q.split(/\s+/)
+  for (let index = 0; index < queryParts.length; index += 1) {
+    const resolved = resolveMonthIntentToken(queryParts[index])
+    if (!resolved) continue
+
+    const possibleYear =
+      queryParts[index + 1] === 'de'
+        ? queryParts[index + 2]
+        : queryParts[index + 1]
+    const year = /^20\d{2}$/.test(possibleYear || '')
+      ? Number(possibleYear)
+      : today.getFullYear()
+
+    const start = `${year}-${String(resolved.month).padStart(2, '0')}-01`
+    const last = new Date(year, resolved.month, 0).getDate()
+    const end = `${year}-${String(resolved.month).padStart(2, '0')}-${String(last).padStart(2, '0')}`
+
+    const consumed = [resolved.token]
+    if (/^20\d{2}$/.test(possibleYear || '')) {
+      if (queryParts[index + 1] === 'de') consumed.push('de')
+      consumed.push(possibleYear)
+    }
+
+    return { start, end, consumed }
+  }
+
   return null
 }
 
@@ -149,7 +232,7 @@ export async function searchFinancialData(
         ...moneyTokens(row.total_amount), ...moneyTokens(row.remaining_amount),
       ].map(norm).filter(Boolean)
       const haystack = fields.join(' ')
-      if (tokens.length && !tokens.every((token) => haystack.includes(token))) return
+      if (tokens.length && !tokens.every((token) => fuzzyTokenMatch(token, haystack))) return
       if (!tokens.length && !dateIntent) return
 
       let score = 0
@@ -158,6 +241,7 @@ export async function searchFinancialData(
         else if (norm(category?.name).includes(token)) score += 6
         else if (norm(account?.name).includes(token) || norm(account?.bank).includes(token) || norm(account?.bank_name).includes(token)) score += 5
         else if (haystack.includes(token)) score += 2
+        else if (fuzzyTokenMatch(token, haystack)) score += 1
       }
       if (dateIntent) score += 4
       if (row.receipt_url && tokens.some((t) => ['comprovante','anexo','recibo'].includes(t))) score += 5

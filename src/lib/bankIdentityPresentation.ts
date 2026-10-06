@@ -52,13 +52,18 @@ const OPTICAL_PROFILES:
       scale: 0.92,
     },
     pagbank: {
-      scale: 0.92,
+      // O SVG oficial contém símbolo + wordmark muito horizontal.
+      // Reduzimos o conjunto inteiro para respirar dentro do mesmo
+      // container quadrado usado pelas demais instituições.
+      scale: 0.72,
     },
     'mercado-pago': {
       scale: 0.9,
     },
     stone: {
-      scale: 0.9,
+      // Wordmark horizontal: normalização óptica evita que encoste
+      // nas bordas e mantém o mesmo peso visual dos demais bancos.
+      scale: 0.74,
     },
     sicoob: {
       scale: 0.88,
