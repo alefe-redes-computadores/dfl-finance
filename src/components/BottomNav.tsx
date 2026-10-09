@@ -91,20 +91,23 @@ export default function BottomNav() {
     setIsOpen((v) => !v)
   }
 
+  const isTransactionsRoot = pathname === '/transactions'
+
   const handleCentralAction = () => {
-    // Em Transações, o botão principal abre o lançamento completo.
-    // Nas demais telas, preserva o menu rápido existente.
-    if (pathname === '/transactions') {
+    // Contrato V81:
+    // Transações possui entrada rica; Ação rápida é um atalho global.
+    // A página de Transações também possui seu CTA próprio, portanto
+    // o fluxo completo não depende exclusivamente deste botão central.
+    if (isTransactionsRoot) {
       vibrate([15])
       setIsOpen(false)
+      setQuickActionOpen(false)
       navigateSafely('/transactions/new')
       return
     }
 
     toggleMenu()
   }
-
-  const isTransactionsRoot = pathname === '/transactions'
 
   return (
     <>

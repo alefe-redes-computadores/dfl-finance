@@ -692,7 +692,7 @@ function EditTransactionContent() {
       setSaved(true)
 
       const baseMessage =
-        `${txType === 'income' ? 'Receita' : 'Despesa'} ${isNew ? 'adicionada' : 'atualizada'}.`
+        `${txType === 'transfer' ? 'Transferência' : txType === 'income' ? 'Receita' : 'Despesa'} ${isNew ? 'adicionada' : 'atualizada'}.`
 
       const scopeMessage =
         seriesPropagation.updated > 0
@@ -1151,6 +1151,7 @@ function EditTransactionContent() {
   }
 
   const isIncome = txType === 'income'
+  const isTransfer = txType === 'transfer' || Boolean(tx?.transfer_group_id)
   const colorClass = isIncome ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
   const toggleBgClass = isPaid ? (isIncome ? 'bg-emerald-500' : 'bg-teal-600') : 'bg-gray-200 dark:bg-slate-700'
   const toggleTracks = isPaid ? 'translate-x-7' : 'translate-x-1'
@@ -1210,7 +1211,11 @@ function EditTransactionContent() {
 
           <div className="text-center">
             <h1 className="text-[18px] font-bold text-gray-900 dark:text-white">
-              {isNew ? `Nova ${isIncome ? 'receita' : 'despesa'}` : `Editar ${isIncome ? 'receita' : 'despesa'}`}
+              {isTransfer
+                ? 'Transferência'
+                : isNew
+                  ? `Nova ${isIncome ? 'receita' : 'despesa'}`
+                  : `Editar ${isIncome ? 'receita' : 'despesa'}`}
             </h1>
             {hasSeries && (
               <span className="mt-1 inline-flex items-center rounded-full bg-gray-100 dark:bg-slate-800 px-2.5 py-1 text-[10px] font-semibold text-gray-500 dark:text-gray-400">
@@ -1238,6 +1243,24 @@ function EditTransactionContent() {
           </div>
         </div>
       </div>
+
+      {isTransfer && (
+        <div className="mx-5 mb-3 rounded-[18px] border border-blue-200/70 bg-blue-50/80 px-4 py-3 dark:border-blue-900/50 dark:bg-blue-500/10">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px] bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
+              <ArrowRightLeft size={17} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[12px] font-bold text-blue-800 dark:text-blue-300">
+                Movimento de transferência
+              </p>
+              <p className="mt-0.5 text-[10px] leading-4 text-blue-700/70 dark:text-blue-300/60">
+                Este registro faz parte de uma transferência entre contas. Ele não é uma despesa nem uma receita e permanece ligado ao outro lado do movimento.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* FORMULÁRIO COMPLETO */}
       <div className="px-4 pt-5 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">

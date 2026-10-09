@@ -11,7 +11,7 @@ import {
   Search, ChevronLeft, ChevronRight, ReceiptText, Loader2,
   ArrowLeftRight, Download, ArrowDown, ArrowUp, Clock, ChevronDown,
   Check, Image as ImageIcon, Paperclip, CheckCircle, X, SortDesc, SortAsc,
-  Filter, User
+  Filter, User, Plus
 } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -1226,7 +1226,7 @@ export default function TransactionsPage() {
 
       <div className="sticky top-0 z-40 border-b border-gray-200/70 bg-[#f8f9fa]/95 px-4 pb-3 pt-3 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/95">
         <div className="mx-auto max-w-md">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex items-center justify-between gap-2">
             <div className="min-w-0">
               <h1 className="text-[25px] font-bold tracking-[-0.035em] text-gray-950 dark:text-white">
                 Transações
@@ -1235,6 +1235,17 @@ export default function TransactionsPage() {
                 Movimentações do seu financeiro
               </p>
             </div>
+
+            <button
+              type="button"
+              aria-label="Nova transação completa"
+              title="Nova transação"
+              onClick={() => router.push('/transactions/new')}
+              className="ml-auto flex h-10 items-center gap-1.5 rounded-[14px] bg-teal-700 px-3.5 text-[11.5px] font-black text-white shadow-sm transition-all active:scale-95 dark:bg-teal-600"
+            >
+              <Plus size={16} strokeWidth={2.5} />
+              <span>Nova</span>
+            </button>
 
             <div className="relative shrink-0" ref={exportMenuRef}>
               <button

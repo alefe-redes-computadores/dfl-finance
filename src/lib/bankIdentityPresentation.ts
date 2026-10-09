@@ -52,18 +52,17 @@ const OPTICAL_PROFILES:
       scale: 0.92,
     },
     pagbank: {
-      // O SVG oficial contém símbolo + wordmark muito horizontal.
-      // Reduzimos o conjunto inteiro para respirar dentro do mesmo
-      // container quadrado usado pelas demais instituições.
-      scale: 0.72,
+      // V83: recupera presença óptica sem encostar nas bordas.
+      // O perfil continua centralizado e vale para todo o app.
+      scale: 0.8,
     },
     'mercado-pago': {
       scale: 0.9,
     },
     stone: {
-      // Wordmark horizontal: normalização óptica evita que encoste
-      // nas bordas e mantém o mesmo peso visual dos demais bancos.
-      scale: 0.74,
+      // V83: wordmark ganha presença semelhante aos demais bancos
+      // sem abandonar o mesmo container compartilhado.
+      scale: 0.8,
     },
     sicoob: {
       scale: 0.88,

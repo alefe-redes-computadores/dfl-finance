@@ -546,6 +546,11 @@ function HomeContent() {
         (tx: any) =>
           String(tx.date || '').slice(0, 10) === todayIso
       ).length,
+      reviewCount: allPending.filter((tx: any) =>
+        ['whatsapp', 'ai_ocr', 'ofx_import', 'ofx_merged'].includes(
+          String(tx.source || '')
+        )
+      ).length,
     }
   }, [localTransactions, cards, debtsList, todayIso])
 
@@ -966,6 +971,18 @@ function HomeContent() {
         0
       ),
     [accounts]
+  )
+
+  const operationalCommitted = useMemo(
+    () =>
+      Math.max(0, safeNumber(pendings.toPay)) +
+      Math.max(0, safeNumber(pendings.faturas)),
+    [pendings.toPay, pendings.faturas]
+  )
+
+  const operationalAvailable = useMemo(
+    () => totalAccountsBalance - operationalCommitted,
+    [totalAccountsBalance, operationalCommitted]
   )
 
   const openCards = useMemo(
@@ -1434,11 +1451,11 @@ function HomeContent() {
             <div className="overflow-hidden rounded-[24px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
               <div className="flex items-center justify-between gap-3 px-4 py-3.5">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
-                    Atenção agora
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-teal-600 dark:text-teal-400">
+                    Agora
                   </p>
                   <h3 className="mt-0.5 text-[15px] font-semibold text-gray-900 dark:text-gray-100">
-                    {hasPriorities ? 'Prioridades' : 'Pendências'}
+                    {hasPriorities ? 'O que precisa de você' : 'Seu financeiro agora'}
                   </h3>
 
                   {pendings.actionableCount > 0 && (
@@ -1467,6 +1484,48 @@ function HomeContent() {
                     <Check size={15} />
                   </div>
                 )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 border-t border-gray-100 px-3 py-3 dark:border-slate-700/60">
+                <button
+                  type="button"
+                  onClick={() => router.push('/accounts')}
+                  className="min-w-0 rounded-[17px] bg-teal-50/70 p-3 text-left transition active:scale-[0.985] dark:bg-teal-500/10"
+                >
+                  <p className="text-[9px] font-black uppercase tracking-[0.1em] text-teal-700/70 dark:text-teal-400/70">
+                    Disponível operacional
+                  </p>
+                  <p className={`mt-1 truncate text-[15px] font-black ${
+                    operationalAvailable < 0
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-teal-800 dark:text-teal-300'
+                  }`}>
+                    {hideBalance ? '••••' : formatCurrency(operationalAvailable)}
+                  </p>
+                  <p className="mt-1 text-[9.5px] leading-4 text-teal-700/60 dark:text-teal-400/60">
+                    Saldo menos compromissos imediatos
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => router.push('/conciliation')}
+                  className="min-w-0 rounded-[17px] bg-violet-50/70 p-3 text-left transition active:scale-[0.985] dark:bg-violet-500/10"
+                >
+                  <p className="text-[9px] font-black uppercase tracking-[0.1em] text-violet-700/70 dark:text-violet-400/70">
+                    Inbox financeira
+                  </p>
+                  <p className="mt-1 truncate text-[15px] font-black text-violet-800 dark:text-violet-300">
+                    {pendings.reviewCount > 0
+                      ? `${pendings.reviewCount} para revisar`
+                      : pendings.actionableCount > 0
+                        ? `${pendings.actionableCount} pendente${pendings.actionableCount === 1 ? '' : 's'}`
+                        : 'Tudo em dia'}
+                  </p>
+                  <p className="mt-1 text-[9.5px] leading-4 text-violet-700/60 dark:text-violet-400/60">
+                    WhatsApp, comprovantes e pendências
+                  </p>
+                </button>
               </div>
 
               {hasPriorities && (
@@ -1581,12 +1640,12 @@ function HomeContent() {
                   >
                     <div className="min-w-0">
                       <p className="text-[12px] font-bold text-gray-800 dark:text-gray-100">
-                        Revisar pendências de hoje
+                        Abrir Inbox financeira
                       </p>
 
                       <p className="mt-0.5 text-[10.5px] text-gray-400 dark:text-gray-500">
-                        Concilie {pendings.actionableCount}{' '}
-                        item{pendings.actionableCount === 1 ? '' : 's'} sem misturar lançamentos futuros.
+                        Revise {pendings.actionableCount}{' '}
+                        item{pendings.actionableCount === 1 ? '' : 's'} que já exige atenção. O futuro continua no planejamento.
                       </p>
                     </div>
 

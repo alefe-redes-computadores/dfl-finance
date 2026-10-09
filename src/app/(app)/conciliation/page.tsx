@@ -57,12 +57,12 @@ function formatMoney(value: number) {
 function sourceMeta(source?: string | null) {
   switch (source) {
     case 'ai_ocr':
-      return { label: 'Comprovante', review: true, icon: ReceiptText }
+      return { label: 'Comprovante/OCR', review: true, icon: ReceiptText }
     case 'ofx_import':
     case 'ofx_merged':
-      return { label: 'Importação', review: true, icon: FileSearch }
+      return { label: 'Importação · revisar', review: true, icon: FileSearch }
     case 'whatsapp':
-      return { label: 'WhatsApp', review: true, icon: SearchCheck }
+      return { label: 'WhatsApp · revisar', review: true, icon: SearchCheck }
     case 'recurring':
       return { label: 'Recorrente', review: false, icon: RefreshCcw }
     default:
@@ -243,10 +243,10 @@ export default function ConciliationPage() {
           </button>
           <div className="min-w-0 flex-1">
             <h1 className="text-[20px] font-black tracking-tight text-gray-900 dark:text-white">
-              Conciliação
+              Inbox financeira
             </h1>
             <p className="text-[11px] font-medium text-gray-400">
-              Confirme antes de movimentar seu saldo
+              Revise o que precisa da sua decisão
             </p>
           </div>
           <div className="flex h-10 min-w-10 items-center justify-center rounded-[16px] bg-sky-50 px-3 text-[12px] font-black text-sky-700 dark:bg-sky-500/10 dark:text-sky-400">
@@ -263,9 +263,9 @@ export default function ConciliationPage() {
                 <Inbox size={21} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[14px] font-black text-gray-900 dark:text-white">Caixa de revisão financeira</p>
+                <p className="text-[14px] font-black text-gray-900 dark:text-white">O que precisa de você</p>
                 <p className="mt-0.5 text-[11px] leading-4 text-gray-400">
-                  Futuras ficam no planejamento. Aqui entram somente vencidas, hoje e itens importados que já podem ser revisados.
+                  WhatsApp, comprovantes, importações e pendências atuais ficam aqui. O que é futuro continua no planejamento.
                 </p>
               </div>
             </div>
@@ -306,7 +306,7 @@ export default function ConciliationPage() {
               ['all', 'Todas'],
               ['overdue', 'Atrasadas'],
               ['today', 'Hoje'],
-              ['review', 'Para revisar'],
+              ['review', 'Automação'],
             ].map(([key, label]) => (
               <button
                 key={key}

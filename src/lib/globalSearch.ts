@@ -16,6 +16,65 @@ export type GlobalSearchResult = {
   status?: string
 }
 
+export type FinancialSearchCommand = {
+  id: string
+  title: string
+  description: string
+  href: string
+  intent:
+    | 'create'
+    | 'review'
+    | 'plan'
+    | 'transfer'
+    | 'receipt'
+    | 'search'
+}
+
+export const FINANCIAL_COMMAND_SUGGESTIONS: FinancialSearchCommand[] = [
+  {
+    id: 'new-expense',
+    title: 'Nova despesa',
+    description: 'Abrir lançamento completo de despesa',
+    href: '/transactions/new?type=expense',
+    intent: 'create',
+  },
+  {
+    id: 'new-income',
+    title: 'Nova receita',
+    description: 'Abrir lançamento completo de receita',
+    href: '/transactions/new?type=income',
+    intent: 'create',
+  },
+  {
+    id: 'transfer',
+    title: 'Transferir entre contas',
+    description: 'Abrir a área de transações para transferência',
+    href: '/transactions',
+    intent: 'transfer',
+  },
+  {
+    id: 'inbox',
+    title: 'Abrir Inbox financeira',
+    description: 'Revisar WhatsApp, comprovantes, importações e pendências',
+    href: '/conciliation',
+    intent: 'review',
+  },
+  {
+    id: 'planning',
+    title: 'Abrir planejamento',
+    description: 'Ver futuro, compromissos e projeções',
+    href: '/projections',
+    intent: 'plan',
+  },
+  {
+    id: 'receipts',
+    title: 'Ver comprovantes',
+    description: 'Abrir a Central de Comprovantes',
+    href: '/receipts',
+    intent: 'receipt',
+  },
+]
+
 const norm = (v: unknown) =>
   String(v ?? '')
     .normalize('NFD')
@@ -23,6 +82,68 @@ const norm = (v: unknown) =>
     .toLowerCase()
     .trim()
     .replace(/\s+/g, ' ')
+
+export function resolveFinancialCommands(
+  query: string
+): FinancialSearchCommand[] {
+  const q = norm(query)
+
+  if (!q) return FINANCIAL_COMMAND_SUGGESTIONS.slice(0, 4)
+
+  const commands: FinancialSearchCommand[] = []
+
+  const add = (id: string) => {
+    const command = FINANCIAL_COMMAND_SUGGESTIONS.find(
+      (item) => item.id === id
+    )
+    if (
+      command &&
+      !commands.some((item) => item.id === command.id)
+    ) {
+      commands.push(command)
+    }
+  }
+
+  if (
+    /\b(nova?|criar|adicionar|lancar|registrar)\b/.test(q) &&
+    /\b(despesa|gasto|pagamento)\b/.test(q)
+  ) {
+    add('new-expense')
+  }
+
+  if (
+    /\b(nova?|criar|adicionar|lancar|registrar)\b/.test(q) &&
+    /\b(receita|entrada|recebimento)\b/.test(q)
+  ) {
+    add('new-income')
+  }
+
+  if (
+    /\b(transferir|transferencia|transferir entre|mover dinheiro)\b/.test(q)
+  ) {
+    add('transfer')
+  }
+
+  if (
+    /\b(inbox|conciliacao|conciliar|revisar|pendencias?|pendente)\b/.test(q)
+  ) {
+    add('inbox')
+  }
+
+  if (
+    /\b(planejamento|planejar|projecao|projecoes|futuro|cenario)\b/.test(q)
+  ) {
+    add('planning')
+  }
+
+  if (
+    /\b(comprovante|comprovantes|recibo|recibos|anexo|anexos)\b/.test(q)
+  ) {
+    add('receipts')
+  }
+
+  return commands.slice(0, 3)
+}
 
 const numberOrUndefined = (value: unknown) => {
   if (value === null || value === undefined || value === '') return undefined

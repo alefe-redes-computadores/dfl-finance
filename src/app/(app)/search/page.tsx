@@ -27,7 +27,9 @@ import {
 import { useAuth } from '@/lib/hooks/useAuth'
 import { useContext_ } from '@/components/ContextToggle'
 import {
+  resolveFinancialCommands,
   searchFinancialData,
+  type FinancialSearchCommand,
   type GlobalSearchResult,
 } from '@/lib/globalSearch'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
@@ -144,6 +146,46 @@ const kindPresentation: Record<
     shell: 'bg-slate-100 dark:bg-slate-800',
     iconClass: 'text-slate-600 dark:text-slate-300',
   },
+}
+
+function SearchCommandRow({
+  command,
+  onOpen,
+}: {
+  command: FinancialSearchCommand
+  onOpen: (command: FinancialSearchCommand) => void
+}) {
+  const Icon =
+    command.intent === 'transfer'
+      ? ArrowLeftRight
+      : command.intent === 'review'
+        ? Check
+        : command.intent === 'plan'
+          ? Target
+          : command.intent === 'receipt'
+            ? Receipt
+            : CircleDollarSign
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(command)}
+      className="flex w-full items-center gap-3 rounded-[18px] px-3 py-3 text-left transition active:scale-[0.99] active:bg-teal-50 dark:active:bg-teal-950/30"
+    >
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-teal-50 text-teal-600 dark:bg-teal-950/40 dark:text-teal-400">
+        <Icon size={18} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13px] font-extrabold text-slate-800 dark:text-slate-100">
+          {command.title}
+        </p>
+        <p className="mt-0.5 truncate text-[10.5px] font-medium text-slate-400">
+          {command.description}
+        </p>
+      </div>
+      <ChevronRight size={16} className="shrink-0 text-slate-300 dark:text-slate-600" />
+    </button>
+  )
 }
 
 function SearchResultRow({
@@ -292,6 +334,11 @@ export default function Page() {
 
   const trimmedQuery = query.trim()
 
+  const commands = useMemo(
+    () => resolveFinancialCommands(trimmedQuery),
+    [trimmedQuery]
+  )
+
   const visibleItems = useMemo(() => {
     if (activeFilters.length === 0) return items
     const selected = new Set(activeFilters)
@@ -341,6 +388,11 @@ export default function Page() {
   const openResult = (item: GlobalSearchResult) => {
     vibrate([10])
     router.push(item.href)
+  }
+
+  const openCommand = (command: FinancialSearchCommand) => {
+    vibrate([10])
+    router.push(command.href)
   }
 
   const clearSearch = () => {
@@ -394,10 +446,10 @@ export default function Page() {
 
           <div className="min-w-0">
             <h1 className="app-premium-title">
-              Busca global
+              Buscar e comandar
             </h1>
             <p className="app-premium-subtitle">
-              Encontre qualquer coisa nas suas finanças.
+              Encontre dados ou diga o que você quer fazer.
             </p>
           </div>
         </header>
@@ -425,7 +477,7 @@ export default function Page() {
               autoFocus
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Buscar transação, conta, cartão…"
+              placeholder="Ex.: pendências, nova despesa, outubro…"
               className="h-full min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-slate-900 outline-none placeholder:font-medium placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-600"
             />
 
@@ -490,17 +542,39 @@ export default function Page() {
             : loading ? 'Buscando' : ''}
         </div>
 
+        {commands.length > 0 && (
+          <section className="mt-1 mb-4">
+            <div className="mb-2 flex items-center justify-between px-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-teal-600 dark:text-teal-400">
+                {trimmedQuery ? 'Ações entendidas' : 'Ações rápidas'}
+              </p>
+              <p className="text-[9.5px] font-semibold text-slate-400">
+                toque para executar
+              </p>
+            </div>
+            <div className="app-premium-card space-y-0.5 p-1.5">
+              {commands.map((command) => (
+                <SearchCommandRow
+                  key={command.id}
+                  command={command}
+                  onOpen={openCommand}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
         {trimmedQuery.length < 2 ? (
           <div className="mt-10 flex flex-col items-center px-7 text-center">
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[20px] bg-teal-50 text-teal-600 dark:bg-teal-950/40 dark:text-teal-400">
               <Search size={24} />
             </div>
             <p className="text-[15px] font-extrabold text-slate-800 dark:text-slate-200">
-              Suas finanças, em uma busca
+              Seu Command Center financeiro
             </p>
             <p className="mt-1.5 max-w-xs text-[12px] leading-5 text-slate-500 dark:text-slate-500">
-              Digite pelo menos 2 caracteres. A pesquisa usa seus dados locais e
-              continua disponível offline.
+              Busque valores, meses, contas e transações ou use comandos como
+              “nova despesa”, “pendências” e “comprovantes”. Seus dados continuam locais e privados.
             </p>
           </div>
         ) : loading && items.length === 0 ? (
@@ -547,7 +621,7 @@ export default function Page() {
 
         <div className="mt-8 flex items-center justify-center gap-2 text-[10px] font-semibold text-slate-400 dark:text-slate-700">
           <PiggyBank size={13} />
-          Busca local e privada
+          Busca e comandos locais e privados
         </div>
       </div>
 
