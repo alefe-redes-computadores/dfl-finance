@@ -137,16 +137,24 @@ const withPWA = require('next-pwa')({
       },
     },
 
-    /*
-     * Não existe um catch-all de rede aqui de propósito.
-     *
-     * cacheOnFrontEndNav + cacheStartUrl cuidam do shell
-     * visitado pelo usuário e `fallbacks.document` atende
-     * uma navegação ainda indisponível offline.
-     *
-     * Requisições de API, Supabase, IA e outros serviços
-     * não devem cair acidentalmente em um cache genérico.
-     */
+    // Navigation HTML shares the cache populated by cacheOnFrontEndNav.
+    // RSC, APIs, OAuth and cross-origin data must never receive cached HTML.
+    {
+      urlPattern: ({ url, request }) => {
+        if (url.origin !== self.location.origin) return false
+        if (url.pathname.startsWith('/api/') || url.pathname === '/api' ||
+            url.pathname.startsWith('/auth/') || url.pathname.startsWith('/_next/')) return false
+        if (request.headers.get('RSC') === '1' || url.searchParams.has('_rsc')) return false
+        return request.mode === 'navigate' || request.destination === 'document'
+      },
+      handler: 'NetworkFirst',
+      options: {
+        cacheName: 'others',
+        networkTimeoutSeconds: 3,
+        cacheableResponse: { statuses: [200] },
+        expiration: { maxEntries: 48, maxAgeSeconds: 60 * 60 * 24 * 30 },
+      },
+    },
   ],
 })
 

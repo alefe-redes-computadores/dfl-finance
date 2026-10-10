@@ -11,6 +11,11 @@ export default function Page() {
   const router = useRouter()
 
   useEffect(() => {
+    // A cold offline boot needs a cached HTML navigation, not an RSC fetch.
+    if (!navigator.onLine) {
+      window.location.replace('/home')
+      return
+    }
     router.replace('/home')
   }, [router])
 
