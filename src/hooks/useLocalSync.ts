@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { syncFailurePresentation } from '@/lib/syncSafetyPresentation'
 import { useToast } from '@/contexts/ToastContext'
 import {
   configureSyncEngine,
@@ -92,7 +93,7 @@ export function useLocalSync() {
           failed[0]
 
         showToast(
-          `${failed.length} item(ns) falharam. ${first.table}/${first.operation}: ${first.lastError}`,
+          syncFailurePresentation(first.lastError)?.message || 'Alterações locais preservadas; sincronização incompleta.',
           'error'
         )
       } else {

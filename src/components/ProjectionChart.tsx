@@ -163,7 +163,7 @@ export default function ProjectionChart({ hideBalance = false, formatCurrency = 
           </p>
           <p className="mt-0.5 text-[9px] font-medium text-gray-400 dark:text-gray-500">
             {projection.sampleSize > 0
-              ? `${projection.sampleSize} gastos em ${projection.sampleDays} dias · confiança ${
+              ? `${projection.sampleSize} movimentações em ${projection.sampleDays} dias · confiança ${
                   projection.confidence === 'high'
                     ? 'alta'
                     : projection.confidence === 'medium'

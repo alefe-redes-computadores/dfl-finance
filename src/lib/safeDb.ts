@@ -1,6 +1,7 @@
 // src/lib/safeDb.ts
 
 import { db, addToSyncQueue } from './db'
+import { isTransferMovement } from './financialSyncContract'
 
 type TableName =
   | 'transactions'
@@ -128,6 +129,11 @@ export async function safeUpdate(
         table,
         id,
       })
+    }
+
+    if (table === 'transactions' && isTransferMovement(existing) &&
+      Object.keys(data).some(key => !['receipt_url','notes','updated_at','sync_status','sync_attempts'].includes(key))) {
+      throw new Error('Uma transferência não pode ser alterada como uma transação isolada.')
     }
 
     const finalRecord = {
@@ -289,6 +295,10 @@ export async function safeDelete(
       })
     }
 
+    if (table === 'transactions' && isTransferMovement(existing)) {
+      throw new Error('Uma perna de transferência não pode ser excluída isoladamente.')
+    }
+
     if (table === 'categories') {
       if (existing.is_default) {
         return logOperation('delete', table, id, {
@@ -396,6 +406,7 @@ export async function safeDelete(
 
         await db.tags.delete(id)
         await addToSyncQueue(userId, 'tags', 'delete', id, {
+          ...existing,
           id,
           user_id: existing.user_id ?? userId,
           deleted_at: now,
@@ -453,6 +464,7 @@ export async function safeDelete(
             'delete',
             id,
             {
+              ...existing,
               id,
               user_id: existing.user_id ?? userId,
               deleted_at: now,
@@ -566,6 +578,7 @@ export async function safeDelete(
 
           await db.contacts.delete(id)
           await addToSyncQueue(userId, 'contacts', 'delete', id, {
+            ...existing,
             id,
             user_id: existing.user_id ?? userId,
             deleted_at: now,
@@ -677,6 +690,7 @@ export async function safeDelete(
     await db.transaction('rw', db.table(table), db.syncQueue, async () => {
       await db.table(table).delete(id)
       await addToSyncQueue(userId, table, 'delete', id, {
+        ...existing,
         id,
         user_id: existing.user_id ?? userId,
         deleted_at: new Date().toISOString(),

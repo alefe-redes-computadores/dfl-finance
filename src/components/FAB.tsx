@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   Plus, X, Zap, Wallet, Check,
   Coffee, ShoppingCart, Car, Home, Smartphone, Utensils, Heart,
@@ -12,35 +12,13 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
 import { useAccountsList } from '@/hooks/useAccountsList' // ✅ HOOK ESPECÍFICO
-import { useSafeDb } from '@/hooks/useSafeDb'
+import { useLocalData } from '@/hooks/useLocalData'
+import { createQuickCashTransaction } from '@/lib/cashOperations'
+import { filterTransactionCategories } from '@/lib/transactionCategoryOperations'
+import { getDynamicIcon } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import BankLogo from '@/components/BankLogo'
 import MoneyInput from '@/components/MoneyInput'
-import IconPicker from '@/components/IconPicker'
-
-const EXPENSE_CATS = [
-  { label: 'Café', color: '#8B4513', icon: Coffee },
-  { label: 'Compras', color: '#FF6B6B', icon: ShoppingCart },
-  { label: 'Transporte', color: '#4ECDC4', icon: Car },
-  { label: 'Alimentação', color: '#FF8C00', icon: Utensils },
-  { label: 'Celular', color: '#6C5CE7', icon: Smartphone },
-  { label: 'Saúde', color: '#E74C3C', icon: Heart },
-  { label: 'Trabalho', color: '#2C3E50', icon: Briefcase },
-  { label: 'Lazer', color: '#9B59B6', icon: Gamepad2 },
-  { label: 'Estudos', color: '#3498DB', icon: BookOpen },
-]
-
-const INCOME_CATS = [
-  { label: 'Salário', color: '#2E7D32', icon: Briefcase },
-  { label: 'Freelance', color: '#1565C0', icon: TrendingUp },
-  { label: 'Economia', color: '#6A1B9A', icon: PiggyBank },
-  { label: 'Presente', color: '#E91E63', icon: Gift },
-  { label: 'Reembolso', color: '#00838F', icon: Repeat },
-  { label: 'Aluguel', color: '#4E342E', icon: Home },
-  { label: 'Venda', color: '#33691E', icon: Wallet },
-  { label: 'Dividendos', color: '#F57F17', icon: Coins },
-  { label: 'Seguro', color: '#BF360C', icon: Shield },
-]
 
 type QuickType = 'expense' | 'income'
 type QuickContext = 'dfl' | 'personal'
@@ -59,14 +37,14 @@ export default function FAB({
   initialType = 'expense',
 }: Props) {
   const { user } = useAuth()
-  const { context, effectiveContext } = useContext_()
+  const { effectiveContext, appMode } = useContext_()
   const { showToast } = useToast()
-  const { safeAdd, safeUpdate } = useSafeDb()
   const { vibrate, success, error: hapticError } = useHapticFeedback()
 
   const [showModal, setShowModal] = useState(isOpen)
   const [showAccModal, setShowAccModal] = useState(false)
-  const [showIconPicker, setShowIconPicker] = useState(false)
+  const savingRef = useRef(false)
+  const operationId = useRef<string | null>(null)
 
   const [quickType, setQuickType] = useState<QuickType>(initialType)
   const [quickContext, setQuickContext] = useState<QuickContext>('dfl')
@@ -77,16 +55,17 @@ export default function FAB({
 
 
   // ✅ HOOK ESPECÍFICO
-  const { data: allAccounts } = useAccountsList(effectiveContext)
+  const { data: allAccounts } = useAccountsList(quickContext)
 
   useEffect(() => {
     setShowModal(isOpen)
 
     if (isOpen) {
       setQuickType(initialType)
-      setQuickContext(context === 'personal' ? 'personal' : 'dfl')
+      setQuickContext(effectiveContext)
+      operationId.current = crypto.randomUUID()
     }
-  }, [isOpen, initialType, context])
+  }, [isOpen, initialType, effectiveContext])
 
   const accounts = useMemo(() => {
     return (allAccounts || [])
@@ -98,9 +77,12 @@ export default function FAB({
     return accounts.find((a: any) => a?.id === accountId) ?? null
   }, [accounts, accountId])
 
-  const cats = useMemo(() => {
-    return quickType === 'expense' ? EXPENSE_CATS : INCOME_CATS
-  }, [quickType])
+  const { data: allCategories } = useLocalData({
+    table: 'categories', filters: { context: quickContext }, orderBy: 'order_index', orderDir: 'asc',
+  })
+  const cats = useMemo(() => filterTransactionCategories(allCategories, quickType, quickContext),
+    [allCategories, quickType, quickContext])
+  useEffect(() => { setCategory('') }, [quickType, quickContext])
 
   useEffect(() => {
     if (!accountId) return
@@ -113,16 +95,17 @@ export default function FAB({
     setCategory('')
     setAccountId('')
     setSaving(false)
+    operationId.current = null
   }, [])
 
   const closeAll = useCallback(() => {
     setShowAccModal(false)
-    setShowIconPicker(false)
     setShowModal(false)
     onClose?.()
   }, [onClose])
 
   const save = async () => {
+    if (savingRef.current) return
     if (!user?.id) {
       hapticError()
       showToast('Faça login para salvar.', 'warning')
@@ -138,65 +121,13 @@ export default function FAB({
     try {
       setSaving(true)
 
-      const txId =
-        typeof crypto !== 'undefined' && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-
-      const selected = accounts.find((a: any) => a?.id === accountId)
-
-      if (accountId && selected) {
-        const currentBalance = Number(selected?.balance ?? 0)
-        const nextBalance =
-          quickType === 'income'
-            ? currentBalance + Number(amount)
-            : currentBalance - Number(amount)
-
-        const accountUpdatePayload = {
-          balance: nextBalance,
-          updated_at: new Date().toISOString(),
-          sync_status: 'pending',
-          sync_attempts: 0,
-        }
-
-        const accRes = await safeUpdate('accounts', accountId, accountUpdatePayload as any)
-
-        if (!accRes?.success) {
-          throw new Error(accRes?.error || 'Falha ao atualizar saldo da conta.')
-        }
-      }
-
-      const nowIso = new Date().toISOString()
-      const today = format(new Date(), 'yyyy-MM-dd')
-
-      const payload: any = {
-        id: txId,
-        user_id: user.id,
-
-        type: quickType,
-        amount: Number(amount),
-
-        description:
-          category || (quickType === 'income' ? 'Receita rápida' : 'Despesa rápida'),
-
-        date: today,
-        status: 'done',
-        context: quickContext,
-
-        account_id: accountId || null,
-
-        created_at: nowIso,
-        updated_at: nowIso,
-
-        sync_status: 'pending',
-        sync_attempts: 0,
-      }
-
-      const res = await safeAdd('transactions', payload)
-
-      if (!res?.success) {
-        throw new Error(res?.error || 'Falha ao salvar transação.')
-      }
+      savingRef.current = true
+      operationId.current ??= crypto.randomUUID()
+      await createQuickCashTransaction({
+        operationId: operationId.current, userId: user.id, context: quickContext,
+        type: quickType, amount: Number(amount), accountId, categoryId: category || null,
+        date: format(new Date(), 'yyyy-MM-dd'),
+      })
 
       success()
       showToast(
@@ -212,6 +143,7 @@ export default function FAB({
       hapticError()
       showToast(`Erro ao salvar: ${err?.message || 'erro inesperado'}`, 'error')
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
   }
@@ -278,7 +210,7 @@ export default function FAB({
               </div>
 
               <div className="flex bg-gray-50 dark:bg-slate-700 p-1 rounded-full border border-gray-100 dark:border-slate-600">
-                {(['dfl', 'personal'] as const).map((c) => (
+                {(appMode === 'personal_only' ? ['personal'] as const : ['dfl', 'personal'] as const).map((c) => (
                   <button
                     key={c}
                     type="button"
@@ -313,7 +245,7 @@ export default function FAB({
 
             <div className="mb-6">
               <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3 block ml-2">
-                Conta destino
+                {quickType === 'income' ? 'Conta de recebimento' : 'Conta de pagamento'}
               </label>
               <button
                 type="button"
@@ -356,15 +288,15 @@ export default function FAB({
 
               <div className="grid grid-cols-4 gap-3">
                 {cats.map((c) => {
-                  const Icon = c.icon
-                  const selected = category === c.label
+                  const Icon = getDynamicIcon(c.icon)
+                  const selected = category === c.id
 
                   return (
                     <button
-                      key={c.label}
+                      key={c.id}
                       type="button"
                       onClick={() => {
-                        setCategory(selected ? '' : c.label)
+                        setCategory(selected ? '' : c.id)
                         vibrate([5])
                       }}
                       className={`flex flex-col items-center gap-2 p-3 rounded-[20px] transition-all active:scale-95 ${
@@ -386,7 +318,7 @@ export default function FAB({
                             : 'text-gray-600 dark:text-gray-400'
                         }`}
                       >
-                        {c.label}
+                        {c.name}
                       </span>
                       {selected && (
                         <span className="sr-only">Selecionada</span>
@@ -395,31 +327,22 @@ export default function FAB({
                   )
                 })}
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowIconPicker(true)
-                    vibrate([10])
-                  }}
-                  className="flex flex-col items-center gap-2 p-3 rounded-[20px] bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 border border-gray-200 dark:border-slate-600 border-dashed active:scale-95"
-                >
-                  <div className="w-10 h-10 rounded-[14px] flex items-center justify-center bg-gray-200 dark:bg-slate-600 text-gray-500">
-                    <Plus size={20} />
-                  </div>
-                  <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 truncate w-full text-center">
-                    Outro
-                  </span>
-                </button>
+
               </div>
             </div>
 
+            {(!amount || !selectedAccount) && (
+              <p className="mb-3 text-center text-xs text-gray-500 dark:text-gray-400" role="status">
+                {!amount ? 'Informe o valor do lançamento.' : 'Selecione a conta para salvar.'}
+              </p>
+            )}
             <button
               type="button"
               onClick={() => {
                 vibrate([10, 50])
                 save()
               }}
-              disabled={saving || Number(amount) <= 0}
+              disabled={saving || !Number.isFinite(amount) || Number(amount) <= 0 || !selectedAccount}
               className="w-full bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[24px] font-bold text-[16px] disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-lg shadow-teal-600/30"
             >
               {saving ? (
@@ -499,16 +422,7 @@ export default function FAB({
         </div>
       )}
 
-      <IconPicker
-        isOpen={showIconPicker}
-        onClose={() => setShowIconPicker(false)}
-        selectedIcon={category}
-        onSelect={(icon) => {
-          setCategory(icon)
-          setShowIconPicker(false)
-          vibrate([10])
-        }}
-      />
+
     </>
   )
 }

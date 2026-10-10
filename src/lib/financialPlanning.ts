@@ -1,11 +1,12 @@
 import type { FinancialIntelligenceOutput, IntelligenceTransactionLike } from '@/lib/financial-intelligence'
+import { resolveKnownCommitments, type CommitmentSources, type KnownCashCommitment } from '@/lib/financialCommitments'
+import { addCivilDays, civilISO, buildForecastBasis } from '@/lib/financialForecast'
 
 const n = (value: unknown) => {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : 0
 }
 const money = (value: number) => Math.round(value * 100) / 100
-const dateOnly = (value: unknown) => String(value || '').slice(0, 10)
 const iso = (date: Date) => {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')
@@ -15,6 +16,15 @@ const iso = (date: Date) => {
 const monthEnd = (date: Date) => iso(new Date(date.getFullYear(), date.getMonth() + 1, 0, 12))
 
 export interface FinancialPlanSnapshot {
+  estimatedCashExpense30: number
+  estimatedCashExpense90: number
+  commitments: KnownCashCommitment[]
+  coverageWarnings: string[]
+  baselineCash30: number
+  baselineCash90: number
+  monthlyCashTrend: number
+  remainingMonthDays: number
+  overduePayables: number
   realizedIncome: number
   realizedExpense: number
   realizedNet: number
@@ -81,198 +91,70 @@ export interface FinancialDiscovery {
   evidence: string
 }
 
-export function buildFinancialPlan(
-  intelligence: FinancialIntelligenceOutput,
-  transactions: IntelligenceTransactionLike[],
-  now = new Date()
-): FinancialPlanSnapshot {
-  const snapshot = intelligence.snapshot
-  const today = iso(now)
-  const end = monthEnd(now)
-  const pending = transactions.filter((tx) => {
-    if (tx.context !== intelligence.context || tx.status !== 'pending') return false
-    const date = dateOnly(tx.date)
-    return Boolean(date) && date >= today && date <= end
-  })
+const sumEntries = (entries: KnownCashCommitment[], direction: 'income' | 'expense') => money(entries.filter(e=>e.direction===direction).reduce((sum,e)=>sum+e.amount,0))
 
-  const committedPayables = pending.reduce((sum, tx) =>
-    tx.type === 'expense' || tx.type === 'sangria' ? sum + Math.abs(n(tx.amount)) : sum, 0)
-  const probableReceivables = pending.reduce((sum, tx) =>
-    tx.type === 'income' ? sum + Math.abs(n(tx.amount)) : sum, 0)
-  const projectedMonthIncome =
-    n(snapshot.projectedMonthNet) +
-    n(snapshot.projectedMonthExpense)
-
-  const estimatedRemainingExpense = Math.max(
-    0,
-    n(snapshot.projectedMonthExpense) -
-      n(snapshot.currentMonthExpense) -
-      committedPayables
-  )
-
-  const estimatedRemainingIncome = Math.max(
-    0,
-    projectedMonthIncome -
-      n(snapshot.currentMonthIncome) -
-      probableReceivables
-  )
-
-  const knownCommitmentNet =
-    probableReceivables - committedPayables
-
-  const futureNet =
-    knownCommitmentNet +
-    estimatedRemainingIncome -
-    estimatedRemainingExpense
-
-  const creditCommitments =
-    n(snapshot.activeLoanRemaining) + n(snapshot.activeFinancingRemaining)
-
-  return {
-    realizedIncome: money(snapshot.currentMonthIncome),
-    realizedExpense: money(snapshot.currentMonthExpense),
-    realizedNet: money(snapshot.currentMonthNet),
-    committedPayables: money(committedPayables),
-    probableReceivables: money(probableReceivables),
-    estimatedRemainingExpense: money(estimatedRemainingExpense),
-    estimatedRemainingIncome: money(estimatedRemainingIncome),
-    knownCommitmentNet: money(knownCommitmentNet),
-    recurringMonthly: money(snapshot.recurringMonthlyEquivalent),
-    cardExposure: money(snapshot.creditCardOpenExposure),
-    creditCommitments: money(creditCommitments),
-    availableAfterKnownCommitments: money(
-      snapshot.accountBalance - committedPayables + probableReceivables
-    ),
-    projectedMonthNet: money(
-      n(snapshot.currentMonthNet) + futureNet
-    ),
-    projectedMonthEndCash: money(
-      n(snapshot.accountBalance) + futureNet
-    ),
-    confidence: snapshot.confidence,
-    sampleSize: snapshot.sampleSize,
+export function projectKnownAndEstimatedCash(balance:number, entries:KnownCashCommitment[], dailyIncome:number, dailyExpense:number, days:number, now:Date) {
+  const today=civilISO(now), end=addCivilDays(today,days-1)
+  const included=entries.filter(e=>e.date<=end && !(e.direction==='income'&&e.overdue))
+  const knownIncome=sumEntries(included,'income'),knownExpense=sumEntries(included,'expense')
+  // Behavioral residual is a model, not a second ledger commitment.
+  const estimatedIncome=Math.max(0,dailyIncome*days-knownIncome)
+  const estimatedExpense=Math.max(0,dailyExpense*days-knownExpense)
+  const points:{day:string;balance:number}[]=[]
+  let running=balance
+  for(let i=0;i<days;i++){
+    const day=addCivilDays(today,i),events=included.filter(e=>(e.date<today?today:e.date)===day)
+    running+=sumEntries(events,'income')-sumEntries(events,'expense')+(estimatedIncome-estimatedExpense)/days
+    points.push({day,balance:money(running)})
   }
+  return {points,knownIncome,knownExpense,estimatedIncome,estimatedExpense}
 }
 
-export function buildKnownCashTimeline(
-  intelligence: FinancialIntelligenceOutput,
-  transactions: IntelligenceTransactionLike[],
-  days = 30,
-  now = new Date()
-): FinancialCashTimeline {
-  const horizon = Math.max(1, Math.min(90, Math.trunc(days) || 30))
-  const start = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-    12
-  )
+export function buildFinancialPlan(intelligence:FinancialIntelligenceOutput, transactions:IntelligenceTransactionLike[], now=new Date(), sources:CommitmentSources={}):FinancialPlanSnapshot {
+  const snapshot=intelligence.snapshot,today=iso(now),end=monthEnd(now)
+  const known=resolveKnownCommitments(intelligence.context,transactions,sources,now)
+  const monthly=known.entries.filter(e=>e.date<=end)
+  const committedPayables=sumEntries(monthly,'expense'),probableReceivables=sumEntries(monthly,'income')
+  const economic=monthly.filter(e=>e.economic)
+  const economicBasis=snapshot.forecastBasis||buildForecastBasis(transactions,intelligence.context,now)
+  const cashBasis=snapshot.cashForecastBasis||buildForecastBasis(transactions,intelligence.context,now,true)
+  const remainingMonthDays=Math.max(0,new Date(now.getFullYear(),now.getMonth()+1,0).getDate()-now.getDate())
+  const futureEconomic= economic.filter(e=>e.date>=today || e.direction==='expense')
+  const futureCardExpense=transactions.filter(tx=>tx.context===intelligence.context&&tx.credit_card_id&&tx.type==='expense'&&tx.status==='pending'&&!tx.goal_id&&!tx.transfer_group_id&&String(tx.date).slice(0,10)>today&&String(tx.date).slice(0,10)<=end).reduce((sum,tx)=>sum+Math.max(0,n(tx.amount)),0)
+  const economicExpense=sumEntries(futureEconomic,'expense')+futureCardExpense,economicIncome=sumEntries(futureEconomic,'income')
+  const estimatedRemainingExpense=Math.max(0,economicBasis.dailyExpense*remainingMonthDays-economicExpense)
+  const estimatedRemainingIncome=Math.max(0,economicBasis.dailyIncome*remainingMonthDays-economicIncome)
+  const monthCash=projectKnownAndEstimatedCash(n(snapshot.accountBalance),known.entries,cashBasis.dailyIncome*remainingMonthDays/(remainingMonthDays+1),cashBasis.dailyExpense*remainingMonthDays/(remainingMonthDays+1),remainingMonthDays+1,now)
+  const p30=projectKnownAndEstimatedCash(n(snapshot.accountBalance),known.entries,cashBasis.dailyIncome,cashBasis.dailyExpense,30,now)
+  const p90=projectKnownAndEstimatedCash(n(snapshot.accountBalance),known.entries,cashBasis.dailyIncome,cashBasis.dailyExpense,90,now)
+  return { estimatedCashExpense30:p30.estimatedExpense,estimatedCashExpense90:p90.estimatedExpense,commitments:known.entries,coverageWarnings:known.warnings,
+    baselineCash30:p30.points[29].balance,baselineCash90:p90.points[89].balance,
+    monthlyCashTrend:money((cashBasis.dailyIncome-cashBasis.dailyExpense)*30),remainingMonthDays,
+    overduePayables:sumEntries(monthly.filter(e=>e.overdue),'expense'),
+    realizedIncome:money(snapshot.currentMonthIncome),realizedExpense:money(snapshot.currentMonthExpense),realizedNet:money(snapshot.currentMonthNet),
+    committedPayables,probableReceivables,estimatedRemainingExpense:money(estimatedRemainingExpense),estimatedRemainingIncome:money(estimatedRemainingIncome),
+    knownCommitmentNet:money(probableReceivables-committedPayables),recurringMonthly:money(snapshot.recurringMonthlyEquivalent),
+    cardExposure:sumEntries(known.entries.filter(e=>e.source==='invoice'),'expense'),
+    creditCommitments:money(n(snapshot.activeLoanRemaining)+n(snapshot.activeFinancingRemaining)),
+    availableAfterKnownCommitments:money(n(snapshot.accountBalance)-committedPayables),
+    projectedMonthNet:money(n(snapshot.currentMonthNet)+economicIncome-economicExpense+estimatedRemainingIncome-estimatedRemainingExpense),
+    projectedMonthEndCash:monthCash.points[monthCash.points.length-1].balance,
+    confidence:cashBasis.confidence,sampleSize:cashBasis.sampleSize }
+}
 
-  const byDate = new Map<
-    string,
-    { income: number; expense: number; events: number }
-  >()
-
-  for (const tx of transactions) {
-    if (
-      tx.context !== intelligence.context ||
-      tx.status !== 'pending'
-    ) {
-      continue
-    }
-
-    const date = dateOnly(tx.date)
-    if (!date) continue
-
-    const parsed = new Date(`${date}T12:00:00`)
-    if (Number.isNaN(parsed.getTime())) continue
-
-    const distance = Math.floor(
-      (parsed.getTime() - start.getTime()) / 86_400_000
-    )
-
-    if (distance < 0 || distance >= horizon) continue
-
-    const current = byDate.get(date) || {
-      income: 0,
-      expense: 0,
-      events: 0,
-    }
-
-    const amount = Math.abs(n(tx.amount))
-
-    if (tx.type === 'income') {
-      current.income += amount
-    } else if (
-      tx.type === 'expense' ||
-      tx.type === 'sangria'
-    ) {
-      current.expense += amount
-    } else {
-      continue
-    }
-
-    current.events += 1
-    byDate.set(date, current)
+export function buildKnownCashTimeline(intelligence:FinancialIntelligenceOutput, transactions:IntelligenceTransactionLike[],days=30,now=new Date(),sources:CommitmentSources={}):FinancialCashTimeline {
+  const horizon=Math.max(1,Math.min(90,Math.trunc(days)||30)),today=iso(now),end=addCivilDays(today,horizon-1)
+  const entries=resolveKnownCommitments(intelligence.context,transactions,sources,now).entries.filter(e=>e.date<=end&&!(e.direction==='income'&&e.overdue))
+  let cash=n(intelligence.snapshot.accountBalance),lowestCash=cash,firstRiskDate:string|null=cash<0?today:null
+  const timeline:FinancialTimelineDay[]=[]
+  for(let i=0;i<horizon;i++){
+    const date=addCivilDays(today,i),events=entries.filter(e=>(e.date<today?today:e.date)===date)
+    const income=sumEntries(events,'income'),expense=sumEntries(events,'expense'),net=money(income-expense)
+    cash=money(cash+net);lowestCash=Math.min(lowestCash,cash)
+    if(cash<0&&!firstRiskDate)firstRiskDate=date
+    if(events.length||date===firstRiskDate)timeline.push({date,income,expense,net,projectedCash:cash,events:events.length})
   }
-
-  let cash = n(intelligence.snapshot.accountBalance)
-  let lowestCash = cash
-  let firstRiskDate: string | null = cash < 0 ? iso(start) : null
-  let knownIncome = 0
-  let knownExpense = 0
-
-  const timeline: FinancialTimelineDay[] = []
-
-  for (let index = 0; index < horizon; index++) {
-    const day = new Date(
-      start.getFullYear(),
-      start.getMonth(),
-      start.getDate() + index,
-      12
-    )
-
-    const date = iso(day)
-    const flow = byDate.get(date) || {
-      income: 0,
-      expense: 0,
-      events: 0,
-    }
-
-    const income = money(flow.income)
-    const expense = money(flow.expense)
-    const net = money(income - expense)
-
-    cash = money(cash + net)
-    knownIncome += income
-    knownExpense += expense
-    lowestCash = Math.min(lowestCash, cash)
-
-    if (cash < 0 && !firstRiskDate) {
-      firstRiskDate = date
-    }
-
-    // Dias vazios não precisam poluir a UI.
-    // O dia do primeiro risco é preservado mesmo sem evento.
-    if (flow.events > 0 || date === firstRiskDate) {
-      timeline.push({
-        date,
-        income,
-        expense,
-        net,
-        projectedCash: cash,
-        events: flow.events,
-      })
-    }
-  }
-
-  return {
-    days: timeline,
-    firstRiskDate,
-    lowestCash: money(lowestCash),
-    knownIncome: money(knownIncome),
-    knownExpense: money(knownExpense),
-  }
+  return {days:timeline,firstRiskDate,lowestCash:money(lowestCash),knownIncome:sumEntries(entries,'income'),knownExpense:sumEntries(entries,'expense')}
 }
 
 export function buildFinancialDiscoveries(
@@ -323,6 +205,9 @@ export function buildFinancialDiscoveries(
   }
 
   if (
+    timeline.days.some(day => day.events > 0) &&
+    plan.coverageWarnings.length === 0 &&
+    plan.confidence !== 'low' &&
     !timeline.firstRiskDate &&
     plan.projectedMonthNet >= 0 &&
     plan.availableAfterKnownCommitments >= 0
@@ -346,7 +231,9 @@ export function buildFinancialDiscoveries(
     })
   }
 
-  return discoveries.slice(0, 4)
+  if (plan.coverageWarnings.length) discoveries.push({id:'commitment-coverage',tone:'warning',title:'Há dados fora da projeção',message:plan.coverageWarnings[0],evidence:`${plan.coverageWarnings.length} aviso(s) de cobertura. Não representam saldo confirmado.`})
+  const tonePriority = { critical:4, warning:3, opportunity:2, stable:1 }
+  return discoveries.sort((a,b)=>tonePriority[b.tone]-tonePriority[a.tone]).slice(0, 4)
 }
 
 export function simulateFinancialScenario(
@@ -356,22 +243,22 @@ export function simulateFinancialScenario(
   const extraIncome = Math.max(0, n(input.extraIncomeMonthly))
   const reduction = Math.max(0, n(input.expenseReductionMonthly))
   const debtNow = Math.max(0, n(input.debtAllocationNow))
-  const monthlyImprovement = extraIncome + reduction
-  const baseline30 = plan.projectedMonthEndCash
+  const monthlyImprovement = extraIncome + Math.min(reduction,plan.estimatedCashExpense30)
+  const baseline30 = plan.baselineCash30
   const scenario30 = baseline30 + monthlyImprovement - debtNow
-  const baseline90 = plan.projectedMonthEndCash + (plan.projectedMonthNet * 2)
-  const scenario90 = baseline90 + (monthlyImprovement * 3) - debtNow
+  const baseline90 = plan.baselineCash90
+  const scenario90 = baseline90 + extraIncome * 3 + Math.min(reduction * 3,plan.estimatedCashExpense90) - debtNow
 
   return {
     baseline30: money(baseline30),
     scenario30: money(scenario30),
     baseline90: money(baseline90),
     scenario90: money(scenario90),
-    improvement30: money(monthlyImprovement),
-    improvement90: money(monthlyImprovement * 3),
+    improvement30: money(scenario30 - baseline30),
+    improvement90: money(scenario90 - baseline90),
     debtAllocationNow: money(debtNow),
     note: debtNow > 0
       ? 'A antecipação reduz o caixa imediatamente. Como os contratos não informam economia futura de juros de forma uniforme, o simulador não inventa esse ganho.'
-      : 'Cenário educativo baseado no ritmo atual; nenhuma alteração é gravada no seu financeiro.',
+      : 'A redução fica limitada ao gasto estimado; não cancela faturas ou parcelas conhecidas. Nenhuma alteração é gravada.',
   }
 }

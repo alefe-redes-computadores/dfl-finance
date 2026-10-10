@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
+import SyncSafetyDetails from '@/components/SyncSafetyDetails'
+import { syncSafetyStatus } from '@/lib/syncSafetyPresentation'
 import { useLocalSync } from '@/hooks/useLocalSync'
 import { RefreshCw, Wifi, WifiOff, X, Shield } from 'lucide-react'
 
@@ -60,7 +62,7 @@ export default function SyncStatusModal({ isOpen, onClose }: SyncStatusModalProp
         ? `${pendingCount} pendente(s)`
         : syncStatus === 'offline'
           ? 'Aguardando conexão'
-          : 'Tudo sincronizado'
+          : localSync.lastSuccessfulSyncAt && !localSync.lastSyncError && !localSync.hasFinancialOutbox ? 'Última sincronização confirmada' : 'Confirmação ainda não verificada'
 
   const handleForceSync = () => {
     if (!isOnlineStatus || isSyncing) return
@@ -76,7 +78,7 @@ export default function SyncStatusModal({ isOpen, onClose }: SyncStatusModalProp
         onClick={onClose}
       />
       <div
-        className="app-modal-panel max-w-md p-6 transform transition-all duration-300 animate-in fade-in zoom-in-95 slide-in-from-bottom-4"
+        className="app-modal-panel max-h-[88dvh] max-w-md overflow-y-auto p-6 transform transition-all duration-300 animate-in fade-in zoom-in-95 slide-in-from-bottom-4"
         style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}
       >
         <div className="flex items-center justify-between mb-6">
@@ -111,6 +113,8 @@ export default function SyncStatusModal({ isOpen, onClose }: SyncStatusModalProp
           </span>
         </div>
 
+        <p className="mb-3 text-xs leading-5 text-gray-500 dark:text-gray-400">{syncSafetyStatus({ online: isOnlineStatus, pending: pendingCount, hasOutbox: localSync.hasFinancialOutbox, lastSuccess: localSync.lastSuccessfulSyncAt, lastError: localSync.lastSyncError }).message}</p>
+        <SyncSafetyDetails />
         <button
           onClick={handleForceSync}
           disabled={isSyncing || !isOnlineStatus}

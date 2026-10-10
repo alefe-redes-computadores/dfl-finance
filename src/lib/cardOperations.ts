@@ -1,3 +1,4 @@
+import { financialOperationId } from '@/lib/financialSyncContract'
 // src/lib/cardOperations.ts
 
 import { format } from 'date-fns'
@@ -809,7 +810,7 @@ export async function payCardInvoice({
           invoice?.id ?? null,
         idempotency_key:
           invoice?.id
-            ? `card_invoice_payment:${invoice.id}`
+            ? financialOperationId(`${userId}:card_invoice_payment:${invoice.id}`)
             : null,
 
         date: format(new Date(), 'yyyy-MM-dd'),

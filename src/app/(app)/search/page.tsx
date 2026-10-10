@@ -48,7 +48,7 @@ const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
 
 const formatDate = (value?: string) => {
   if (!value) return ''
-  const date = new Date(value)
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value)
   if (Number.isNaN(date.getTime())) return String(value).slice(0, 10)
   return dateFormatter.format(date).replace('.', '')
 }
@@ -323,7 +323,7 @@ function SearchResultRow({
 export default function Page() {
   const router = useRouter()
   const { user } = useAuth()
-  const { context } = useContext_()
+  const { effectiveContext: context } = useContext_()
   const { vibrate } = useHapticFeedback()
 
   const [query, setQuery] = useState('')

@@ -1,16 +1,20 @@
+import { civilDate, civilISO } from '@/lib/financialForecast'
+import { isInboxCandidate } from '@/lib/inboxPolicy'
 import { addToSyncQueue, db } from '@/lib/db'
 
 function safeAmount(value: unknown) {
-  const parsed = Math.abs(Number(value))
+  const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error('Informe um valor válido.')
   }
-  return Math.round(parsed * 100) / 100
+  const rounded = Math.round(parsed * 100) / 100
+  if (rounded < 0.01) throw new Error('Informe um valor de pelo menos um centavo.')
+  return rounded
 }
 
 function safeCivilDate(value: unknown) {
   const text = String(value || '').slice(0, 10)
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+  if (!civilDate(text)) {
     throw new Error('Informe uma data válida.')
   }
   return text
@@ -42,6 +46,8 @@ export async function saveConciliationReview(
       throw new Error('Esta transação já foi concluída.')
     }
 
+    if (!isInboxCandidate(tx)) throw new Error('Cartões, transferências e contratos devem ser revisados no fluxo de origem.')
+    if (tx.affects_balance === true) throw new Error('Pendência antiga com efeito de saldo ambíguo. Preserve o registro para revisão.')
     const account = await db.accounts.get(patch.account_id)
     if (!account || account.user_id !== userId || account.context !== tx.context || account.is_archived) {
       throw new Error('Escolha uma conta válida para esta pendência.')
@@ -67,9 +73,11 @@ export async function saveConciliationReview(
       description: String(patch.description || '').trim() || 'Transação sem descrição',
       amount: safeAmount(patch.amount),
       date: safeCivilDate(patch.date),
+      ...(tx.due_date ? { due_date: safeCivilDate(patch.date) } : {}),
       account_id: account.id,
       category_id: categoryId,
       updated_at: now,
+      reviewed_at: now,
       sync_status: 'pending' as const,
     }
 
@@ -98,6 +106,10 @@ export async function conciliatePendingTransaction(
       return { alreadyDone: true, transaction: tx }
     }
 
+    if (!isInboxCandidate(tx)) throw new Error('Use o fluxo de origem para cartões, transferências e contratos.')
+    const due = safeCivilDate(tx.due_date || tx.date)
+    if (due > civilISO(new Date())) throw new Error('Esta pendência é futura. Revise sem liquidar; o pagamento antecipado deve ser explícito no formulário completo.')
+    if (tx.affects_balance === true) throw new Error('Pendência antiga com efeito de saldo ambíguo. Preserve o registro para revisão.')
     if (!tx.account_id) {
       throw new Error('Escolha uma conta antes de conciliar.')
     }
@@ -108,11 +120,12 @@ export async function conciliatePendingTransaction(
     }
 
     const amount = safeAmount(tx.amount)
-    const shouldApplyBalance = tx.affects_balance !== true
+    const shouldApplyBalance = true
     const now = new Date().toISOString()
 
     if (shouldApplyBalance) {
-      const currentBalance = Number(account.balance || 0)
+      const currentBalance = Number(account.balance)
+      if (!Number.isFinite(currentBalance)) throw new Error('Saldo da conta inválido. Nenhuma alteração foi realizada.')
       const delta = tx.type === 'income' ? amount : -amount
       const updatedAccount = {
         ...account,

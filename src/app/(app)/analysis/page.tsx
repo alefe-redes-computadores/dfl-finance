@@ -46,7 +46,7 @@ import {
   AreaChart,
   Area,
 } from 'recharts'
-import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import DetailedProjectionChart from '@/components/DetailedProjectionChart'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useDashboardMetrics } from '@/hooks/useDashboardMetrics'
@@ -268,6 +268,8 @@ function AnalysisContent() {
     ]
   )
 
+  const commitmentSources = useMemo(() => ({creditCards:localCreditCards, creditInvoices:localCreditInvoices, debts:localDebts, loans:localLoans, financings:localFinancings, subscriptions:localSubscriptions}), [localCreditCards,localCreditInvoices,localDebts,localLoans,localFinancings,localSubscriptions])
+
   const intelligenceInsights = useMemo(
     () =>
       selectFinancialInsights(
@@ -471,6 +473,9 @@ function AnalysisContent() {
         const amount = Number(t.amount || 0)
 
         if (t.type === 'transfer') {
+          if (filterAccount && t.account_id !== filterAccount) return 0
+          if (t.transfer_direction === 'out') return -amount
+          if (t.transfer_direction === 'in') return amount
           if (!filterAccount || t.account_id !== filterAccount) return 0
 
           /*
@@ -888,6 +893,7 @@ function AnalysisContent() {
       </div>
 
       <FinancialHealthCenter
+        sources={commitmentSources}
         intelligence={financialIntelligence}
         transactions={(localTransactions || []) as any[]}
       />
@@ -1583,8 +1589,6 @@ export default function AnalysisPage() {
   if (!isClient) return <div className="min-h-screen bg-[#f8f9fa] dark:bg-slate-900" />
 
   return (
-    <ContextProvider>
-      <AnalysisContent />
-    </ContextProvider>
+    <AnalysisContent />
   )
 }

@@ -2,6 +2,9 @@
 'use client'
 
 import { liveQuery } from 'dexie'
+import { pushAtomicFinancialBatch } from '@/lib/atomicFinancialSync'
+import { remoteSyncBase } from '@/lib/financialSyncContract'
+import { fetchRemoteSyncRows } from '@/lib/remoteSyncPages'
 import {
   confirmSyncSuccessIfCurrent,
   db,
@@ -58,18 +61,24 @@ type SyncSnapshot = {
   syncStatus: SyncStatus
   isOnline: boolean
   pendingCount: number
+  hasFinancialOutbox: boolean
   isSyncing: boolean
   isBalanceReconciling: boolean
   balanceVerifiedAt: string | null
+  lastSuccessfulSyncAt: string | null
+  lastSyncError: string | null
 }
 
 const SERVER_SNAPSHOT: SyncSnapshot = {
   syncStatus: 'idle',
   isOnline: true,
   pendingCount: 0,
+  hasFinancialOutbox: false,
   isSyncing: false,
   isBalanceReconciling: false,
   balanceVerifiedAt: null,
+  lastSuccessfulSyncAt: null,
+  lastSyncError: null,
 }
 
 let snapshot: SyncSnapshot = {
@@ -180,7 +189,7 @@ function ensureRuntime() {
   document.addEventListener('visibilitychange', handleVisibilityChange)
 
   periodicSyncTimer = setInterval(() => {
-    if (!currentUserId || !snapshot.isOnline) return
+    if (!currentUserId || !snapshot.isOnline || document.visibilityState !== 'visible') return
 
     /*
      * Fila local pendente continua recebendo oportunidade a cada minuto.
@@ -205,16 +214,17 @@ function watchPendingCount(userId: string | null) {
   pendingSubscription = null
 
   if (!userId) {
-    setSnapshot({ pendingCount: 0 })
+    setSnapshot({ pendingCount: 0, hasFinancialOutbox: false })
     return
   }
 
-  pendingSubscription = liveQuery(() =>
-    db.syncQueue.where('user_id').equals(userId).count()
-  ).subscribe({
-    next: (count) => {
+  pendingSubscription = liveQuery(async () => {
+    const [count, outbox] = await Promise.all([db.syncQueue.where('user_id').equals(userId).count(), db.financialOutbox.get(userId)])
+    return { count, hasOutbox: Boolean(outbox) }
+  }).subscribe({
+    next: ({ count, hasOutbox }) => {
       if (currentUserId === userId) {
-        setSnapshot({ pendingCount: count })
+        setSnapshot({ pendingCount: count, hasFinancialOutbox: hasOutbox })
       }
     },
     error: (error) => {
@@ -243,6 +253,7 @@ export function configureSyncEngine(userId: string | null) {
   }
 
   currentUserId = userId
+  setSnapshot({ lastSuccessfulSyncAt: null, lastSyncError: null, balanceVerifiedAt: null, pendingCount: 0, hasFinancialOutbox: false })
   watchPendingCount(userId)
 
   if (userId && online) {
@@ -276,7 +287,7 @@ export function getServerSyncSnapshot() {
 export async function refreshPendingCount(userId = currentUserId) {
   if (!userId) {
     if (!currentUserId) {
-      setSnapshot({ pendingCount: 0 })
+      setSnapshot({ pendingCount: 0, hasFinancialOutbox: false })
     }
     return 0
   }
@@ -308,127 +319,6 @@ export async function getSyncQueueDiagnostics(
   }))
 }
 
-const LOCAL_ONLY_REMOTE_KEYS =
-  new Set([
-    'syncstatus',
-    'syncattempts',
-    'lastsyncerror',
-  ])
-
-const TRANSACTION_PRESENTATION_REMOTE_KEYS =
-  new Set([
-    'categoryname',
-    'accountname',
-  ])
-
-function sanitizeRemotePayload(
-  source: Record<string, any>,
-  recordId: string,
-  userId: string,
-  table?: LocalSyncQueue['table']
-) {
-  const sanitizedEntries =
-    Object.entries(source)
-      .filter(([key, value]) => {
-        if (value === undefined) {
-          return false
-        }
-
-        const normalizedKey =
-          key
-            .replace(
-              /[^a-zA-Z0-9]/g,
-              ''
-            )
-            .toLowerCase()
-
-        return (
-          !LOCAL_ONLY_REMOTE_KEYS.has(
-            normalizedKey
-          ) &&
-          !(
-            table ===
-              'transactions' &&
-            TRANSACTION_PRESENTATION_REMOTE_KEYS.has(
-              normalizedKey
-            )
-          )
-        )
-      })
-      .map(([key, value]) => {
-        const normalizedKey =
-          key
-            .replace(
-              /[^a-zA-Z0-9]/g,
-              ''
-            )
-            .toLowerCase()
-
-        const legacyRemoteKeyAliases: Record<string, string> = {
-          userid: 'user_id',
-          accountid: 'account_id',
-          categoryid: 'category_id',
-          creditcardid: 'credit_card_id',
-          invoiceid: 'invoice_id',
-          debtid: 'debt_id',
-          goalid: 'goal_id',
-          contactid: 'contact_id',
-          linkedtransactionid: 'linked_transaction_id',
-          recurringgroupid: 'recurring_group_id',
-
-          /*
-           * Compatibilidade com transferências criadas por
-           * versões antigas do app.
-           *
-           * O backend atual expõe to_account_id. As chaves
-           * transfer_to/transfer_from nunca existiram como
-           * colunas remotas e poderiam deixar itens antigos
-           * presos na fila.
-           */
-          transferto: 'to_account_id',
-          transferfrom: 'to_account_id',
-          transfergroupid: 'transfer_group_id',
-          idempotencykey: 'idempotency_key',
-
-          affectsbalance: 'affects_balance',
-          createdat: 'created_at',
-          updatedat: 'updated_at',
-        }
-
-        const canonicalKey =
-          legacyRemoteKeyAliases[normalizedKey]
-
-        if (canonicalKey) {
-          return [
-            canonicalKey,
-            value,
-          ]
-        }
-
-        if (
-          table ===
-            'chat_history' &&
-          key === 'role' &&
-          value === 'assistant'
-        ) {
-          return [
-            'role',
-            'model',
-          ]
-        }
-
-        return [
-          key,
-          value,
-        ]
-      })
-
-  return Object.fromEntries([
-    ...sanitizedEntries,
-    ['id', recordId],
-    ['user_id', userId],
-  ])
-}
 
 function retryDelayMs(attempts: number) {
   if (attempts <= 0) return 0
@@ -477,16 +367,8 @@ export async function reconcileAccountBalancesFast(
         .map((item) => item.record_id)
     )
 
-    const { data, error } = await supabase
-      .from('accounts')
-      .select('*')
-      .eq('user_id', userId)
-
-    if (error) {
-      throw new Error(error.message)
-    }
-
-    const remoteAccounts = data ?? []
+    const remoteAccounts = await fetchRemoteSyncRows('accounts', userId)
+    if (currentUserId !== userId) return false
     const remoteIds = new Set(
       remoteAccounts
         .map((item: any) => item?.id)
@@ -509,6 +391,7 @@ export async function reconcileAccountBalancesFast(
 
         await db.accounts.put({
           ...remoteAccount,
+          _sync_base: remoteSyncBase(remoteAccount),
           balance:
             Math.round(Number(remoteAccount.balance ?? 0) * 100) / 100,
           sync_status: 'synced',
@@ -517,13 +400,15 @@ export async function reconcileAccountBalancesFast(
         })
       }
 
+      const currentAccountQueue = await db.syncQueue.where('user_id').equals(userId).filter(item => item.table === 'accounts').toArray()
+      const currentlyProtected = new Set(currentAccountQueue.map(item => item.record_id))
       const staleIds = localAccounts
         .filter(
           (account: any) =>
             account?.id &&
             account.sync_status === 'synced' &&
             !remoteIds.has(account.id) &&
-            !protectedAccountIds.has(account.id)
+            !protectedAccountIds.has(account.id) && !currentlyProtected.has(account.id)
         )
         .map((account: any) => account.id)
 
@@ -533,7 +418,8 @@ export async function reconcileAccountBalancesFast(
     })
 
     const verifiedAt = new Date().toISOString()
-    setSnapshot({ balanceVerifiedAt: verifiedAt })
+    const stillProtected = await db.syncQueue.where('user_id').equals(userId).filter(item => item.table === 'accounts').count()
+    setSnapshot({ balanceVerifiedAt: stillProtected ? null : verifiedAt })
     renderLog('Saldos das contas reconciliados com prioridade.', 'success')
     return true
   } catch (error: any) {
@@ -577,6 +463,9 @@ async function healOrphanAccountSyncStates(
       .map((item) => item.record_id)
   )
 
+  const outbox = await db.financialOutbox.get(userId)
+  for (const item of outbox?.queue ?? []) if (item.table === 'accounts') queuedAccountIds.add(item.record_id)
+
   const orphanIds = localAccounts
     .filter(
       (account: any) =>
@@ -603,6 +492,7 @@ async function healOrphanAccountSyncStates(
     )
   }
 
+  if (currentUserId !== userId) return 0
   const remoteAccounts = data ?? []
 
   if (remoteAccounts.length === 0) {
@@ -646,6 +536,7 @@ async function healOrphanAccountSyncStates(
 
         await db.accounts.put({
           ...remoteAccount,
+          _sync_base: remoteSyncBase(remoteAccount),
           balance:
             Math.round(Number(remoteAccount.balance ?? 0) * 100) / 100,
           sync_status: 'synced',
@@ -703,48 +594,12 @@ async function pullRemoteChanges(
     const lastPullKey = `dfl_last_pull_${userId}`
     const storedLastPull =
       localStorage.getItem(lastPullKey) || '2000-01-01T00:00:00.000Z'
-    const syncTime = new Date().toISOString()
+    const fullKey = `dfl_last_full_pull_${userId}`
+    const fullDue = Date.now() - Number(localStorage.getItem(fullKey) || 0) >= 30 * 60_000
+    const fullSnapshot = force || fullDue
+    let remoteHighWater = fullSnapshot ? '2000-01-01T00:00:00.000Z' : storedLastPull
     const failedTables: SyncTableName[] = []
     let skippedProtectedRemoteRows = false
-
-    /*
-     * Snapshot único das mutações locais protegidas.
-     *
-     * Antes getPendingSyncItems(userId) era executado novamente
-     * dentro de CADA iteração de SYNC_TABLES, relendo e ordenando
-     * a fila inteira várias vezes durante um único pull.
-     *
-     * O push acontece antes do pull no mesmo ciclo, então este
-     * snapshot representa exatamente a fila que deve ser protegida
-     * contra sobrescrita remota nesta etapa.
-     */
-    const currentPendingItems =
-      await getPendingSyncItems(userId)
-
-    const pendingIdsByTable =
-      new Map<
-        LocalSyncQueue['table'],
-        Set<string>
-      >()
-
-    for (const pendingItem of currentPendingItems) {
-      let ids =
-        pendingIdsByTable.get(
-          pendingItem.table
-        )
-
-      if (!ids) {
-        ids = new Set<string>()
-        pendingIdsByTable.set(
-          pendingItem.table,
-          ids
-        )
-      }
-
-      ids.add(
-        pendingItem.record_id
-      )
-    }
 
     for (const tableName of SYNC_TABLES) {
       let effectiveLastPull = storedLastPull
@@ -756,126 +611,48 @@ async function pullRemoteChanges(
           .equals(userId)
           .count()
 
-        if (force || localCount === 0) {
+        if (fullSnapshot || localCount === 0) {
           effectiveLastPull = '2000-01-01T00:00:00.000Z'
         }
       } catch {
         effectiveLastPull = '2000-01-01T00:00:00.000Z'
       }
 
-      const { data, error } = await supabase
-        .from(tableName)
-        .select('*')
-        .eq('user_id', userId)
-        .gt('updated_at', effectiveLastPull)
-
-      if (error) {
+      let remoteData: any[]
+      try {
+        const overlap = effectiveLastPull === '2000-01-01T00:00:00.000Z' ? undefined :
+          new Date(Math.max(0, Date.parse(effectiveLastPull) - 5 * 60_000)).toISOString()
+        remoteData = await fetchRemoteSyncRows(tableName, userId, overlap)
+        if (currentUserId !== userId) return { success: false, failedTables: [] }
+        for (const row of remoteData) {
+          if (typeof row.updated_at === 'string' && Date.parse(row.updated_at) >= Date.parse(remoteHighWater)) remoteHighWater = row.updated_at
+        }
+      } catch (error: any) {
         failedTables.push(tableName)
-        renderLog(
-          `Falha ao receber ${tableName}: ${error.message}`,
-          'error'
-        )
+        renderLog(`Falha ao receber ${tableName}: ${error.message}`, 'error')
         continue
       }
 
-      const remoteData = data ?? []
-
-      const pendingIds =
-        pendingIdsByTable.get(
-          tableName
-        ) ??
-        new Set<string>()
-
-      const remoteIdsForLookup = remoteData
-        .map((item: any) => item?.id)
-        .filter(
-          (id: any): id is string =>
-            typeof id === 'string' && id.length > 0
-        )
-
-      const localRows = force
-        ? await db
-            .table(tableName)
-            .where('user_id')
-            .equals(userId)
-            .toArray()
-        : (
-            await db
-              .table(tableName)
-              .bulkGet(remoteIdsForLookup)
-          ).filter(
-            (item: any) =>
-              Boolean(item) &&
-              item.user_id === userId
-          )
-
-      const localRowsById = new Map(
-        localRows
-          .filter((item: any) => typeof item?.id === 'string')
-          .map((item: any) => [item.id, item])
-      )
-
-      /*
-       * V65 — a fila é a autoridade para proteção local.
-       *
-       * sync_status=pending/failed sem item correspondente na fila é
-       * estado órfão: não existe mutação capaz de ser enviada. Proteger
-       * esse registro para sempre impede o snapshot remoto de convergir.
-       */
-      const isLocallyProtected = (id: string) =>
-        pendingIds.has(id)
-
-      const remoteDataSafeToApply = remoteData.filter(
-        (item: any) =>
-          typeof item?.id !== 'string' || !isLocallyProtected(item.id)
-      )
-
-      if (remoteDataSafeToApply.length < remoteData.length) {
-        skippedProtectedRemoteRows = true
-      }
-
-      if (remoteDataSafeToApply.length > 0) {
-        const localData =
-          remoteDataSafeToApply.map(
-            (item: any) => ({
-              ...item,
-              sync_status:
-                'synced',
-              sync_attempts:
-                0,
-              last_sync_error:
-                null,
-            })
-          )
-
-        await db
-          .table(tableName)
-          .bulkPut(localData)
-      }
-
-      if (force) {
-        const remoteIds = new Set(
-          remoteData
-            .map((item: any) => item?.id)
-            .filter(
-              (id: any): id is string =>
-                typeof id === 'string' && id.length > 0
-            )
-        )
-
-        const staleSyncedIds = localRows
-          .filter((item: any) => {
-            if (typeof item?.id !== 'string') return false
-            if (remoteIds.has(item.id)) return false
-            if (isLocallyProtected(item.id)) return false
-            return item.sync_status === 'synced'
-          })
-          .map((item: any) => item.id)
-
-        if (staleSyncedIds.length > 0) {
-          await db.table(tableName).bulkDelete(staleSyncedIds)
+      // Recheck the queue inside the same write transaction as apply/prune.
+      await db.transaction('rw', db.table(tableName), db.syncQueue, async () => {
+        const latestQueue = await db.syncQueue.where('user_id').equals(userId)
+          .filter(item => item.table === tableName).toArray()
+        const protectedNow = new Set(latestQueue.map(item => item.record_id))
+        const safeRows = remoteData.filter(item => !protectedNow.has(item.id))
+        if (safeRows.length < remoteData.length) skippedProtectedRemoteRows = true
+        if (safeRows.length) await db.table(tableName).bulkPut(safeRows.map(item => ({
+          ...item, _sync_base: remoteSyncBase(item),
+          sync_status: 'synced', sync_attempts: 0, last_sync_error: null,
+        })))
+        if (fullSnapshot) {
+          const remoteIds = new Set(remoteData.map(item => item.id))
+          const currentLocal = await db.table(tableName).where('user_id').equals(userId).toArray()
+          const stale = currentLocal.filter(item => item.sync_status === 'synced' &&
+            !remoteIds.has(item.id) && !protectedNow.has(item.id)).map(item => item.id)
+          if (stale.length) await db.table(tableName).bulkDelete(stale)
         }
-      }
+      })
+
     }
 
     if (failedTables.length === 0) {
@@ -886,7 +663,8 @@ async function pullRemoteChanges(
        * remota novamente.
        */
       if (!skippedProtectedRemoteRows) {
-        localStorage.setItem(lastPullKey, syncTime)
+        localStorage.setItem(lastPullKey, remoteHighWater)
+        if (fullSnapshot) localStorage.setItem(fullKey, String(Date.now()))
       } else {
         renderLog(
           'Recebimento remoto preservou o cursor porque há registros protegidos pela fila local.',
@@ -950,266 +728,7 @@ async function runSyncCycle(
   let pushFailures = 0
 
   try {
-    const items =
-      await getPendingSyncItems(userId)
-
-    const syncPriority:
-      Partial<Record<
-        LocalSyncQueue['table'],
-        number
-      >> = {
-        categories: 10,
-        accounts: 20,
-        contacts: 30,
-        credit_cards: 40,
-        debts: 50,
-        loans: 60,
-        financings: 70,
-        subscriptions: 80,
-        tags: 90,
-        budgets: 100,
-        goals: 110,
-        chat_sessions: 120,
-        transactions: 200,
-        credit_invoices: 210,
-        notifications: 220,
-        chat_history: 230,
-      }
-
-    items.sort((a, b) => {
-      const priorityA =
-        syncPriority[a.table] ??
-        150
-
-      const priorityB =
-        syncPriority[b.table] ??
-        150
-
-      if (
-        priorityA !== priorityB
-      ) {
-        return (
-          priorityA -
-          priorityB
-        )
-      }
-
-      return String(
-        a.created_at || ''
-      ).localeCompare(
-        String(
-          b.created_at || ''
-        )
-      )
-    })
-
-    for (const item of items) {
-      if (
-        !forcePushRetry &&
-        !isRetryDue(item)
-      ) {
-        continue
-      }
-
-      const itemRevision = item.revision ?? 0
-
-      try {
-        const currentQueueItem = await db.syncQueue.get(item.id)
-
-        if (
-          !currentQueueItem ||
-          (currentQueueItem.revision ?? 0) !== itemRevision
-        ) {
-          continue
-        }
-
-        const supabaseClient = supabase.from(item.table)
-
-        if (item.operation === 'delete') {
-          const { error } = await supabaseClient
-            .delete()
-            .eq('id', item.record_id)
-            .eq('user_id', userId)
-
-          if (error) {
-            throw new Error(error.message)
-          }
-        } else {
-          const localRecord = await db.table(item.table).get(item.record_id)
-
-          if (!localRecord) {
-            throw new Error(
-              `Registro local ${item.table}/${item.record_id} não encontrado para envio.`
-            )
-          }
-
-          if (localRecord.user_id !== userId) {
-            throw new Error(
-              `Registro local ${item.table}/${item.record_id} pertence a outro usuário.`
-            )
-          }
-
-          const payload = sanitizeRemotePayload(
-            localRecord,
-            item.record_id,
-            userId,
-            item.table
-          )
-
-          /*
-           * V61 — accounts.balance é snapshot financeiro.
-           * Um snapshot remoto que mudou depois do início desta
-           * fila local nunca é sobrescrito silenciosamente.
-           */
-          if (
-            item.table === 'accounts' &&
-            item.operation === 'update'
-          ) {
-            const { data: remoteAccount, error: remoteReadError } =
-              await supabaseClient
-                .select('id, user_id, balance, updated_at')
-                .eq('id', item.record_id)
-                .eq('user_id', userId)
-                .maybeSingle()
-
-            if (remoteReadError) {
-              throw new Error(
-                `Não foi possível validar a versão remota da conta: ${remoteReadError.message}`
-              )
-            }
-
-            const remoteUpdatedAt =
-              typeof remoteAccount?.updated_at === 'string'
-                ? remoteAccount.updated_at
-                : ''
-            const localUpdatedAt =
-              typeof localRecord.updated_at === 'string'
-                ? localRecord.updated_at
-                : ''
-            const queueStartedAt =
-              typeof item.created_at === 'string'
-                ? item.created_at
-                : ''
-
-            const remoteUpdatedMs = Date.parse(remoteUpdatedAt)
-            const localUpdatedMs = Date.parse(localUpdatedAt)
-            const queueStartedMs = Date.parse(queueStartedAt)
-
-            const remoteChangedAfterQueue =
-              Number.isFinite(remoteUpdatedMs) &&
-              Number.isFinite(queueStartedMs) &&
-              remoteUpdatedMs > queueStartedMs
-
-            const remoteMatchesLocal =
-              Number.isFinite(remoteUpdatedMs) &&
-              Number.isFinite(localUpdatedMs) &&
-              remoteUpdatedMs === localUpdatedMs
-
-            if (
-              remoteChangedAfterQueue &&
-              !remoteMatchesLocal &&
-              remoteAccount
-            ) {
-              const remoteBalance = Number(remoteAccount.balance ?? 0)
-              const localBalance = Number(localRecord.balance ?? 0)
-
-              /*
-               * V64 — convergência multi-cliente de saldo.
-               *
-               * A V61 preservava corretamente o snapshot remoto mais novo,
-               * mas deixava a mutação local conflitante na fila. Como o pull
-               * protege registros pendentes/failed, esse cliente nunca mais
-               * aceitava o saldo remoto e podia permanecer divergente para
-               * sempre.
-               *
-               * Se o servidor mudou DEPOIS do início desta mutação local,
-               * o snapshot remoto é a versão vencedora. Aplicamos esse
-               * snapshot no Dexie e consumimos somente a revisão da fila que
-               * acabamos de validar. Se outra edição local ocorreu durante
-               * esta resolução, confirmSyncSuccessIfCurrent detecta a revisão
-               * nova e preserva a mutação mais recente.
-               */
-              await db.accounts.put({
-                ...localRecord,
-                ...remoteAccount,
-                sync_status: 'synced',
-                sync_attempts: 0,
-                last_sync_error: null,
-              })
-
-              const converged =
-                await confirmSyncSuccessIfCurrent(
-                  item.id,
-                  itemRevision
-                )
-
-              if (!converged) {
-                /*
-                 * Houve nova edição enquanto o conflito era resolvido.
-                 * Não apagamos a revisão nova; ela será tratada no próximo
-                 * ciclo de sincronização.
-                 */
-                renderLog(
-                  `Saldo da conta ${item.record_id} recebeu snapshot remoto, mas uma edição local mais nova foi preservada na fila.`,
-                  'info'
-                )
-              } else {
-                renderLog(
-                  [
-                    `Saldo convergido entre dispositivos: ${item.record_id}.`,
-                    `Local anterior=${localBalance.toFixed(2)}.`,
-                    `Remoto=${remoteBalance.toFixed(2)}.`,
-                  ].join(' '),
-                  'success'
-                )
-              }
-
-              continue
-            }
-          }
-
-          const { error } = await supabaseClient.upsert(payload, {
-            onConflict: 'id',
-          })
-
-          if (error) {
-            throw new Error(error.message)
-          }
-        }
-
-        const confirmed = await confirmSyncSuccessIfCurrent(
-          item.id,
-          itemRevision
-        )
-
-        if (confirmed) {
-          renderLog(
-            `${item.table}/${item.record_id} confirmado e removido da fila.`,
-            'success'
-          )
-        } else {
-          renderLog(
-            `${item.table}/${item.record_id} mudou durante o envio; revisão nova preservada.`,
-            'info'
-          )
-        }
-      } catch (error: any) {
-        const message = error?.message || 'Falha desconhecida no envio.'
-        const failureRecorded = await markSyncFailedIfCurrent(
-          item.id,
-          itemRevision,
-          message
-        )
-
-        if (failureRecorded) {
-          pushFailures += 1
-          renderLog(
-            `${item.table}/${item.record_id} permaneceu na fila após falha: ${message}`,
-            'error'
-          )
-        }
-      }
-    }
+    pushFailures = await pushAtomicFinancialBatch(userId, forcePushRetry, isRetryDue)
 
     const pullResult = await pullRemoteChanges(userId, forcePull)
 
@@ -1234,8 +753,17 @@ async function runSyncCycle(
     const success =
       pushFailures === 0 &&
       remainingPendingCount === 0 &&
+      !(await db.financialOutbox.get(userId)) &&
       pullResult.success
 
+    if (currentUserId === userId) {
+      const pending = await getPendingSyncItems(userId)
+      const firstError = pending.find(item => item.last_error)?.last_error
+      setSnapshot({
+        ...(success ? { lastSuccessfulSyncAt: new Date().toISOString() } : {}),
+        lastSyncError: success ? null : firstError || (pullResult.success ? 'Confirmação remota pendente.' : 'Recebimento remoto incompleto.'),
+      })
+    }
     return {
       success,
       pushFailures,
@@ -1245,6 +773,7 @@ async function runSyncCycle(
     }
   } catch (error: any) {
     console.error('[SYNC] Falha crítica no ciclo:', error)
+    if (currentUserId === userId) setSnapshot({ lastSyncError: error?.message || 'Ciclo incompleto.' })
 
     return {
       success: false,

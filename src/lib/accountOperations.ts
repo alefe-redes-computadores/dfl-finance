@@ -1,5 +1,7 @@
 // src/lib/accountOperations.ts
 
+import { civilISO } from '@/lib/financialForecast'
+import { financialOperationId } from '@/lib/financialSyncContract'
 import { addToSyncQueue, db } from '@/lib/db'
 
 type AccountContext = 'dfl' | 'personal'
@@ -10,6 +12,7 @@ interface TransferBetweenAccountsInput {
   toAccountId: string
   amount: number
   description?: string
+  operationId?: string
 }
 
 interface AdjustAccountBalanceInput {
@@ -34,6 +37,7 @@ export async function transferBetweenAccounts({
   toAccountId,
   amount,
   description,
+  operationId,
 }: TransferBetweenAccountsInput): Promise<void> {
   if (!userId) {
     throw new Error('Usuário não autenticado.')
@@ -51,9 +55,11 @@ export async function transferBetweenAccounts({
     throw new Error('Informe um valor válido para transferência.')
   }
 
-  const transferGroupId = crypto.randomUUID()
+  const transferGroupId = operationId ? financialOperationId(operationId) : crypto.randomUUID()
+  amount = Math.round(amount * 100) / 100
+  if (amount <= 0) throw new Error('Informe um valor de pelo menos um centavo.')
   const now = new Date().toISOString()
-  const date = now.split('T')[0]
+  const date = civilISO(new Date())
 
   await db.transaction(
     'rw',
@@ -61,6 +67,17 @@ export async function transferBetweenAccounts({
     db.transactions,
     db.syncQueue,
     async () => {
+      const previous = await db.transactions.where('user_id').equals(userId)
+        .filter(row => row.transfer_group_id === transferGroupId).toArray()
+      if (previous.length) {
+        const outgoing = previous.find(row => row.transfer_direction === 'out')
+        const incoming = previous.find(row => row.transfer_direction === 'in')
+        if (previous.length !== 2 || outgoing?.account_id !== fromAccountId ||
+            incoming?.account_id !== toAccountId || outgoing.amount !== amount || incoming.amount !== amount) {
+          throw new Error('Esta identidade já pertence a outra transferência.')
+        }
+        return
+      }
       const fromAccount: any = await db.accounts.get(fromAccountId)
       const toAccount: any = await db.accounts.get(toAccountId)
 
@@ -81,11 +98,12 @@ export async function transferBetweenAccounts({
         )
       }
 
+      if (fromAccount.is_archived || toAccount.is_archived || !Number.isFinite(Number(fromAccount.balance)) || !Number.isFinite(Number(toAccount.balance))) throw new Error('Escolha contas ativas com saldos válidos.')
       const fromBalance = safeNumber(fromAccount.balance)
       const toBalance = safeNumber(toAccount.balance)
 
-      const newFromBalance = fromBalance - amount
-      const newToBalance = toBalance + amount
+      const newFromBalance = (Math.round(fromBalance * 100) - Math.round(amount * 100)) / 100
+      const newToBalance = (Math.round(toBalance * 100) + Math.round(amount * 100)) / 100
 
       const fromContext = accountContext(fromAccount.context)
       const toContext = accountContext(toAccount.context)
@@ -106,11 +124,13 @@ export async function transferBetweenAccounts({
          * V55 — direção canônica da transferência.
          *
          * account_id continua representando a conta desta perna e
-         * to_account_id a contraparte. O idempotency_key torna a
-         * direção inequívoca sem introduzir campos fantasmas.
+         * to_account_id a contraparte. O transfer_direction mantém a
+         * direção explícita, independente do texto e da identidade UUID.
          */
         idempotency_key:
-          `transfer:${transferGroupId}:out`,
+          financialOperationId(`${userId}:transfer:${transferGroupId}:out`),
+        transfer_direction: 'out' as const,
+        cash_delta: -amount,
 
         date,
         status: 'done',
@@ -151,7 +171,9 @@ export async function transferBetweenAccounts({
          * contas já são atualizados atomicamente nesta operação.
          */
         idempotency_key:
-          `transfer:${transferGroupId}:in`,
+          financialOperationId(`${userId}:transfer:${transferGroupId}:in`),
+        transfer_direction: 'in' as const,
+        cash_delta: amount,
 
         date,
         status: 'done',
@@ -241,8 +263,10 @@ export async function adjustAccountBalance({
     throw new Error('Informe um valor válido para ajuste.')
   }
 
+  amount = Math.round(amount * 100) / 100
+  if (amount === 0) throw new Error('Informe um ajuste de pelo menos um centavo.')
   const now = new Date().toISOString()
-  const date = now.split('T')[0]
+  const date = civilISO(new Date())
   let newBalance = 0
 
   await db.transaction(
@@ -261,7 +285,7 @@ export async function adjustAccountBalance({
         throw new Error('Esta conta não pertence ao usuário.')
       }
 
-      newBalance = safeNumber(account.balance) + amount
+      newBalance = (Math.round(safeNumber(account.balance) * 100) + Math.round(amount * 100)) / 100
 
       const updatedAccount = {
         ...account,
@@ -274,6 +298,8 @@ export async function adjustAccountBalance({
         id: crypto.randomUUID(),
         user_id: userId,
         description: description?.trim() || 'Ajuste de saldo',
+        affects_balance: false,
+        cash_delta: amount,
         amount: Math.abs(amount),
         type: amount > 0 ? 'income' : 'expense',
         account_id: account.id,

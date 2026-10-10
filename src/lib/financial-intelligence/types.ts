@@ -51,6 +51,14 @@ export interface IntelligenceTransactionLike {
   category_id?: string | null
   account_id?: string | null
   goal_id?: string | null
+  transfer_group_id?: string | null
+  credit_card_id?: string | null
+  invoice_id?: string | null
+  loan_id?: string | null
+  financing_id?: string | null
+  due_date?: string | null
+  paid?: boolean | null
+  cash_delta?: number | null
   debt_id?: string | null
   debt_applied_amount?: number | null
   contact_credit_delta?: number | null
@@ -110,6 +118,7 @@ export interface IntelligenceGoalLike {
 }
 
 export interface IntelligenceLoanLike {
+  direction?: 'lent' | 'borrowed' | null
   id?: string
   context?: string | null
   description?: string | null
@@ -120,6 +129,7 @@ export interface IntelligenceLoanLike {
 }
 
 export interface IntelligenceFinancingLike {
+  outstanding_balance?: number | null
   id?: string
   context?: string | null
   name?: string | null
@@ -192,6 +202,8 @@ export interface FinancialInsight {
 }
 
 export interface FinancialIntelligenceSnapshot {
+  forecastBasis?: import('@/lib/financialForecast').ForecastBasis
+  cashForecastBasis?: import('@/lib/financialForecast').ForecastBasis
   accountBalance: number
   currentMonthIncome: number
   currentMonthExpense: number

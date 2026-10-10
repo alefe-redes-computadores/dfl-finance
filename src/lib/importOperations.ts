@@ -1,3 +1,4 @@
+import { financialOperationId } from '@/lib/financialSyncContract'
 // src/lib/importOperations.ts
 import { addToSyncQueue, db, LocalTransaction } from '@/lib/db'
 
@@ -130,7 +131,7 @@ export async function importAccountTransactions(
         )
 
         if (transaction.idempotency_key) {
-          existingIdempotencyKeys.add(transaction.idempotency_key)
+          existingIdempotencyKeys.add(/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(transaction.idempotency_key) ? transaction.idempotency_key : financialOperationId(`${userId}:${transaction.idempotency_key}`))
         }
       }
 
@@ -182,7 +183,7 @@ export async function importAccountTransactions(
         batchOccurrences.set(signature, occurrence)
 
         const idempotencyKey =
-          `import:${source}:${stableImportHash(signature)}:${occurrence}`
+          financialOperationId(`${userId}:import:${source}:${stableImportHash(signature)}:${occurrence}`)
 
         if (existingIdempotencyKeys.has(idempotencyKey)) {
           duplicates++

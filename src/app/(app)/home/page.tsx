@@ -2,6 +2,8 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
+import { belongsInFinancialInbox, pendingDueDate, needsFinancialReview } from '@/lib/inboxPolicy'
+import { resolveKnownCommitments } from '@/lib/financialCommitments'
 import { useEffect, useState, useCallback, useRef, lazy, Suspense, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -17,7 +19,7 @@ import {
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useLocalSync } from '@/hooks/useLocalSync'
 import NotificationBell from '@/components/NotificationBell'
 import { isNotificationRead } from '@/lib/notificationUtils'
@@ -484,10 +486,10 @@ function HomeContent() {
     // Home é operacional: resume somente o que já venceu ou vence hoje.
     // Lançamentos futuros continuam no ledger e nas telas de planejamento,
     // mas não inflam a fila de ação imediata.
-    const allPending = localTransactions.filter((tx: any) => {
-      if (tx.status !== 'pending') return false
-      const date = String(tx.date || '').slice(0, 10)
-      return Boolean(date) && date <= todayIso
+    const inboxItems = localTransactions.filter((tx: any) => belongsInFinancialInbox(tx, todayIso))
+    const allPending = inboxItems.filter((tx: any) => {
+      const date = pendingDueDate(tx)
+      return Boolean(date && date <= todayIso)
     })
 
     const toPay = allPending
@@ -537,20 +539,16 @@ function HomeContent() {
       faturas,
       transactionReceivables,
       debtReceivables,
-      actionableCount: allPending.length,
+      actionableCount: inboxItems.length,
       overdueCount: allPending.filter(
         (tx: any) =>
-          String(tx.date || '').slice(0, 10) < todayIso
+          String(pendingDueDate(tx) || todayIso) < todayIso
       ).length,
       dueTodayCount: allPending.filter(
         (tx: any) =>
-          String(tx.date || '').slice(0, 10) === todayIso
+          pendingDueDate(tx) === todayIso
       ).length,
-      reviewCount: allPending.filter((tx: any) =>
-        ['whatsapp', 'ai_ocr', 'ofx_import', 'ofx_merged'].includes(
-          String(tx.source || '')
-        )
-      ).length,
+      reviewCount: inboxItems.filter((tx: any) => needsFinancialReview(tx) || !pendingDueDate(tx)).length,
     }
   }, [localTransactions, cards, debtsList, todayIso])
 
@@ -973,12 +971,9 @@ function HomeContent() {
     [accounts]
   )
 
-  const operationalCommitted = useMemo(
-    () =>
-      Math.max(0, safeNumber(pendings.toPay)) +
-      Math.max(0, safeNumber(pendings.faturas)),
-    [pendings.toPay, pendings.faturas]
-  )
+  const knownCommitments = useMemo(() => resolveKnownCommitments(effectiveContext, localTransactions, {creditCards:localCards, creditInvoices:localCreditInvoices, debts:localDebts, loans:localLoans, financings:localFinancings, subscriptions:localSubscriptions}, currentDate), [effectiveContext,localTransactions,localCards,localCreditInvoices,localDebts,localLoans,localFinancings,localSubscriptions,currentDate])
+
+  const operationalCommitted = useMemo(() => knownCommitments.entries.filter(e => e.direction === 'expense' && e.date <= todayIso).reduce((sum,e) => sum + e.amount,0), [knownCommitments,todayIso])
 
   const operationalAvailable = useMemo(
     () => totalAccountsBalance - operationalCommitted,
@@ -2392,8 +2387,6 @@ export default function HomePage() {
   useEffect(() => setIsClient(true), [])
   if (!isClient) return <div className="min-h-screen bg-gray-50 dark:bg-slate-900" />
   return (
-    <ContextProvider>
-      <HomeContent />
-    </ContextProvider>
+    <HomeContent />
   )
 }

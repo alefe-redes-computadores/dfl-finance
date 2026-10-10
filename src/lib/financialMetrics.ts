@@ -11,6 +11,9 @@ import { ptBR } from 'date-fns/locale'
 export type FinancialContext = 'dfl' | 'personal'
 
 export interface FinancialTransactionLike {
+  credit_card_id?: string | null
+  invoice_id?: string | null
+  transfer_group_id?: string | null
   id?: string
   context?: string | null
   type?: string | null
@@ -52,9 +55,11 @@ export function isRealizedFinancialTransaction(
   transaction: FinancialTransactionLike
 ) {
   if (!transaction) return false
-  if (transaction.status !== 'done') return false
-  if (transaction.affects_balance === false) return false
-  if (transaction.goal_id) return false
+  if (transaction.transfer_group_id || transaction.type === 'transfer' || transaction.goal_id) return false
+  // Purchase recognizes expense; invoice settlement moves cash only.
+  if (transaction.credit_card_id && transaction.type === 'expense') return ['done','pending'].includes(String(transaction.status))
+  if (transaction.invoice_id && !transaction.credit_card_id) return false
+  if (transaction.status !== 'done' || transaction.affects_balance === false) return false
 
   return (
     transaction.type === 'income' ||

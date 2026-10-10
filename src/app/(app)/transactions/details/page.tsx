@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
+import TransferMovementDetails from '@/components/TransferMovementDetails'
 import CameraCapture from '@/components/CameraCapture'
 import QRCodeScanner from '@/components/QRCodeScanner'
 import ModalFinancing from '@/components/ModalFinancing'
@@ -23,6 +24,7 @@ import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useTransactionById } from '@/hooks/useTransactionById'
 import { useLocalData } from '@/hooks/useLocalData'
 import { db } from '@/lib/db'
+import { assertTransactionUnchanged } from '@/lib/financialRevision'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import Skeleton from '@/components/Skeleton'
 import DatePickerSheet, { formatDateLabel } from '@/components/DatePickerSheet'
@@ -89,6 +91,8 @@ function EditTransactionContent() {
 
   // TODOS OS HOOKS E USECALLBACK PRIMEIRO, ANTES DE QUALQUER RETURN CONDICIONAL
   const [saving, setSaving] = useState(false)
+  const saveFlight = useRef(false)
+  const loadedTransaction = useRef<any>(null)
   const [saved, setSaved] = useState(false)
   const [isNew, setIsNew] = useState(false)
 
@@ -210,11 +214,17 @@ function EditTransactionContent() {
   const handleSave = useCallback(async (
     seriesScope: TransactionSeriesScope = 'single'
   ) => {
+    if (saveFlight.current) return
     if (!user?.id) { showToast('Sessão expirada. Entre novamente.', 'error'); return }
+    if (!isNew && (tx?.type === 'transfer' || tx?.transfer_group_id)) {
+      hapticError()
+      showToast('Transferências devem ser corrigidas como um movimento completo. As duas contas foram preservadas.', 'warning')
+      return
+    }
     setSaving(true)
 
-    const rawAmount = parseFloat(amountInput.replace(/\./g, '').replace(',', '.'))
-    if (isNaN(rawAmount) || rawAmount <= 0) {
+    const rawAmount = Math.round(parseFloat(amountInput.replace(/\./g, '').replace(',', '.')) * 100) / 100
+    if (!Number.isFinite(rawAmount) || rawAmount <= 0) {
       hapticError()
       showToast('Informe um valor válido.', 'warning')
       setSaving(false)
@@ -355,6 +365,7 @@ function EditTransactionContent() {
       return result
     }
 
+    saveFlight.current = true
     try {
       await db.transaction(
         'rw',
@@ -367,6 +378,11 @@ function EditTransactionContent() {
           db.syncQueue,
         ],
         async () => {
+        if (!isNew) assertTransactionUnchanged(loadedTransaction.current, await db.transactions.get(id!), user.id)
+        if (payload.account_id) {
+          const account = await db.accounts.get(payload.account_id)
+          if (!account || account.user_id !== user.id || account.context !== payload.context || account.is_archived) throw new Error('Escolha uma conta ativa do contexto desta transação.')
+        }
         // 1) Reverte exatamente o efeito financeiro antigo.
         if (
           !isNew &&
@@ -715,6 +731,7 @@ function EditTransactionContent() {
       hapticError()
       showToast(`Erro ao salvar transação: ${err.message}`, 'error')
     } finally {
+      saveFlight.current = false
       setSaving(false)
     }
   }, [user, amountInput, categoryId, subcategories, description, notes, isRefund, financingId, loanId, txType, creditCardId, isPaid, accountId, contactId, selectedTags, receiptUrl, isReimbursable, isNew, tx, effectiveContext, date, vibrate, showToast, router, safeAdd, safeUpdate, safeDelete, id, hapticError, categories])
@@ -773,9 +790,13 @@ function EditTransactionContent() {
     loadAuxData()
   }, [user, effectiveContext, txType, tx?.context])
 
+  // A new ID must not inherit the previous form or its financial revision.
+  useEffect(() => { loadedTransaction.current = null; setInitialized(false); setSaved(false) }, [id])
+
   // HIDRATAÇÃO DO FORMULÁRIO QUANDO O ITEM CHEGAR (useEffect)
   useEffect(() => {
-    if (id && id !== 'new' && tx && !initialized) {
+    if (id && id !== 'new' && tx?.id === id && !initialized) {
+      loadedTransaction.current = JSON.parse(JSON.stringify(tx))
       setTxType(tx.type || 'expense')
       setIsPaid(tx.status === 'done')
       setDate(tx.date || format(new Date(), 'yyyy-MM-dd'))
@@ -1021,6 +1042,7 @@ function EditTransactionContent() {
         db.transactions,
         db.syncQueue,
         async () => {
+        if (id && tx) assertTransactionUnchanged(loadedTransaction.current, await db.transactions.get(id), user.id)
         const affectedCardReferences =
           new Map<string, {
             cardId: string
@@ -1030,6 +1052,10 @@ function EditTransactionContent() {
         for (const txId of idsToDelete) {
           const txRecord: any = await db.transactions.get(txId)
           if (!txRecord) continue
+          if (txRecord.user_id !== user.id) throw new Error('Transação não pertence ao usuário.')
+          if (txRecord.type === 'transfer' || txRecord.transfer_group_id) {
+            throw new Error('A exclusão de uma perna de transferência não é permitida. Preserve o movimento completo.')
+          }
 
           const isManagedSettlement =
             txRecord.status === 'done' &&
@@ -1193,6 +1219,8 @@ function EditTransactionContent() {
 
   const isParcelado = tx?.recurring_group_id && tx?.total_installments && tx.total_installments > 1
   const parcelaLabel = isParcelado ? `${tx.installment_index || 1}/${tx.total_installments}` : null
+
+  if (isTransfer && id && !isNew) return <TransferMovementDetails key={id} transactionId={id} />
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 font-sans pb-36 relative transition-colors duration-300">

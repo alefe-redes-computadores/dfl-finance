@@ -1,5 +1,7 @@
 // src/lib/db.ts
 import Dexie, { Table } from 'dexie'
+import type { FinancialOutbox } from '@/lib/atomicFinancialSync'
+import { rememberSyncBase } from '@/lib/financialSyncContract'
 
 // ============================================================
 // TIPOS DAS TABELAS
@@ -14,6 +16,8 @@ export interface LocalTransaction {
   date: string
   status: 'pending' | 'done'
   affects_balance?: boolean
+  /** Actual settled cash impact; distinct from economic classification. */
+  cash_delta?: number | null
   category_id?: string | null
   account_id?: string | null
   credit_card_id?: string | null
@@ -23,6 +27,7 @@ export interface LocalTransaction {
   notes?: string | null
   recurring_group_id?: string | null
   transfer_group_id?: string | null
+  transfer_direction?: 'out' | 'in' | null
   to_account_id?: string | null
   idempotency_key?: string | null
   source?:
@@ -49,6 +54,7 @@ export interface LocalTransaction {
   debt_applied_amount?: number | null
   /** Variação de crédito do contato: positivo gera, negativo consome. */
   contact_credit_delta?: number | null
+  reviewed_at?: string | null
   receipt_url?: string | null
   created_at: string
   updated_at: string
@@ -400,6 +406,7 @@ class DFLDatabase extends Dexie {
   chat_history!: Table<LocalChatMessage, string>
   chat_sessions!: Table<LocalChatSession, string>
   syncQueue!: Table<LocalSyncQueue, string>
+  financialOutbox!: Table<FinancialOutbox, string>
 
   constructor() {
     super('DFLFinanceDB')
@@ -440,10 +447,23 @@ class DFLDatabase extends Dexie {
       syncQueue:
         'id, user_id, table, operation, record_id, created_at, [user_id+table], [user_id+created_at], [user_id+table+record_id]',
     })
+    this.version(7).stores({ financialOutbox: 'user_id, id, created_at' })
   }
 }
 
 export const db = new DFLDatabase()
+
+// Capture the last observed server version before any local path changes it.
+// Hook metadata is unindexed: no Dexie schema migration or data rewrite.
+for (const table of db.tables.filter(table => table.name !== 'syncQueue' && table.name !== 'financialOutbox')) {
+  table.hook('creating', (_key, row) => {
+    if (row.sync_status === 'pending' && !row._sync_base) row._sync_base = { updated_at: null }
+  })
+  table.hook('updating', (modifications, _key, original) =>
+    rememberSyncBase(modifications, original)
+  )
+}
+
 
 // ============================================================
 // FUNÇÕES AUXILIARES
@@ -469,6 +489,7 @@ export async function clearAllLocalData() {
       db.chat_history,
       db.chat_sessions,
       db.syncQueue,
+      db.financialOutbox,
     ],
     async () => {
       await db.transactions.clear()
@@ -488,6 +509,7 @@ export async function clearAllLocalData() {
       await db.chat_history.clear()
       await db.chat_sessions.clear()
       await db.syncQueue.clear()
+      await db.financialOutbox.clear()
     }
   )
 }

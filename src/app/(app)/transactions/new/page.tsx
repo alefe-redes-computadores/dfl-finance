@@ -1,6 +1,8 @@
 // src/app/(app)/transactions/new/page.tsx
 'use client'
 
+import { applyAccountCashDelta } from '@/lib/cashOperations'
+
 import { useState, useCallback, useEffect, Suspense, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -880,21 +882,10 @@ function NewTransactionContent() {
             !creditCardId &&
             occurrenceIsSettled
           ) {
-            const freshAccount = await db.accounts.get(accountId)
-            if (!freshAccount) {
-              throw new Error('Conta selecionada não encontrada')
-            }
+            await applyAccountCashDelta(user.id, accountId,
+              type === 'income' ? installmentAmount : -installmentAmount,
+              effectiveContext)
 
-            const currentBalance = safeNum(freshAccount.balance)
-            const newBal =
-              type === 'income'
-                ? currentBalance + installmentAmount
-                : currentBalance - installmentAmount
-
-            const balanceResult = await safeUpdate('accounts', accountId, { balance: newBal })
-            if (!balanceResult.success) {
-              throw new Error(balanceResult.error || 'Erro ao atualizar saldo da conta')
-            }
           }
 
           if (freshCard) {

@@ -15,6 +15,7 @@ import {
   Sparkles,
   Wallet,
 } from 'lucide-react'
+import type { CommitmentSources } from '@/lib/financialCommitments'
 import type { FinancialIntelligenceOutput, IntelligenceTransactionLike } from '@/lib/financial-intelligence'
 import {
   buildFinancialDiscoveries,
@@ -29,9 +30,11 @@ const confidenceLabel = { low: 'Baixa', medium: 'Média', high: 'Alta' } as cons
 export default function FinancialHealthCenter({
   intelligence,
   transactions,
+  sources,
 }: {
   intelligence: FinancialIntelligenceOutput
   transactions: IntelligenceTransactionLike[]
+  sources?: CommitmentSources
 }) {
   const [openScenario, setOpenScenario] = useState(false)
   const [openExplanation, setOpenExplanation] = useState(false)
@@ -41,8 +44,8 @@ export default function FinancialHealthCenter({
   const [debtAllocation, setDebtAllocation] = useState('')
 
   const plan = useMemo(
-    () => buildFinancialPlan(intelligence, transactions),
-    [intelligence, transactions]
+    () => buildFinancialPlan(intelligence, transactions, new Date(), sources),
+    [intelligence, transactions, sources]
   )
   const scenario = useMemo(
     () => simulateFinancialScenario(plan, {
@@ -54,8 +57,8 @@ export default function FinancialHealthCenter({
   )
 
   const timeline = useMemo(
-    () => buildKnownCashTimeline(intelligence, transactions, 30),
-    [intelligence, transactions]
+    () => buildKnownCashTimeline(intelligence, transactions, 30, new Date(), sources),
+    [intelligence, transactions, sources]
   )
 
   const discoveries = useMemo(
@@ -179,7 +182,7 @@ export default function FinancialHealthCenter({
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Wallet size={15} className="text-gray-400" />
-              <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">Livre após compromissos conhecidos</span>
+              <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">Disponível após compromissos do mês</span>
             </div>
             <span className={`text-[14px] font-bold ${healthTone}`}>{brl(plan.availableAfterKnownCommitments)}</span>
           </div>
@@ -209,8 +212,9 @@ export default function FinancialHealthCenter({
             <div className="mt-3 space-y-2 rounded-[13px] bg-gray-50 p-3 text-[9.5px] leading-4 text-gray-500 dark:bg-slate-900/50 dark:text-gray-400">
               <p>
                 <strong className="text-gray-700 dark:text-gray-300">Conhecido:</strong>{' '}
-                {brl(plan.committedPayables)} a pagar e {brl(plan.probableReceivables)} a receber já cadastrados neste mês.
+                {brl(plan.committedPayables)} a pagar e {brl(plan.probableReceivables)} a receber considerados até o fim do mês, incluindo vencidos. Receitas pendentes não aumentam o disponível.
               </p>
+              {plan.coverageWarnings.map(warning => <p key={warning} className="text-amber-600 dark:text-amber-400">{warning}</p>)}
               <p>
                 <strong className="text-gray-700 dark:text-gray-300">Estimado:</strong>{' '}
                 {brl(plan.estimatedRemainingExpense)} de despesas e {brl(plan.estimatedRemainingIncome)} de receitas ainda inferidas pelo ritmo atual.
@@ -253,7 +257,7 @@ export default function FinancialHealthCenter({
                   ? 'text-red-700 dark:text-red-300'
                   : 'text-gray-700 dark:text-gray-300'
               }`}>
-                Linha do tempo conhecida · 30 dias
+                Caixa conhecido · 30 dias
               </p>
               <p className="truncate text-[10px] text-gray-500 dark:text-gray-400">
                 {timeline.firstRiskDate
@@ -291,7 +295,7 @@ export default function FinancialHealthCenter({
 
             {timelinePreview.length === 0 ? (
               <p className="px-3.5 py-4 text-[10px] leading-4 text-gray-400">
-                Nenhum compromisso com data conhecida nos próximos 30 dias.
+                Nenhum compromisso com data válida no horizonte. Isso não garante ausência de despesas.
               </p>
             ) : (
               <div className="divide-y divide-gray-100 dark:divide-slate-700/60">

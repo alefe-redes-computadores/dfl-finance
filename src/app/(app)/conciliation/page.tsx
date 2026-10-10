@@ -34,6 +34,7 @@ import {
   saveConciliationReview,
 } from '@/lib/conciliationOperations'
 import Skeleton from '@/components/Skeleton'
+import { belongsInFinancialInbox, inboxState, pendingDueDate, needsFinancialReview } from '@/lib/inboxPolicy'
 
 function safeNum(value: unknown) {
   const parsed = Number(value)
@@ -58,6 +59,8 @@ function sourceMeta(source?: string | null) {
   switch (source) {
     case 'ai_ocr':
       return { label: 'Comprovante/OCR', review: true, icon: ReceiptText }
+    case 'csv':
+    case 'csv_import':
     case 'ofx_import':
     case 'ofx_merged':
       return { label: 'Importação · revisar', review: true, icon: FileSearch }
@@ -95,9 +98,9 @@ export default function ConciliationPage() {
     if (!user?.id) return { transactions: [], accounts: [], categories: [] }
 
     const [transactions, accounts, categories] = await Promise.all([
-      db.transactions.where('user_id').equals(user.id).toArray(),
-      db.accounts.where('user_id').equals(user.id).toArray(),
-      db.categories.where('user_id').equals(user.id).toArray(),
+      db.transactions.where('[user_id+context]').equals([user.id, effectiveContext]).toArray(),
+      db.accounts.where('[user_id+context]').equals([user.id, effectiveContext]).toArray(),
+      db.categories.where('[user_id+context]').equals([user.id, effectiveContext]).toArray(),
     ])
 
     const today = localIsoDate()
@@ -105,14 +108,12 @@ export default function ConciliationPage() {
     return {
       transactions: transactions
         .filter((tx: any) => {
-          if (tx.context !== effectiveContext || tx.status !== 'pending') return false
-          const date = String(tx.date || '').slice(0, 10)
-          return Boolean(date) && date <= today
+          return belongsInFinancialInbox(tx, today)
         })
         .sort((a: any, b: any) => {
           const reviewDiff = Number(sourceMeta(b.source).review) - Number(sourceMeta(a.source).review)
           if (reviewDiff) return reviewDiff
-          return String(a.date || '').localeCompare(String(b.date || ''))
+          return String(pendingDueDate(a) || '').localeCompare(String(pendingDueDate(b) || ''))
         }),
       accounts: accounts.filter((item: any) => item.context === effectiveContext && !item.is_archived),
       categories: categories.filter((item: any) => item.context === effectiveContext && !item.is_archived),
@@ -128,11 +129,11 @@ export default function ConciliationPage() {
   const stats = useMemo(() => {
     return transactions.reduce(
       (acc, tx: any) => {
-        const date = String(tx.date || '').slice(0, 10)
+        const date = pendingDueDate(tx)
         const amount = safeNum(tx.amount)
-        if (date < today) acc.overdue++
+        if (date && date < today) acc.overdue++
         if (date === today) acc.today++
-        if (sourceMeta(tx.source).review) acc.review++
+        if (inboxState(tx, today).review) acc.review++
         if (tx.type === 'income') acc.receivable += amount
         else acc.payable += amount
         return acc
@@ -143,10 +144,10 @@ export default function ConciliationPage() {
 
   const visible = useMemo(() => {
     return transactions.filter((tx: any) => {
-      const date = String(tx.date || '').slice(0, 10)
-      if (filter === 'overdue') return date < today
+      const date = pendingDueDate(tx)
+      if (filter === 'overdue') return Boolean(date && date < today)
       if (filter === 'today') return date === today
-      if (filter === 'review') return sourceMeta(tx.source).review
+      if (filter === 'review') return inboxState(tx, today).review
       return true
     })
   }, [transactions, filter, today])
@@ -166,7 +167,7 @@ export default function ConciliationPage() {
       id: tx.id,
       description: tx.description || '',
       amount: String(safeNum(tx.amount)),
-      date: String(tx.date || '').slice(0, 10),
+      date: pendingDueDate(tx) || '',
       account_id: tx.account_id || '',
       category_id: tx.category_id || '',
       type: tx.type,
@@ -185,7 +186,7 @@ export default function ConciliationPage() {
         category_id: review.category_id || null,
       })
       success()
-      showToast('Revisão salva. Agora você pode conciliar com segurança.', 'success')
+      showToast('Revisão salva sem movimentar saldo. Itens futuros continuam no planejamento.', 'success')
       setReview(null)
     } catch (error: any) {
       errorHaptic()
@@ -265,7 +266,7 @@ export default function ConciliationPage() {
               <div className="min-w-0 flex-1">
                 <p className="text-[14px] font-black text-gray-900 dark:text-white">O que precisa de você</p>
                 <p className="mt-0.5 text-[11px] leading-4 text-gray-400">
-                  WhatsApp, comprovantes, importações e pendências atuais ficam aqui. O que é futuro continua no planejamento.
+                  WhatsApp, comprovantes, importações e pendências atuais ficam aqui. O futuro confirmado continua no planejamento. Importações futuras também pedem revisão aqui.
                 </p>
               </div>
             </div>
@@ -330,11 +331,11 @@ export default function ConciliationPage() {
               <Check size={24} />
             </div>
             <h2 className="mt-4 text-[16px] font-black text-gray-900 dark:text-white">
-              {transactions.length === 0 ? 'Tudo conciliado' : 'Nada neste filtro'}
+              {transactions.length === 0 ? 'Inbox em dia' : 'Nada neste filtro'}
             </h2>
             <p className="mt-1 max-w-[250px] text-[11px] leading-5 text-gray-400">
               {transactions.length === 0
-                ? 'Não há pendências vencidas ou de hoje aguardando sua revisão.'
+                ? 'Nenhum item desta fila exige revisão agora. Cartões e contratos continuam nos seus próprios fluxos.'
                 : 'As outras pendências continuam preservadas na caixa de revisão.'}
             </p>
           </section>
@@ -345,7 +346,7 @@ export default function ConciliationPage() {
               const category = tx.category_id ? categoryMap.get(tx.category_id) : null
               const meta = sourceMeta(tx.source)
               const SourceIcon = meta.icon
-              const overdue = String(tx.date || '').slice(0, 10) < today
+              const overdue = inboxState(tx, today).overdue
               const isIncome = tx.type === 'income'
               const busy = processingId === tx.id
 
@@ -379,7 +380,7 @@ export default function ConciliationPage() {
                               <span className="truncate">{meta.label}</span>
                               <span>•</span>
                               <span className={overdue ? 'text-red-500' : ''}>
-                                {String(tx.date || '').slice(0, 10).split('-').reverse().join('/')}
+                                {pendingDueDate(tx)?.split('-').reverse().join('/') || 'Revisar data'}
                               </span>
                             </div>
                           </div>
@@ -399,7 +400,7 @@ export default function ConciliationPage() {
                           <span className="max-w-full truncate rounded-full bg-gray-50 px-2.5 py-1 text-[9.5px] font-bold text-gray-500 dark:bg-slate-800 dark:text-gray-400">
                             {category?.name || 'Sem categoria'}
                           </span>
-                          {meta.review && (
+                          {(needsFinancialReview(tx) || !pendingDueDate(tx)) && (
                             <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[9.5px] font-bold text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">
                               Revisão recomendada
                             </span>
@@ -422,10 +423,10 @@ export default function ConciliationPage() {
                     <button
                       type="button"
                       onClick={() => void conciliate(tx)}
-                      disabled={busy}
+                      disabled={busy || inboxState(tx, today).future || !pendingDueDate(tx)}
                       className="flex h-10 items-center justify-center gap-2 rounded-[15px] bg-gray-900 text-[11px] font-black text-white active:scale-[0.98] disabled:opacity-50 dark:bg-white dark:text-gray-900"
                     >
-                      <Check size={14} /> {busy ? 'Conciliando…' : 'Conciliar'}
+                      <Check size={14} /> {busy ? 'Conciliando…' : inboxState(tx, today).future ? 'Revisar para planejar' : !pendingDueDate(tx) ? 'Revisar data' : 'Conciliar'}
                     </button>
                   </div>
                 </article>

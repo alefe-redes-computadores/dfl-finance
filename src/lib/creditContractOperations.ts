@@ -1,3 +1,4 @@
+import { financialOperationId } from '@/lib/financialSyncContract'
 import { addToSyncQueue, db, type LocalFinancing, type LocalTransaction } from '@/lib/db'
 
 type FinanceContext = 'dfl' | 'personal'
@@ -227,7 +228,7 @@ export async function syncFinancingSchedule({
           paid: false,
           paid_date: null,
           idempotency_key:
-            `financing:${financingId}:installment:${number}`,
+            financialOperationId(`${userId}:financing:${financingId}:installment:${number}`),
           source: 'manual',
           created_at: now,
           updated_at: now,
@@ -385,9 +386,9 @@ export async function settleLoanInFull({
         return null
       }
 
-      const payoffKey = `loan:${loanId}:payoff`
+      const payoffKey = financialOperationId(`${userId}:loan:${loanId}:payoff`)
       const duplicate = payments.find(
-        (item) => item.idempotency_key === payoffKey
+        (item) => (item.idempotency_key === payoffKey || item.idempotency_key === `loan:${loanId}:payoff`)
       )
       if (duplicate) return duplicate.id
 
@@ -413,6 +414,7 @@ export async function settleLoanInFull({
         context:
           loan.context === 'personal' ? 'personal' : 'dfl',
         type: 'loan_payment',
+        cash_delta: direction === 'lent' ? amount : -amount,
         amount,
         description: `Quitação · ${loan.description || 'Empréstimo'}`,
         date: now.slice(0, 10),

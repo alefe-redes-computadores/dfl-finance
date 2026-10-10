@@ -2,6 +2,7 @@
 'use client'
 
 import SelectField from '@/components/SelectField'
+import TransferModal from '@/components/TransferModal'
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useRef, useMemo } from 'react'
@@ -512,6 +513,13 @@ export default function TransactionsPage() {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const [commandTransferOpen, setCommandTransferOpen] = useState(false)
+  useEffect(() => { setCommandTransferOpen(searchParams.get('action') === 'transfer') }, [searchParams])
+  const closeCommandTransfer = () => {
+    setCommandTransferOpen(false)
+    const params = new URLSearchParams(searchParams.toString()); params.delete('action')
+    router.replace(`/transactions${params.size ? `?${params}` : ''}`)
+  }
   const { effectiveContext } = useContext_()
   const { showToast } = useToast()
   const { pendingCount } = useLocalSync()
@@ -1006,20 +1014,19 @@ export default function TransactionsPage() {
         byGroup.set(tx.transfer_group_id, rows)
       }
     })
-    return filtered.filter((tx: any) => {
-      if (tx.type !== 'transfer' || !tx.transfer_group_id) return true
-      if (seen.has(tx.transfer_group_id)) return false
+    return filtered.flatMap((tx: any) => {
+      if (tx.type !== 'transfer' || !tx.transfer_group_id) return [tx]
+      if (seen.has(tx.transfer_group_id)) return []
       seen.add(tx.transfer_group_id)
       const legs = byGroup.get(tx.transfer_group_id) || [tx]
-      const out = legs.find((leg: any) => String(leg.idempotency_key || '').endsWith(':out')) || legs.find((leg: any) => /^Transferência para\b/i.test(String(leg.description || ''))) || legs[0]
+      const out = legs.find((leg: any) => leg.transfer_direction === 'out') || legs.find((leg: any) => String(leg.idempotency_key || '').endsWith(':out')) || legs.find((leg: any) => /^Transferência para\b/i.test(String(leg.description || ''))) || legs[0]
       const incoming = legs.find((leg: any) => leg.id !== out.id)
-      Object.assign(tx, {
+      return [{
         ...out,
         _transferView: true,
         _fromAccount: accountById.get(out.account_id) || null,
         _toAccount: accountById.get(out.to_account_id) || accountById.get(incoming?.account_id) || null,
-      })
-      return true
+      }]
     })
   }, [filtered, accountById])
   const grouped = groupByDate(displayTxs)
@@ -1215,6 +1222,7 @@ export default function TransactionsPage() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans relative transition-colors duration-300">
+      <TransferModal isOpen={commandTransferOpen} onClose={closeCommandTransfer} context={effectiveContext} />
 
       {(pageLoading || pendingCount > 0) && (
         <div className="fixed top-6 right-6 z-50">

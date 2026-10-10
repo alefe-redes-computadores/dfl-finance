@@ -1,4 +1,5 @@
 import { db } from '@/lib/db'
+import { civilDate } from '@/lib/financialForecast'
 
 export type GlobalSearchResult = {
   id: string
@@ -48,8 +49,8 @@ export const FINANCIAL_COMMAND_SUGGESTIONS: FinancialSearchCommand[] = [
   {
     id: 'transfer',
     title: 'Transferir entre contas',
-    description: 'Abrir a área de transações para transferência',
-    href: '/transactions',
+    description: 'Abrir transferência para você revisar e confirmar',
+    href: '/transactions?action=transfer',
     intent: 'transfer',
   },
   {
@@ -199,8 +200,13 @@ function editDistanceAtMostOne(a: string, b: string) {
   return edits <= 1
 }
 
+function exactTokenMatch(token: string, haystack: string) {
+  if (/^[0-9.,]+$/.test(token)) return haystack.split(/\s+/).includes(token)
+  return haystack.split(/[^a-z0-9]+/).some(word => word === token || (token.length >= 3 && word.startsWith(token)))
+}
+
 function fuzzyTokenMatch(token: string, haystack: string) {
-  if (haystack.includes(token)) return true
+  if (exactTokenMatch(token, haystack)) return true
   if (token.length < 4) return false
 
   return haystack
@@ -223,7 +229,7 @@ function resolveMonthIntentToken(token: string) {
     : null
 }
 
-type DateIntent = { start: string; end: string; consumed: string[] }
+export type DateIntent = { start: string; end: string; consumed: string[] }
 
 function isoLocal(date: Date) {
   const y = date.getFullYear()
@@ -232,9 +238,9 @@ function isoLocal(date: Date) {
   return `${y}-${m}-${d}`
 }
 
-function parseDateIntent(query: string): DateIntent | null {
+export function parseDateIntent(query: string, reference = new Date()): DateIntent | null {
   const q = norm(query)
-  const today = new Date()
+  const today = new Date(reference)
   today.setHours(12, 0, 0, 0)
   if (/\bhoje\b/.test(q)) {
     const day = isoLocal(today)
@@ -246,44 +252,39 @@ function parseDateIntent(query: string): DateIntent | null {
     return { start: day, end: day, consumed: ['ontem'] }
   }
 
-  for (const [name, month] of Object.entries(MONTHS)) {
-    const re = new RegExp(`\\b${name}\\b(?:\\s+(?:de\\s+)?(20\\d{2}))?`)
-    const match = q.match(re)
-    if (!match) continue
-    const year = Number(match[1] || today.getFullYear())
-    const start = `${year}-${String(month).padStart(2, '0')}-01`
-    const last = new Date(year, month, 0).getDate()
-    const end = `${year}-${String(month).padStart(2, '0')}-${String(last).padStart(2, '0')}`
-    return { start, end, consumed: match[0].split(/\s+/) }
+  const dayMatch = q.match(/\b(20\d{2})-(\d{2})-(\d{2})\b|\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/)
+  if (dayMatch) {
+    const date = dayMatch[1] ? `${dayMatch[1]}-${dayMatch[2]}-${dayMatch[3]}` :
+      `${dayMatch[6]}-${dayMatch[5].padStart(2, '0')}-${dayMatch[4].padStart(2, '0')}`
+    return civilDate(date) ? { start: date, end: date, consumed: [dayMatch[0]] } : null
   }
-
-  // V79: tolerância de uma edição somente para nomes de mês com
-  // quatro ou mais caracteres. Ex.: outubr -> outubro.
-  const queryParts = q.split(/\s+/)
-  for (let index = 0; index < queryParts.length; index += 1) {
-    const resolved = resolveMonthIntentToken(queryParts[index])
+  const monthRange = (year: number, month: number, consumed: string[]): DateIntent => ({
+    start: `${year}-${String(month).padStart(2, '0')}-01`,
+    end: `${year}-${String(month).padStart(2, '0')}-${new Date(year, month, 0).getDate()}`,
+    consumed,
+  })
+  const monthYear = q.match(/\b([a-z]+|\d{1,2})\/(20\d{2}|\d{2})\b/)
+  if (monthYear) {
+    const resolved = resolveMonthIntentToken(monthYear[1])
+    const month = resolved?.month || Number(monthYear[1])
+    const year = Number(monthYear[2]) + (monthYear[2].length === 2 ? 2000 : 0)
+    if (month >= 1 && month <= 12) return monthRange(year, month, [monthYear[0]])
+  }
+  const parts = q.split(/\s+/)
+  for (let index = 0; index < parts.length; index++) {
+    const resolved = resolveMonthIntentToken(parts[index])
     if (!resolved) continue
-
-    const possibleYear =
-      queryParts[index + 1] === 'de'
-        ? queryParts[index + 2]
-        : queryParts[index + 1]
-    const year = /^20\d{2}$/.test(possibleYear || '')
-      ? Number(possibleYear)
-      : today.getFullYear()
-
-    const start = `${year}-${String(resolved.month).padStart(2, '0')}-01`
-    const last = new Date(year, resolved.month, 0).getDate()
-    const end = `${year}-${String(resolved.month).padStart(2, '0')}-${String(last).padStart(2, '0')}`
-
-    const consumed = [resolved.token]
-    if (/^20\d{2}$/.test(possibleYear || '')) {
-      if (queryParts[index + 1] === 'de') consumed.push('de')
+    const possibleYear = parts[index + 1] === 'de' ? parts[index + 2] : parts[index + 1]
+    const explicitYear = /^20\d{2}$/.test(possibleYear || '')
+    const consumed = [parts[index]]
+    if (explicitYear) {
+      if (parts[index + 1] === 'de') consumed.push('de')
       consumed.push(possibleYear)
     }
-
-    return { start, end, consumed }
+    return monthRange(explicitYear ? Number(possibleYear) : today.getFullYear(), resolved.month, consumed)
   }
+  const year = q.match(/\b(20\d{2})\b/)
+  if (year) return { start: `${year[1]}-01-01`, end: `${year[1]}-12-31`, consumed: [year[1]] }
 
   return null
 }
@@ -292,7 +293,7 @@ function searchableTokens(query: string, intent: DateIntent | null) {
   const consumed = new Set(intent?.consumed.map(norm) || [])
   return norm(query)
     .split(/\s+/)
-    .filter((token) => token.length >= 2 && !consumed.has(token) && token !== 'de')
+    .filter((token) => token.length >= 2 && !consumed.has(token) && !['de', 'em', 'no', 'na', 'completo', 'inteiro', 'ano', 'r$', 'reais'].includes(token))
 }
 
 export async function searchFinancialData(
@@ -309,19 +310,19 @@ export async function searchFinancialData(
     'financings', 'subscriptions', 'goals', 'categories',
   ] as const
 
-  const [rows, categories, accounts, contacts] = await Promise.all([
+  const [rows, contacts] = await Promise.all([
     Promise.all(names.map((name) => (db as any)[name].where('[user_id+context]').equals([userId, context]).toArray())),
-    db.categories.where('[user_id+context]').equals([userId, context]).toArray(),
-    db.accounts.where('[user_id+context]').equals([userId, context]).toArray(),
     db.contacts.where('[user_id+context]').equals([userId, context]).toArray(),
   ])
 
+  const categories = rows[names.indexOf('categories')]
+  const accounts = rows[names.indexOf('accounts')]
   const categoryMap = new Map(categories.map((row: any) => [row.id, row]))
   const accountMap = new Map(accounts.map((row: any) => [row.id, row]))
   const contactMap = new Map(contacts.map((row: any) => [row.id, row]))
   const dateIntent = parseDateIntent(query)
   const tokens = searchableTokens(query, dateIntent)
-  const out: Array<GlobalSearchResult & { _score: number }> = []
+  const out: Array<GlobalSearchResult & { _score: number; _fuzzy: number; _group?: string }> = []
 
   const config: Record<string, { kind: string; label: string; base: string }> = {
     transactions: { kind: 'transaction', label: 'Transação', base: '/transactions/details?id=' },
@@ -340,13 +341,14 @@ export async function searchFinancialData(
       const category: any = name === 'transactions' && row.category_id ? categoryMap.get(row.category_id) : undefined
       const account: any = name === 'transactions' && row.account_id ? accountMap.get(row.account_id) : undefined
       const contact: any = name === 'transactions' && row.contact_id ? contactMap.get(row.contact_id) : undefined
-      const date = row.date || row.due_date || row.updated_at || row.created_at
+      const date = row.date || row.due_date || row.next_due_date
+      if (dateIntent && !civilDate(date)) return
       if (dateIntent && date && (String(date).slice(0, 10) < dateIntent.start || String(date).slice(0, 10) > dateIntent.end)) return
       if (dateIntent && !date) return
 
       const fields = [
         row.description, row.name, row.title, row.person_name, row.lender, row.notes,
-        category?.name, account?.name, account?.bank, account?.bank_name,
+        category?.name, account?.name, account?.bank, account?.bank_name, account?.bank_slug, row.bank, row.bank_slug,
         contact?.name, contact?.person_name,
         row.receipt_url ? 'comprovante anexo recibo' : '',
         ...moneyTokens(row.amount), ...moneyTokens(row.balance),
@@ -357,18 +359,21 @@ export async function searchFinancialData(
       if (!tokens.length && !dateIntent) return
 
       let score = 0
+      const fuzzyCount = tokens.filter(token => !exactTokenMatch(token, haystack)).length
       for (const token of tokens) {
-        if (norm(row.description).includes(token) || norm(row.name).includes(token) || norm(row.title).includes(token)) score += 8
-        else if (norm(category?.name).includes(token)) score += 6
-        else if (norm(account?.name).includes(token) || norm(account?.bank).includes(token) || norm(account?.bank_name).includes(token)) score += 5
-        else if (haystack.includes(token)) score += 2
+        if (exactTokenMatch(token, norm(row.description)) || exactTokenMatch(token, norm(row.name)) || exactTokenMatch(token, norm(row.title))) score += 8
+        else if (exactTokenMatch(token, norm(category?.name))) score += 6
+        else if (exactTokenMatch(token, norm(account?.name)) || exactTokenMatch(token, norm(account?.bank)) || exactTokenMatch(token, norm(account?.bank_name))) score += 5
+        else if (exactTokenMatch(token, haystack)) score += 2
         else if (fuzzyTokenMatch(token, haystack)) score += 1
       }
       if (dateIntent) score += 4
       if (row.receipt_url && tokens.some((t) => ['comprovante','anexo','recibo'].includes(t))) score += 5
 
       const cfg = config[name]
-      const title = row.description || row.name || row.title || row.person_name || row.lender || cfg.label
+      const transfer = name === 'transactions' && (row.type === 'transfer' || row.transfer_group_id)
+      if (transfer && row.transfer_direction === 'out') score += 0.1
+      const title = transfer ? 'Transferência' : row.description || row.name || row.title || row.person_name || row.lender || cfg.label
       out.push({
         id: row.id,
         kind: cfg.kind,
@@ -377,19 +382,27 @@ export async function searchFinancialData(
         href: name === 'categories' ? cfg.base : `${cfg.base}${encodeURIComponent(row.id)}`,
         amount: numberOrUndefined(row.amount ?? row.balance ?? row.total_amount ?? row.remaining_amount),
         date,
-        transactionType: name === 'transactions' ? row.type : undefined,
+        transactionType: transfer ? 'transfer' : name === 'transactions' ? row.type : undefined,
         categoryName: category?.name,
         categoryIcon: name === 'categories' ? row.icon : category?.icon,
         categoryColor: name === 'categories' ? row.color : category?.color,
         hasAttachment: name === 'transactions' ? Boolean(row.receipt_url) : false,
         status: row.status,
-        _score: score,
+        _score: score, _fuzzy: fuzzyCount, _group: transfer ? row.transfer_group_id : undefined,
       })
     })
   })
 
+  const precise = out.some(item => item._fuzzy === 0)
+  const seenGroups = new Set<string>()
   return out
+    .filter(item => !precise || item._fuzzy === 0)
     .sort((a, b) => b._score - a._score || String(b.date || '').localeCompare(String(a.date || '')))
+    .filter(item => {
+      if (!item._group) return true
+      if (seenGroups.has(item._group)) return false
+      seenGroups.add(item._group); return true
+    })
     .slice(0, limit)
-    .map(({ _score, ...item }) => item)
+    .map(({ _score, _fuzzy, _group, ...item }) => item)
 }
