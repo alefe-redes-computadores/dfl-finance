@@ -30,13 +30,20 @@ export interface ProjectionData {
   cappedDays: number
 }
 
+/** Invoice schema has user/card and user/status indexes, but no user/context index. */
+export async function readProjectionRows(userId: string, context: FinancialContext) {
+  const names = ['accounts', 'transactions', 'debts', 'credit_cards', 'credit_invoices', 'loans', 'financings', 'subscriptions'] as const
+  return Promise.all(names.map(name => name === 'credit_invoices'
+    ? db.credit_invoices.where('user_id').equals(userId).filter(row => row.context === context).toArray()
+    : db.table(name).where('[user_id+context]').equals([userId, context]).toArray()))
+}
+
 export function useProjection(context: FinancialContext) {
   const { user } = useAuth()
   return useLiveQuery(async()=> {
     if(!context||!user?.id)return null
     const userId=user.id,now=new Date()
-    const names=['accounts','transactions','debts','credit_cards','credit_invoices','loans','financings','subscriptions'] as const
-    const rows=await Promise.all(names.map(name=>db.table(name).where('[user_id+context]').equals([userId,context]).toArray()))
+    const rows = await readProjectionRows(userId, context)
     const [accounts,transactions,debts,creditCards,creditInvoices,loans,financings,subscriptions]=rows
     return buildUnifiedCashProjection({context,now,accounts,transactions,debts,creditCards,creditInvoices,loans,financings,subscriptions,categories:[]})
   },[context,user?.id])
