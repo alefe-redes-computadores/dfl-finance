@@ -1,3 +1,4 @@
+import { Landmark } from 'lucide-react'
 import {
   getBankIcon,
   hasBrandedBankIcon,
@@ -17,32 +18,6 @@ interface BankLogoProps {
   name: string
   color?: string
   size?: 'sm' | 'md' | 'lg'
-}
-
-function getFallbackLabel(
-  name: string
-) {
-  const parts = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-
-  if (parts.length === 0) {
-    return 'B'
-  }
-
-  if (parts.length === 1) {
-    return parts[0]
-      .slice(0, 2)
-      .toUpperCase()
-  }
-
-  return parts
-    .slice(0, 2)
-    .map((part) =>
-      part.charAt(0).toUpperCase()
-    )
-    .join('')
 }
 
 export default function BankLogo({
@@ -149,14 +124,11 @@ export default function BankLogo({
         'Instituição financeira'
       }
     >
-      <span
-        className="select-none text-[9px] font-black uppercase tracking-[-0.03em] text-slate-600 dark:text-slate-300"
+      <Landmark
+        className="h-1/2 w-1/2 text-slate-500 dark:text-slate-400"
+        strokeWidth={1.8}
         aria-hidden="true"
-      >
-        {getFallbackLabel(
-          canonicalName || name
-        )}
-      </span>
+      />
     </div>
   )
 }
