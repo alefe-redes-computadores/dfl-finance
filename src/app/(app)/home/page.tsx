@@ -70,8 +70,8 @@ import {
 const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total', description: 'Visão consolidada do seu patrimônio' },
   { id: 'income-expense', label: 'Receitas e despesas', description: 'Entradas e saídas do mês' },
-  { id: 'intelligence', label: 'Centro financeiro', description: 'Saúde, planejamento e prioridades calculadas pelos seus dados' },
   { id: 'pendings', label: 'Pendências', description: 'Prioridades, contas e vencimentos' },
+  { id: 'intelligence', label: 'Centro financeiro', description: 'Saúde, planejamento e prioridades calculadas pelos seus dados' },
   { id: 'accounts', label: 'Contas', description: 'Suas contas bancárias' },
   { id: 'projection', label: 'Projeção de Saldo', description: 'Previsão para os próximos 30 dias' },
   { id: 'recent', label: 'Transações Recentes', description: 'Últimas movimentações' },
@@ -83,7 +83,7 @@ const ALL_SECTIONS = [
   { id: 'loans', label: 'Empréstimos entre Contextos', description: 'Transferências entre PF e PJ' },
 ]
 const DEFAULT_SECTION_ORDER = ALL_SECTIONS.map(s => s.id)
-const FIXED_SECTIONS = ['balance', 'income-expense', 'intelligence', 'pendings', 'accounts', 'cards', 'recent']
+const FIXED_SECTIONS = ['balance', 'income-expense', 'pendings', 'intelligence', 'accounts', 'cards', 'recent']
 
 const getContextLabel = (ctx: string) => ctx === 'dfl' ? 'PJ' : 'PF'
 const getContextIcon = (ctx: string) => ctx === 'dfl' ? <Building2 size={14} className="text-blue-500" /> : <User size={14} className="text-emerald-500" />
@@ -1200,6 +1200,8 @@ function HomeContent() {
             | FinancialInsight
             | undefined
 
+        if (!priorityInsight) return null
+
         return (
           <div
             key="intelligence"
@@ -1210,7 +1212,7 @@ function HomeContent() {
               onClick={() =>
                 router.push('/analysis#intelligence')
               }
-              className="flex w-full items-center gap-3 rounded-[22px] border border-gray-200/70 bg-white px-4 py-3.5 text-left shadow-sm transition-all active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800"
+              className="flex w-full items-center gap-3 rounded-[22px] border border-gray-200/70 bg-white px-4 py-3 text-left shadow-sm transition-all active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800"
             >
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400">
                 <Sparkles size={18} />
@@ -1221,21 +1223,16 @@ function HomeContent() {
                   Centro financeiro
                 </p>
 
-                <p className="mt-0.5 truncate text-[13px] font-semibold text-gray-900 dark:text-gray-100">
-                  {priorityInsight?.title ||
-                    'Finanças dentro do padrão atual'}
+                <p className="mt-0.5 line-clamp-2 text-[13px] font-semibold text-gray-900 dark:text-gray-100">
+                  {priorityInsight.title}
                 </p>
 
                 <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-gray-500 dark:text-gray-400">
-                  {priorityInsight?.message ||
-                    'Nenhum desvio relevante foi detectado agora.'}
+                  {priorityInsight.message}
                 </p>
               </div>
 
               <div className="flex shrink-0 items-center gap-1 text-[10px] font-semibold text-teal-700 dark:text-teal-400">
-                <span>
-                  Abrir centro
-                </span>
                 <ChevronRight size={15} />
               </div>
             </button>
@@ -2279,7 +2276,7 @@ function HomeContent() {
   }
 
   return (
-    <div ref={containerRef} className="relative mx-auto min-h-[100dvh] w-full max-w-2xl bg-gray-50 px-4 pb-28 pt-3 font-sans transition-colors duration-300 dark:bg-slate-900">
+    <div ref={containerRef} className="relative mx-auto min-h-[100dvh] w-full max-w-2xl bg-gray-50 px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-3 font-sans transition-colors duration-300 dark:bg-slate-900">
       {(isDataLoading || isSyncing) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse shadow-md shadow-teal-500/40" />
@@ -2333,7 +2330,16 @@ function HomeContent() {
         </div>
       </div>
 
-      {enabledSections.map(sectionId => renderSection(sectionId))}
+      {(() => {
+        const order = [...enabledSections]
+        const insightIndex = order.indexOf('intelligence')
+        const attentionIndex = order.indexOf('pendings')
+        if (insightIndex >= 0 && attentionIndex >= 0 && insightIndex < attentionIndex) {
+          order.splice(insightIndex, 1)
+          order.splice(order.indexOf('pendings') + 1, 0, 'intelligence')
+        }
+        return order.map(sectionId => renderSection(sectionId))
+      })()}
 
       <button
         onClick={openPersonalize}

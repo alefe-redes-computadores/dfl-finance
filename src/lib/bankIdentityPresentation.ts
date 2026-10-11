@@ -52,17 +52,13 @@ const OPTICAL_PROFILES:
       scale: 0.92,
     },
     pagbank: {
-      // V83: recupera presença óptica sem encostar nas bordas.
-      // O perfil continua centralizado e vale para todo o app.
-      scale: 0.8,
+      scale: 1,
     },
     'mercado-pago': {
       scale: 0.9,
     },
     stone: {
-      // V83: wordmark ganha presença semelhante aos demais bancos
-      // sem abandonar o mesmo container compartilhado.
-      scale: 0.8,
+      scale: 1,
     },
     sicoob: {
       scale: 0.88,

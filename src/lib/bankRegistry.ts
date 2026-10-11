@@ -91,7 +91,7 @@ export const BANK_REGISTRY: readonly BankRegistryEntry[] = [
     sigla: 'pag',
     kind: 'pagbank',
     featured: true,
-    asset: asset('/banks/pagbank.svg', '#FFFFFF', 'h-[54%] w-[82%] object-contain'),
+    asset: asset('/banks/pagbank-symbol.svg', '#FFFFFF', 'h-[76%] w-[76%] object-contain', 'official-source', 'pagbank.com.br'),
   },
 
   {
@@ -115,7 +115,7 @@ export const BANK_REGISTRY: readonly BankRegistryEntry[] = [
     sigla: 'stone',
     kind: 'stone',
     featured: true,
-    asset: asset('/banks/stone.svg', '#FFFFFF', 'h-[52%] w-[80%] object-contain'),
+    asset: asset('/banks/stone-current.svg', '#FFFFFF', 'h-[72%] w-[88%] object-contain', 'official-source', 'stone.com.br'),
   },
 
   {
