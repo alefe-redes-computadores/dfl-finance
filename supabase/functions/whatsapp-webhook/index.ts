@@ -36,6 +36,41 @@ async function accs(u:string,c:string){const r=await db.from("accounts").select(
 async function cats(u:string,c:string,t:string){const r=await db.from("categories").select("id,name,icon,color").eq("user_id",u).eq("context",c).eq("type",t).order("name");return r.data||[]}
 function matchNamed(list:any[],name:string|null){if(!name)return null;const n=N(name);return list.find(x=>N(x.name)===n)||list.find(x=>N(x.name).includes(n)||n.includes(N(x.name)))||null}
 function pickNamed(list:any[],answer:string){const raw=String(answer||"").trim(),i=Number(raw)-1;if(/^\d+$/.test(raw)&&Number.isInteger(i)&&i>=0&&i<list.length)return list[i];return matchNamed(list,raw)}
+function accountToken(s:string){return N(s).replace(/[^a-z0-9]+/g,"")}
+function accountAliases(name:string){
+  const base=accountToken(name),out=new Set<string>([base]);
+  if(base==="infinitepay"||base==="infinitpay"||base==="infinitypay"){
+    out.add("infinitepay");out.add("infinitpay");out.add("infinitypay")
+  }
+  return [...out].filter(x=>x.length>=4)
+}
+function accountsInText(list:any[],text:string){
+  const compact=accountToken(text),hits=list.filter((a:any)=>
+    accountAliases(String(a.name||"")).some(alias=>compact.includes(alias))
+  );
+  if(!hits.length)return{account:null,ambiguous:false,matches:[]};
+  const ids=new Set(hits.map((x:any)=>x.id));
+  if(ids.size===1)return{account:hits[0],ambiguous:false,matches:hits};
+  const contexts=new Set(hits.map((x:any)=>x.context));
+  return{account:null,ambiguous:true,matches:hits,contexts:[...contexts]}
+}
+function stripMatchedAccount(description:string,account:any){
+  if(!account?.name)return description;
+  let x=description;
+  for(const alias of accountAliases(account.name)){
+    const variants=alias==="infinitepay"
+      ?["InfinitePay","InfinitPay","InfinityPay"]
+      :[account.name];
+    for(const v of variants){
+      const q=String(v).replace(/[.*+?^$()|[\]{}\\]/g,"\\$&");
+      x=x.replace(
+        new RegExp("\\s+(?:na|no|em|pela|pelo|conta)\\s+(?:conta\\s+)?"+q+"\\b.*$","i"),
+        ""
+      ).trim()
+    }
+  }
+  return x||description
+}
 function conversationalContext(answer:string){const n=N(answer);if(n==="1"||/^(empresa|dfl|empresarial)$/.test(n))return"dfl";if(n==="2"||/^(pessoal|personal)$/.test(n))return"personal";return null}
 function list(items:any[],title:string,showBalance=false){let s=title+"\n\n";items.forEach((x,i)=>s+=`*${i+1}* — *${x.name}*${showBalance?`\n   💰 *${money(x.balance)}*`:""}\n`);return s}
 async function resolveAccount(u:string,context:string,wanted:string|null){const a=await accs(u,context);return{all:a,found:matchNamed(a,wanted)}}
@@ -83,8 +118,11 @@ async function afterConfirm(u:any,phone:string,sd:any,reply:any,aid:string){
   }
   if(!sd.context){
     await save(phone,"TX_CTX",sd);
-    const o=await reply("Só preciso saber onde esse lançamento pertence: *Empresa* ou *Pessoal*?");
-    await done(aid,"extracted",o);
+    const ambiguous=sd.account_ambiguous===true;
+    const o=await reply(ambiguous
+      ?"Encontrei essa conta em mais de um contexto. É *Empresa* ou *Pessoal*?"
+      :"Só preciso saber onde esse lançamento pertence: *Empresa* ou *Pessoal*?");
+    await done(aid,"extracted",o,{action:ambiguous?"clarify.account_context":"clarify.context"});
     return;
   }
   const ar=await resolveAccount(u.user_id,sd.context,sd.account_explicit);
@@ -110,7 +148,7 @@ if(req.method!=="POST")return new Response("Method not allowed",{status:405});
 let p:any;
 try{p=await readBoundedJson(req)}catch{return new Response("Invalid request",{status:400})}
 if(!trustedWebhook(req,p,Deno.env.get("DFL_WEBHOOK_SECRET"),Deno.env.get("EVOLUTION_API_KEY")))return new Response("Unauthorized",{status:401});
-try{if(p.event!=="messages.upsert")return new Response("OK");const raw=String(p.data?.key?.remoteJid||"");if(!raw||raw.includes("@g.us"))return new Response("OK");const sender=raw.split("@")[0],u=await userFor(sender);if(!u)return new Response("OK");const fromMe=!!p.data?.key?.fromMe;if(fromMe&&sender!==String(u.phone_id||"")&&sender!==String(u.phone||""))return new Response("OK");const text=String(p.data?.message?.conversation||p.data?.message?.extendedTextMessage?.text||"").trim();
+try{if(p.event!=="messages.upsert")return new Response("OK");const raw=String(p.data?.key?.remoteJid||"");if(!raw||raw.includes("@g.us"))return new Response("OK");const sender=raw.split("@")[0],u=await userFor(sender);if(!u)return new Response("OK");const fromMe=!!p.data?.key?.fromMe;if(fromMe&&sender!==String(u.phone_id||"")&&sender!==String(u.phone||""))return new Response("OK");let text=String(p.data?.message?.conversation||p.data?.message?.extendedTextMessage?.text||"").trim();
 if(!text){
   const m=p.data?.message||{}, media=m.imageMessage||m.documentMessage||null;
   if(media){
@@ -186,7 +224,7 @@ if(!text){
     console.log("[DFL_RECEIPT_LINKED]",JSON.stringify({kind,mimetype:outMime,size:bin.length}));
   }
   return new Response("OK")
-}const phone=u.phone,k=String(p.data?.key?.id||`${sender}:${p.data?.messageTimestamp||0}:${text}`),aid=await audit(u.user_id,sender,text,k);if(!aid)return new Response("OK");const n=N(text),reply=(s:string)=>send(phone,s);await db.from("user_phones").update({last_interaction:new Date().toISOString()}).eq("user_id",u.user_id).eq("phone",phone);
+}const phone=u.phone,k=String(p.data?.key?.id||`${sender}:${p.data?.messageTimestamp||0}:${text}`),aid=await audit(u.user_id,sender,text,k);if(!aid)return new Response("OK");let n=N(text);const reply=(s:string)=>send(phone,s);await db.from("user_phones").update({last_interaction:new Date().toISOString()}).eq("user_id",u.user_id).eq("phone",phone);
 if(n==="/ping"){const o=await reply("🤖 *DFL Finance Bot operacional.*\n✅ Conectado e pronto para lançamentos, consultas e pendências.");await done(aid,"extracted",o,{command:"ping",self_chat:fromMe});return new Response("OK")}
 if(n==="cancelar"||n==="/cancelar"){await clear(phone);const o=await reply("🚫 Operação cancelada.");await done(aid,"extracted",o);return new Response("OK")}
 if(n==="/ajuda"||n==="ajuda"||n==="comandos"||n==="o que voce faz"||n==="o que você faz"||n==="o que consegue fazer"||n==="o que voce consegue fazer"){const o=await reply("🤖 *DFL Finance — Central de Ajuda*\n\n*1* — 💸 Lançamentos, datas, recorrências e comprovantes\n*2* — 🕒 Pendências, filtros e correções\n*3* — 🔄 Transferências\n*4* — 👤 Quem me deve, pagamentos e crédito\n*5* — 🔁 Assinaturas\n*6* — 📊 Consultas, agenda, saldos, períodos e relatórios\n*7* — 🏷️ Categorias e organização\n\n*Atalhos:* /saldo · /resumo · /relatorio · cancelar\n\n*Dicas rápidas:*\n• *agenda financeira* — próximos vencimentos\n• *quem está atrasado* — cobranças vencidas\n• *resumo novembro* — visão mensal\n• *extrato novembro empresa* — lançamentos do período\n• *quanto gastei novembro pessoal* — consulta filtrada\n\n💡 *Você não precisa decorar comandos.* Fale naturalmente. Exemplos:\n• *gastei 45 no posto pela Nubank*\n• *recebi 250 de vendas em Carteira ontem*\n• *pendências despesas novembro*\n• *João pagou 50*\n• *transfere 100 da Carteira para Inter*\n• *quanto gastei novembro empresa*\n• *agenda financeira* / *o que vence nos próximos 15 dias*\n• *quem está atrasado*\n• *corrigir pendência* — escolhe uma pendência e altera só o campo necessário\n\nPara ir direto a um assunto: *ajuda lançamentos*, *ajuda comprovante*, *ajuda pendências*, *ajuda correções*, *ajuda quem me deve*, *ajuda transferências*, *ajuda assinaturas*, *ajuda consultas*, *ajuda agenda* ou *ajuda categorias*.");await save(phone,"HELP_MENU",{});await done(aid,"extracted",o,{action:"help.menu"});return new Response("OK")}
@@ -228,7 +266,7 @@ if(s?.step==="CAT_TYPE"){if(!["1","2"].includes(text)){const o=await reply("Esco
 if(s?.step==="CAT_CTX"){if(!["1","2"].includes(text)){const o=await reply("Escolha *1* Empresa ou *2* Pessoal.");await done(aid,"extracted",o);return new Response("OK")}const context=text==="1"?"dfl":"personal",ex=await db.from("categories").select("id,name").eq("user_id",u.user_id).eq("context",context).eq("type",sd.type).ilike("name",sd.name).limit(1).maybeSingle();if(ex.data){await clear(phone);const o=await reply(`ℹ️ A categoria *${ex.data.name}* já existe nesse contexto.`);await done(aid,"extracted",o);return new Response("OK")}const ci=await db.from("categories").insert({user_id:u.user_id,name:sd.name,type:sd.type,context,color:"#64748b",icon:sd.type==="income"?"trending-up":"tag",is_default:false}).select("id").single();if(ci.error)throw ci.error;await clear(phone);const o=await reply(`✅ *Categoria criada!*\n\n🏷️ *${sd.name}*\n${sd.type==="income"?"🟢 Receita":"🔴 Despesa"} · ${context==="dfl"?"🏢 Empresa":"👤 Pessoal"}`);await done(aid,"extracted",o,{action:"category.create",category_id:ci.data.id});return new Response("OK")}
 if(s?.step==="TX_AMOUNT"){
   const av=amount(text);
-  if(!av){const o=await reply("Não encontrei o valor. Pode mandar, por exemplo, *300* ou *R$ 300,00*.");await done(aid,"extracted",o,{action:"clarify.amount.retry",type:sd.type});return new Response("OK")}
+  if(!av){const o=await reply(sd.type==="income"?"Certo 😊 Qual o valor que entrou? Pode mandar só o valor ou continuar naturalmente, tipo *487,50 do iFood na InfinitePay*.":"Beleza 😊 Qual foi o valor da despesa? Pode mandar só o valor ou continuar naturalmente, tipo *89,90 no posto pela Nubank*.");await done(aid,"extracted",o,{action:"clarify.amount.retry",type:sd.type});return new Response("OK")}
   const synthetic=`${sd.type==="income"?"recebi":"gastei"} ${text}`;
   await clear(phone);
   text=synthetic;
@@ -314,6 +352,6 @@ if(catQuick){const nm=catQuick[1].trim().slice(0,80),type=N(catQuick[2])==="rece
 if(/^(criar |nova |cadastrar )?categoria\b/.test(n)){const nm=text.replace(/^(criar|nova|cadastrar)?\s*categoria\s*/i,"").trim();if(nm){await save(phone,"CAT_TYPE",{name:nm});const o=await reply(`🏷️ Nova categoria: *${nm}*\n\n*1* — 🔴 Despesa\n*2* — 🟢 Receita`);await done(aid,"extracted",o,{action:"category.start"});return new Response("OK")}await save(phone,"CAT_NAME",{});const o=await reply("🏷️ *Nova categoria*\n\nQual é o nome?");await done(aid,"extracted",o,{action:"category.start"});return new Response("OK")}
 if(transfer(text)){const v=amount(text);if(!v){const o=await reply("💸 Entendi a transferência, mas faltou o valor.");await done(aid,"extracted",o);return new Response("OK")}const temp={kind:"transfer",amount:v,description:text,date:naturalDate(text),provider_message_id:k,audit_message_id:aid},aa=await allAccs(u.user_id),pair=N(text).match(/(?:da|do|de)\s+(.+?)\s+para\s+(.+?)(?=\s+(?:hoje|ontem|anteontem|amanha)\b|$)/),from=pair?matchNamed(aa,pair[1]):null,to=pair?matchNamed(aa,pair[2]):null;if(from&&to&&from.id!==to.id){const fromAfter=Number(from.balance||0)-v,toAfter=Number(to.balance||0)+v;await save(phone,"TR_CONFIRM",{...temp,from,to,fromAfter,toAfter});const warning=fromAfter<0?"\n⚠️ *A origem ficará negativa.*":"";const o=await reply(`🔄 *Confirmar transferência*\n\n*${from.name}* → *${to.name}*\nValor: *${money(v)}*\n\nOrigem: ${money(from.balance)} → *${money(fromAfter)}*\nDestino: ${money(to.balance)} → *${money(toAfter)}*${warning}\n\n*1* — Confirmar\n*2* — Cancelar`);await done(aid,"extracted",o,temp);return new Response("OK")}await save(phone,"TR_CTX",temp);const o=await reply(`💸 *Transferência de ${money(v)}*\n\nNão consegui identificar as duas contas com segurança.\n\nQual o contexto?\n*1* - 🏢 Empresa\n*2* - 👤 Pessoal`);await done(aid,"extracted",o,temp);return new Response("OK")}
 const si=subInfo(text),v=amount(text),ec=explicitCategory(text);if(si&&v){const o=await reply("🔁 Entendi que é uma assinatura. Você pode dizer, por exemplo: *assinatura Netflix por 44,90 dia 10* — ou mandar *criar assinatura*.");await done(aid,"extracted",o,{kind:"subscription",action:"subscription.clarify"});return new Response("OK")}
-const ty=typeOf(text);if(ty&&!v){await save(phone,"TX_AMOUNT",{kind:"transaction_start",type:ty,provider_message_id:k,audit_message_id:aid});const o=await reply(`💰 *${ty==="income"?"Receita":"Despesa"} — qual o valor?*\n\nPode mandar só o valor ou continuar naturalmente, por exemplo: *300 do iFood na InfinitPay*.`);await done(aid,"extracted",o,{action:"clarify.amount",type:ty});return new Response("OK")}if(!ty){const o=await reply("🤔 Não consegui identificar com segurança o que você quer fazer.\n\nTente escrever naturalmente o lançamento ou digite *ajuda* para ver tudo que eu consigo fazer.");await done(aid,"extracted",o,{action:"fallback.help"});return new Response("OK")}
-const rc=recur(text),ih=hint(text,ty),ctx=explicitContext(text),ea=explicitAccount(text);let desc=cleanDescription(text,ty,ea,ctx,ec).slice(0,120);const semanticCat=ec||ih;if(semanticCat){const dp=desc.split(/\s+/),cn=N(semanticCat);if(dp.length>1&&N(dp[0])===cn)desc=dp.slice(1).join(" ");else if(dp.length>1&&N(dp[dp.length-1])===cn)desc=dp.slice(0,-1).join(" ")}if(!desc.trim())desc=ty==="income"?"Receita":"Despesa";const temp={kind:"transaction",type:ty,amount:v,description:desc,category_explicit:ec,category_hint:ih,account_explicit:ea,context:ctx,date:naturalDate(text),provider_message_id:k,audit_message_id:aid,recurrence:rc};await save(phone,"TX_CONFIRM",temp);const lines=[`🤖 *Entendi assim:*`,``,`${ty==="income"?"🟢 Receita":"🔴 Despesa"} de *${money(v)}*`,`📝 ${temp.description}`,ec?`🏷️ Categoria informada: *${ec}*`:ih?`🏷️ Sugestão: *${ih}*`:"🏷️ Categoria: vou confirmar depois",ea?`🏦 Conta informada: *${ea}*`:"🏦 Conta: vou confirmar se necessário",ctx?`${ctx==="dfl"?"🏢 Empresa":"👤 Pessoal"}`:"🏢 Contexto: vou perguntar se necessário",rc?`🔁 Recorrência ${rc.label}`:"",`📅 ${temp.date}`,``,`Tá certo?`,`*1* - ✅ Confirmar`,`*2* - ✏️ Corrigir`].filter(Boolean).join("\n");const o=await reply(lines);await done(aid,"extracted",o,temp);return new Response("OK")
+const ty=typeOf(text);if(ty&&!v){await save(phone,"TX_AMOUNT",{kind:"transaction_start",type:ty,provider_message_id:k,audit_message_id:aid});const o=await reply(ty==="income"?"💰 *Receita — qual o valor?*\n\nPode mandar só o valor ou continuar naturalmente, tipo *642,80 do iFood na InfinitePay*.":"💰 *Despesa — qual o valor?*\n\nPode mandar só o valor ou continuar naturalmente, tipo *73,40 no posto pela Nubank*.");await done(aid,"extracted",o,{action:"clarify.amount",type:ty});return new Response("OK")}if(!ty){const o=await reply("🤔 Não consegui identificar com segurança o que você quer fazer.\n\nTente escrever naturalmente o lançamento ou digite *ajuda* para ver tudo que eu consigo fazer.");await done(aid,"extracted",o,{action:"fallback.help"});return new Response("OK")}
+const rc=recur(text),ih=hint(text,ty),knownAccounts=await allAccs(u.user_id),accountHit=accountsInText(knownAccounts,text),matchedAccount=accountHit.account,ctx=explicitContext(text)||matchedAccount?.context||null,ea=matchedAccount?.name||explicitAccount(text);let desc=cleanDescription(text,ty,ea,ctx,ec).slice(0,120);if(matchedAccount)desc=stripMatchedAccount(desc,matchedAccount).slice(0,120);const semanticCat=ec||ih;if(semanticCat){const dp=desc.split(/\s+/),cn=N(semanticCat);if(dp.length>1&&N(dp[0])===cn)desc=dp.slice(1).join(" ");else if(dp.length>1&&N(dp[dp.length-1])===cn)desc=dp.slice(0,-1).join(" ")}if(!desc.trim())desc=ty==="income"?"Receita":"Despesa";const temp={kind:"transaction",type:ty,amount:v,description:desc,category_explicit:ec,category_hint:ih,account_explicit:ea,account:matchedAccount,account_ambiguous:accountHit.ambiguous===true,account_matches:accountHit.ambiguous?accountHit.matches:undefined,context:ctx,date:naturalDate(text),provider_message_id:k,audit_message_id:aid,recurrence:rc};await save(phone,"TX_CONFIRM",temp);const lines=[`🤖 *Entendi assim:*`,``,`${ty==="income"?"🟢 Receita":"🔴 Despesa"} de *${money(v)}*`,`📝 ${temp.description}`,ec?`🏷️ Categoria informada: *${ec}*`:ih?`🏷️ Sugestão: *${ih}*`:"🏷️ Categoria: vou confirmar depois",matchedAccount?`🏦 *${matchedAccount.name}*`:ea?`🏦 Conta informada: *${ea}*`:"🏦 Conta: vou confirmar se necessário",matchedAccount?`${matchedAccount.context==="dfl"?"🏢 Empresa":"👤 Pessoal"} · identificado pela conta`:ctx?`${ctx==="dfl"?"🏢 Empresa":"👤 Pessoal"}`:"🏢 Contexto: vou perguntar se necessário",rc?`🔁 Recorrência ${rc.label}`:"",`📅 ${temp.date}`,``,`Tá certo?`,`*1* - ✅ Confirmar`,`*2* - ✏️ Corrigir`].filter(Boolean).join("\n");const o=await reply(lines);await done(aid,"extracted",o,temp);return new Response("OK")
 }catch(e){console.error("[whatsapp-webhook v100.0]",e);return new Response("OK")}});
