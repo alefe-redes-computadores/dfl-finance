@@ -56,7 +56,27 @@ async function uid(seed:string){const h=new Uint8Array(await crypto.subtle.diges
 async function userFor(x:string){let r=await db.from("user_phones").select("user_id,phone,phone_id,name").eq("phone",x).maybeSingle();if(r.data)return r.data;r=await db.from("user_phones").select("user_id,phone,phone_id,name").eq("phone_id",x).maybeSingle();return r.data}
 async function send(to:string,text:string){const r=await fetch(`${Deno.env.get("EVOLUTION_API_URL")}/message/sendText/${Deno.env.get("EVOLUTION_INSTANCE")}`,{method:"POST",headers:{"Content-Type":"application/json",apikey:Deno.env.get("EVOLUTION_API_KEY")!},body:JSON.stringify({number:to,textMessage:{text}})});if(!r.ok)throw Error(`Evolution ${r.status}`);return text}
 async function save(phone:string,step:string,temp_data:any){const{error}=await db.from("bot_sessions").upsert({phone,step,temp_data},{onConflict:"phone"});if(error)throw error}
-const clear=(p:string)=>db.from("bot_sessions").delete().eq("phone",p);
+/* V157: lifecycle seguro de comprovante mantido temporariamente na sessão. */
+const cleanupHeldReceipt=async(path?:string|null)=>{
+ if(!path)return;
+ try{
+  const linked=await db.from("transactions").select("id").eq("receipt_url",path).limit(1);
+  if(linked.error)throw linked.error;
+  if((linked.data||[]).length)return;
+  const removed=await db.storage.from("receipts").remove([path]);
+  if(removed.error)throw removed.error;
+  console.log("[V157_HELD_RECEIPT_CLEANED]",JSON.stringify({path}));
+ }catch(e){
+  console.error("[V157_HELD_RECEIPT_CLEANUP_ERROR]",JSON.stringify({path,error:String(e)}));
+ }
+};
+const clear=async(p:string)=>{
+ const current=await db.from("bot_sessions").select("temp_data").eq("phone",p).maybeSingle();
+ if(current.error)throw current.error;
+ const held=current.data?.temp_data?.held_receipt_path;
+ if(held)await cleanupHeldReceipt(String(held));
+ return db.from("bot_sessions").delete().eq("phone",p);
+};
 async function audit(u:string,f:string,t:string,k:string){const e=await db.from("whatsapp_messages").select("id,status").eq("provider_message_id",k).maybeSingle();if(e.data&&e.data.status!=="error")return null;if(e.data){await db.from("whatsapp_messages").update({status:"processing",message_text:t}).eq("id",e.data.id);return e.data.id}const r=await db.from("whatsapp_messages").insert({user_id:u,from_number:f,message_text:t,message_type:"text",status:"processing",provider_message_id:k}).select("id").single();if(r.error)throw r.error;return r.data.id}
 const done=(id:string|null,status:string,response_text:string,extracted_json:any=null,transaction_id:string|null=null)=>id?db.from("whatsapp_messages").update({status,response_text,extracted_json,transaction_id,processed_at:new Date().toISOString()}).eq("id",id):Promise.resolve();
 async function accs(u:string,c:string){const r=await db.from("accounts").select("id,name,balance,context").eq("user_id",u).eq("context",c).eq("is_archived",false).order("name");return r.data||[]}
@@ -226,6 +246,18 @@ if(!text){
 
 
     if(canHoldReceipt){
+      const previousHeld=sessionData?.held_receipt_path?String(sessionData.held_receipt_path):null;
+      if(previousHeld&&previousHeld!==path){
+        await cleanupHeldReceipt(previousHeld);
+        if(sessionData?.held_receipt_message_id){
+          await db.from("whatsapp_messages").update({
+            media_url:null,
+            extracted_json:{action:"media.held_receipt_replaced",replaced_storage_path:previousHeld},
+            processed_at:new Date().toISOString()
+          }).eq("id",String(sessionData.held_receipt_message_id));
+        }
+        console.log("[V157_HELD_RECEIPT_REPLACED]",JSON.stringify({previous:previousHeld,current:path}));
+      }
       await save(u.phone,sessionStep,{...sessionData,held_receipt_path:path,held_receipt_mime:outMime,held_receipt_message_id:aid});
       await db.from("whatsapp_messages").update({status:"extracted",media_url:path,transaction_id:null,
         extracted_json:{action:"media.held_for_active_transaction",kind,mimetype:outMime,size:bin.length,storage_bucket:"receipts",storage_path:path,session_step:sessionStep},

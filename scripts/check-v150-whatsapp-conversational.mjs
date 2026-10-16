@@ -21,7 +21,7 @@ const checks = [
     /TR_FROM[\s\S]{0,1000}pickNamed/.test(s) &&
     /TR_TO[\s\S]{0,1000}pickNamed/.test(s)],
   ["iFood receita sem Delivery forçado",
-    s.includes('ty==="income"?"Vendas [IFOOD]":"Delivery"')],
+    s.includes('ty==="income"?"Vendas {IFOOD}":"Delivery"')],
   ["histórico contextual de categoria",
     s.includes('select("category_id,description,account_id")')],
   ["menu primário reduzido",

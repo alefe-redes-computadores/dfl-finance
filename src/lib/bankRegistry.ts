@@ -115,7 +115,7 @@ export const BANK_REGISTRY: readonly BankRegistryEntry[] = [
     sigla: 'stone',
     kind: 'stone',
     featured: true,
-    asset: asset('/banks/stone-current.svg', '#003D1C', 'h-[64%] w-[78%] object-contain brightness-0 invert', 'official-source', 'stone.com.br'),
+    asset: asset('/banks/stone-current.svg', '#FFFFFF', 'h-[64%] w-[78%] object-contain', 'official-source', 'stone.com.br'),
   },
 
   {
