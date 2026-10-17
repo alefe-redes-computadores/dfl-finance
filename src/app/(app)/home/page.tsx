@@ -138,7 +138,9 @@ function HomeContent() {
     balanceVerifiedAt,
     forceSync,
     reconcileBalance,
+    lastSyncError,
   } = useLocalSync()
+  const hasSyncFailure = Boolean(lastSyncError)
 
   useEffect(() => {
     setIsClient(true)
@@ -220,6 +222,22 @@ function HomeContent() {
   const localNotifications = useMemo(() => safeArray(rawNotifications), [rawNotifications])
 
   const isDataLoading = txLoading || catLoading || accLoading || debtsLoading || finLoading || cardsLoading || budgetsLoading || loansLoading || subscriptionsLoading || goalsLoading || creditInvoicesLoading
+
+  // V161 R7.1: indicador discreto; notifique apenas sync demorado ou falha.
+  // O temporizador e cancelado imediatamente quando a sincronizacao termina.
+  useEffect(() => {
+    if (!isSyncing || !isOnline) return
+    const timer = window.setTimeout(() => {
+      showToast('A sincronizacao esta demorando mais de 10 segundos. Seus dados locais continuam preservados.', 'warning')
+    }, 10_000)
+    return () => window.clearTimeout(timer)
+  }, [isSyncing, isOnline, showToast])
+
+  // Alertas usam o ToastProvider global, que ja centraliza os avisos na tela.
+  useEffect(() => {
+    if (!hasSyncFailure || !isOnline) return
+    showToast('A ultima sincronizacao nao foi concluida. Seus dados locais permanecem preservados.', 'error')
+  }, [hasSyncFailure, isOnline, showToast])
 
   useEffect(() => {
     if (user?.id && isOnline && isClient && !syncAttempted) {
@@ -2327,15 +2345,6 @@ function HomeContent() {
 
   return (
     <div ref={containerRef} className="relative mx-auto min-h-[100dvh] w-full max-w-2xl bg-gray-50 px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-3 font-sans transition-colors duration-300 dark:bg-slate-900">
-      {(isDataLoading || isSyncing) && (
-        <div role="status" aria-live="polite" className="pointer-events-none fixed right-4 top-[calc(4.75rem+env(safe-area-inset-top))] z-50">
-          <div className="flex items-center gap-2 rounded-full border border-teal-500/20 bg-white/95 px-3 py-2 text-xs font-semibold text-teal-800 shadow-lg shadow-black/10 backdrop-blur-xl dark:border-teal-400/20 dark:bg-slate-800/95 dark:text-teal-200">
-            <span aria-hidden="true" className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-teal-500 motion-reduce:animate-none" />
-            {isSyncing ? 'Sincronizando dados' : 'Preparando informações'}
-          </div>
-        </div>
-      )}
-
       {undoToast && (
         <UndoToast
           message={undoToast.message}
@@ -2359,13 +2368,21 @@ function HomeContent() {
         <div className="flex shrink-0 flex-col items-end gap-2.5">
           <div className="flex items-center gap-2">
             {isClient ? (
-              <SyncButton
-                pendingCount={typeof pendingCount === 'number' ? pendingCount : 0}
-                isSyncing={!!isSyncing}
-                isOnline={!!isOnline}
-                onSync={forceSync}
-                onClick={() => setIsSyncModalOpen(true)}
-              />
+              <div className="relative shrink-0">
+                <SyncButton
+                  pendingCount={typeof pendingCount === 'number' ? pendingCount : 0}
+                  isSyncing={!!isSyncing}
+                  isOnline={!!isOnline}
+                  onSync={forceSync}
+                  onClick={() => setIsSyncModalOpen(true)}
+                />
+                {isSyncing && (
+                  <span aria-hidden="true" className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-3 w-3">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-400/60 motion-reduce:animate-none" />
+                    <span className="relative inline-flex h-3 w-3 rounded-full bg-teal-400" />
+                  </span>
+                )}
+              </div>
             ) : (
               <div className="w-10 h-10 animate-pulse bg-gray-200 dark:bg-slate-700 rounded-full" />
             )}
