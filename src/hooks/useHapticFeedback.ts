@@ -11,17 +11,17 @@ type HapticPattern = number | number[]
  */
 export function useHapticFeedback() {
   const vibrate = useCallback((pattern: HapticPattern) => {
-    // Verifica se está no navegador e se suporta vibrate
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate(pattern)
-      return
+    // A Web Vibration API não é universal em WebViews Android.
+    // Não simular sucesso nem registrar ruído quando o dispositivo não suporta.
+    if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return
+    try {
+      const valid = Array.isArray(pattern)
+        ? pattern.filter((duration) => Number.isFinite(duration) && duration >= 0).map((duration) => Math.min(duration, 250))
+        : Math.min(Math.max(Number.isFinite(pattern) ? pattern : 0, 0), 250)
+      navigator.vibrate(valid)
+    } catch {
+      // Feedback tátil é opcional: nunca interromper uma ação financeira.
     }
-
-    // Fallback silencioso para ambientes que não suportam
-    // Em produção com Capacitor, você pode adicionar:
-    // import { Haptics } from '@capacitor/haptics';
-    // Haptics.vibrate({ duration: Array.isArray(pattern) ? pattern[0] : pattern });
-    console.debug('[Haptic] Vibração não suportada neste ambiente')
   }, [])
 
   // Atalhos para padrões comuns

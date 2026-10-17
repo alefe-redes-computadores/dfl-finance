@@ -72,7 +72,16 @@ export function useLocalSync() {
         true
       )
 
-    if (
+    if (!result.success && !result.pullSuccess && result.pendingCount === 0) {
+      showToast(
+        result.pullFailedTables.length > 0
+          ? `Recebimento incompleto em ${result.pullFailedTables.length} tabela(s). Seus dados locais foram preservados.`
+          : 'Sincronização não confirmada. Seus dados locais foram preservados.',
+        'warning'
+      )
+    } else if (!result.success && result.pushFailures > 0 && result.pendingCount === 0) {
+      showToast('Não foi possível confirmar o envio. Seus dados locais foram preservados.', 'warning')
+    } else if (
       result.pendingCount > 0
     ) {
       const diagnostics =

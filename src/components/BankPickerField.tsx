@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Check,
@@ -40,6 +40,8 @@ export default function BankPickerField({
 }: BankPickerFieldProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
   const { vibrate } = useHapticFeedback()
 
   useEffect(() => {
@@ -47,16 +49,36 @@ export default function BankPickerField({
 
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    const frame = window.requestAnimationFrame(() => {
+      dialogRef.current?.querySelector<HTMLInputElement>('input[type="text"]')?.focus()
+    })
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setOpen(false)
+      }
+      if (event.key === 'Tab' && dialogRef.current) {
+        const focusables = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])')).filter((el) => el.getClientRects().length > 0)
+        const first = focusables[0]
+        const last = focusables[focusables.length - 1]
+        if (first && last) {
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+        }
+      }
     }
 
     window.addEventListener('keydown', onKeyDown)
 
+    const triggerAtOpen = triggerRef.current
     return () => {
+      window.cancelAnimationFrame(frame)
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', onKeyDown)
+      if (triggerAtOpen?.isConnected) triggerAtOpen.focus()
+      else if (previouslyFocused?.isConnected) previouslyFocused.focus()
     }
   }, [open])
 
@@ -93,6 +115,7 @@ export default function BankPickerField({
             <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" />
 
             <div
+              ref={dialogRef}
               role="dialog"
               aria-modal="true"
               aria-label="Selecionar banco ou instituição"
@@ -232,6 +255,7 @@ export default function BankPickerField({
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
         onClick={() => {

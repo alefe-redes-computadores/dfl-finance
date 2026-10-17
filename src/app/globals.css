@@ -574,3 +574,41 @@ input[data-premium-input="true"]:focus-visible {
   box-shadow: none !important;
   -webkit-tap-highlight-color: transparent;
 }
+
+
+/* DFL_FINANCE_V160_R2_GLOBAL_EXPERIENCE */
+/* Complementa classes existentes, sem alterar altura, tamanho de fonte ou estilo de cada tela. */
+@layer components {
+  .app-field[aria-invalid="true"], .app-select[aria-invalid="true"],
+  .app-textarea[aria-invalid="true"], .app-field-shell:has([aria-invalid="true"]) {
+    border-color: rgb(220 38 38 / .68);
+    box-shadow: 0 0 0 3px rgb(220 38 38 / .10);
+  }
+  .app-field:focus-visible, .app-select:focus-visible, .app-textarea:focus-visible,
+  .app-field-button:focus-visible, .app-primary-action:focus-visible,
+  .app-secondary-action:focus-visible, .app-icon-action:focus-visible {
+    outline: 2px solid rgb(13 148 136 / .8);
+    outline-offset: 2px;
+  }
+  .app-modal-panel, .app-sheet-panel {
+    max-height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
+    overscroll-behavior: contain;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-field, .app-select, .app-textarea, .app-modal-panel, .app-sheet-panel { scroll-behavior: auto; }
+}
+
+/* DFL_V160_R3_FIELD_STATES: estados consistentes sem sobrescrever superfícies financeiras */
+@layer components {
+  .app-field:focus-visible, .app-select:focus-visible, .app-textarea:focus-visible,
+  .app-field-button:focus-visible {
+    outline: 2px solid rgb(13 148 136 / 0.7);
+    outline-offset: 2px;
+  }
+  .app-field[aria-invalid="true"], .app-select[aria-invalid="true"],
+  .app-textarea[aria-invalid="true"], .app-field-button[aria-invalid="true"] {
+    border-color: rgb(239 68 68 / 0.7);
+    box-shadow: 0 0 0 3px rgb(239 68 68 / 0.10);
+  }
+}

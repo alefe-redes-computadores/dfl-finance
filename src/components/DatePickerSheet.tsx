@@ -1,7 +1,7 @@
 // src/components/DatePickerSheet.tsx
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react'
 
@@ -44,6 +44,7 @@ export function formatDateLabel(value: string) {
 
 export default function DatePickerSheet({ isOpen, value, onChange, onClose, title = 'Selecionar data' }: DatePickerSheetProps) {
   const [viewDate, setViewDate] = useState(() => parseLocalDate(value))
+  const dialogRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (isOpen) setViewDate(parseLocalDate(value))
@@ -54,15 +55,28 @@ export default function DatePickerSheet({ isOpen, value, onChange, onClose, titl
 
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    const frame = window.requestAnimationFrame(() => dialogRef.current?.querySelector<HTMLButtonElement>('button')?.focus())
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') { event.preventDefault(); onClose() }
+      if (event.key === 'Tab' && dialogRef.current) {
+        const focusables = Array.from(dialogRef.current.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')).filter((el) => el.getClientRects().length > 0)
+        const first = focusables[0]
+        const last = focusables[focusables.length - 1]
+        if (first && last) {
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+        }
+      }
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => {
+      window.cancelAnimationFrame(frame)
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', onKeyDown)
+      if (previouslyFocused?.isConnected) previouslyFocused.focus()
     }
   }, [isOpen, onClose])
 
@@ -100,6 +114,7 @@ export default function DatePickerSheet({ isOpen, value, onChange, onClose, titl
       <div
         className="app-sheet-panel animate-in slide-in-from-bottom-6 px-5 pb-[max(1.5rem,var(--safe-area-bottom))] pt-3 duration-200"
         onClick={(event) => event.stopPropagation()}
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -197,6 +212,9 @@ export default function DatePickerSheet({ isOpen, value, onChange, onClose, titl
                   type="button"
                   key={iso}
                   onClick={() => choose(day)}
+                  aria-label={new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(day)}
+                  aria-pressed={selected}
+                  aria-current={isToday ? 'date' : undefined}
                   className={`relative flex aspect-square items-center justify-center rounded-[13px] text-[12px] font-bold transition-all active:scale-[0.9] ${
                     selected
                       ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20'

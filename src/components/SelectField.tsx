@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, ChevronDown, X } from 'lucide-react'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
@@ -35,23 +35,46 @@ export default function SelectField({
   const [open, setOpen] = useState(false)
   const { vibrate } = useHapticFeedback()
   const titleId = useId()
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const sheetRef = useRef<HTMLDivElement>(null)
+  // DFL_V160_R3_SELECT_FOCUS
   const selected = options.find((option) => option.value === value)
 
   useEffect(() => {
     if (!open) return
 
     const previousOverflow = document.body.style.overflow
+    const previousFocus = document.activeElement as HTMLElement | null
     document.body.style.overflow = 'hidden'
+    const frame = window.requestAnimationFrame(() => {
+      const first = sheetRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')
+      first?.focus()
+    })
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setOpen(false)
+      }
+      if (event.key === 'Tab' && sheetRef.current) {
+        const candidates = Array.from(sheetRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), [tabindex]:not([tabindex="-1"])'))
+        if (!candidates.length) return
+        const first = candidates[0]
+        const last = candidates[candidates.length - 1]
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+      }
     }
 
     window.addEventListener('keydown', onKeyDown)
 
+    const triggerAtOpen = triggerRef.current
     return () => {
+      window.cancelAnimationFrame(frame)
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', onKeyDown)
+      if (previousFocus?.isConnected) previousFocus.focus()
+      else triggerAtOpen?.focus()
     }
   }, [open])
 
@@ -64,6 +87,7 @@ export default function SelectField({
           >
             <div className="app-overlay absolute inset-0" />
             <div
+              ref={sheetRef}
               role="dialog"
               aria-modal="true"
               aria-labelledby={titleId}
@@ -154,6 +178,7 @@ export default function SelectField({
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
         onClick={() => {

@@ -27,6 +27,7 @@ import SyncButton from '@/components/SyncButton'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
 import Skeleton from '@/components/Skeleton'
+import HomeLoadingSkeleton from '@/components/home/HomeLoadingSkeleton'
 import { UndoToast } from '@/components/ui/UndoToast'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
@@ -205,18 +206,18 @@ function HomeContent() {
     filters: { user_id: user?.id }
   })
 
-  const localTransactions = safeArray(rawTransactions)
-  const localCategories = safeArray(rawCategories)
-  const localAccountsData = safeArray(rawAccounts)
-  const localDebts = safeArray(rawDebts)
-  const localFinancings = safeArray(rawFinancings)
-  const localCards = safeArray(rawCards)
-  const localBudgets = safeArray(rawBudgets)
-  const localLoans = safeArray(rawLoans)
-  const localSubscriptions = safeArray(rawSubscriptions)
-  const localGoals = safeArray(rawGoals)
-  const localCreditInvoices = safeArray(rawCreditInvoices)
-  const localNotifications = safeArray(rawNotifications)
+  const localTransactions = useMemo(() => safeArray(rawTransactions), [rawTransactions])
+  const localCategories = useMemo(() => safeArray(rawCategories), [rawCategories])
+  const localAccountsData = useMemo(() => safeArray(rawAccounts), [rawAccounts])
+  const localDebts = useMemo(() => safeArray(rawDebts), [rawDebts])
+  const localFinancings = useMemo(() => safeArray(rawFinancings), [rawFinancings])
+  const localCards = useMemo(() => safeArray(rawCards), [rawCards])
+  const localBudgets = useMemo(() => safeArray(rawBudgets), [rawBudgets])
+  const localLoans = useMemo(() => safeArray(rawLoans), [rawLoans])
+  const localSubscriptions = useMemo(() => safeArray(rawSubscriptions), [rawSubscriptions])
+  const localGoals = useMemo(() => safeArray(rawGoals), [rawGoals])
+  const localCreditInvoices = useMemo(() => safeArray(rawCreditInvoices), [rawCreditInvoices])
+  const localNotifications = useMemo(() => safeArray(rawNotifications), [rawNotifications])
 
   const isDataLoading = txLoading || catLoading || accLoading || debtsLoading || finLoading || cardsLoading || budgetsLoading || loansLoading || subscriptionsLoading || goalsLoading || creditInvoicesLoading
 
@@ -251,11 +252,29 @@ function HomeContent() {
 
   const start = useMemo(() => format(startOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
   const end = useMemo(() => format(endOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
+  // A Home pode permanecer aberta durante a virada do dia no PWA/APK.
+  // Atualizamos somente quando a data local muda, sem polling de dados ou sync.
+  const [todayIso, setTodayIso] = useState(() => format(new Date(), 'yyyy-MM-dd'))
+  useEffect(() => {
+    const refreshDay = () => {
+      const nextDay = format(new Date(), 'yyyy-MM-dd')
+      setTodayIso(previous => previous === nextDay ? previous : nextDay)
+    }
+    refreshDay()
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') refreshDay()
+    }, 60_000)
+    document.addEventListener('visibilitychange', refreshDay)
+    window.addEventListener('focus', refreshDay)
+    window.addEventListener('pageshow', refreshDay)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', refreshDay)
+      window.removeEventListener('focus', refreshDay)
+      window.removeEventListener('pageshow', refreshDay)
+    }
+  }, [])
   const today = useMemo(() => new Date(), [])
-  const todayIso = useMemo(
-    () => format(today, 'yyyy-MM-dd'),
-    [today]
-  )
 
   const getCardDueDate = useCallback((
     dueDay: number | null | undefined,
@@ -903,10 +922,22 @@ function HomeContent() {
     }
   }, [user?.id, context, isOnline])
 
-  const saveLayout = async (order: string[]) => {
-    if (!user?.id) return
+  const saveLayout = async (order: string[]): Promise<boolean> => {
+    // A personalização permanece visível nesta sessão, mas só confirmamos
+    // persistência quando a operação remota realmente terminar sem erro.
     setEnabledSections(order)
-    await supabase.from('home_layout').upsert({ user_id: user.id, context, section_order: order }, { onConflict: 'user_id,context' })
+    if (!user?.id || !isOnline) return false
+    try {
+      const { error } = await supabase.from('home_layout').upsert(
+        { user_id: user.id, context, section_order: order },
+        { onConflict: 'user_id,context' }
+      )
+      if (error) throw error
+      return true
+    } catch (error) {
+      console.warn('[Home] Falha ao persistir personalização', error)
+      return false
+    }
   }
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -926,14 +957,20 @@ function HomeContent() {
       setRefreshing(true)
       isPulling.current = false
       vibrate(10)
-
-      console.log('🔄 Pull-to-refresh: forçando sync...')
-
-      await forceSync()
-
-      setRefreshing(false)
-      showToast('Dados atualizados!', 'success')
-      hapticSuccess()
+      try {
+        const result = await forceSync()
+        if (result.success && result.pendingCount === 0) {
+          // O próprio hook de sincronização já apresenta a confirmação.
+          hapticSuccess()
+        } else if (!result.success && result.pendingCount === 0) {
+          showToast('Não foi possível confirmar a atualização. Seus dados locais foram preservados.', 'warning')
+        }
+      } catch (error) {
+        console.warn('[Home] Atualização manual falhou', error)
+        showToast('Falha na atualização. Tente novamente quando houver conexão.', 'error')
+      } finally {
+        setRefreshing(false)
+      }
     }
   }, [refreshing, forceSync, vibrate, showToast, hapticSuccess])
 
@@ -954,7 +991,17 @@ function HomeContent() {
 
   const toggleSection = (id: string) => { setPersonalizeEnabled(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
   const moveSection = (id: string, direction: 'up' | 'down') => { setPersonalizeOrder((prev) => { const currentIndex = prev.findIndex((item) => item.id === id); if (currentIndex === -1) return prev; const newOrder = [...prev]; const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1; if (targetIndex >= 0 && targetIndex < newOrder.length) { [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]] } return newOrder }) }
-  const handleSavePersonalize = () => { const finalOrder = personalizeOrder.filter(s => personalizeEnabled.has(s.id)).map(s => s.id); saveLayout(finalOrder); setShowPersonalizeModal(false); showToast('Tela inicial personalizada!', 'success'); hapticSuccess() }
+  const handleSavePersonalize = async () => {
+    const finalOrder = personalizeOrder.filter(s => personalizeEnabled.has(s.id)).map(s => s.id)
+    const saved = await saveLayout(finalOrder)
+    if (saved) {
+      setShowPersonalizeModal(false)
+      showToast('Tela inicial personalizada!', 'success')
+      hapticSuccess()
+    } else {
+      showToast('Preferência aplicada nesta sessão, mas não salva na nuvem. Tente novamente.', 'warning')
+    }
+  }
   const openPersonalize = () => { const enabledOrder = enabledSections.map(id => ALL_SECTIONS.find(s => s.id === id)).filter(Boolean) as typeof ALL_SECTIONS; const missing = ALL_SECTIONS.filter(s => !enabledSections.includes(s.id)); setPersonalizeOrder([...enabledOrder, ...missing]); setPersonalizeEnabled(new Set(enabledSections)); setShowPersonalizeModal(true) }
 
   const formatCurrency = (val: number) => `R$ ${safeNumber(val).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -1053,13 +1100,13 @@ function HomeContent() {
     switch (sectionId) {
       case 'balance':
         return (
-          <div key="balance" className="mb-5">
-            <div className="relative overflow-hidden rounded-[22px] border border-gray-200/80 bg-white px-5 py-5 shadow-[0_8px_30px_rgba(15,23,42,0.06)] dark:border-slate-700 dark:bg-slate-800 dark:shadow-none">
-              <div className="pointer-events-none absolute -right-4 -top-4 opacity-[0.04]">
+          <div key="balance" className="mb-4 sm:mb-5">
+            <div className="relative isolate overflow-hidden rounded-[26px] border border-slate-200/80 bg-gradient-to-br from-white via-white to-teal-50/70 px-5 py-5 shadow-[0_12px_35px_rgba(15,23,42,0.065)] sm:px-6 sm:py-6 dark:border-slate-700/80 dark:from-slate-800 dark:via-slate-800 dark:to-teal-950/25">
+              <div className="pointer-events-none absolute -right-4 -top-4 text-teal-600 opacity-[0.06] dark:text-teal-300 dark:opacity-[0.07]">
                 <Wallet size={92} />
               </div>
 
-              <div className="relative z-10 flex items-center justify-between gap-3 mb-3">
+              <div className="relative z-10 mb-4 flex items-start justify-between gap-3">
                 <div>
                   <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
                     Saldo total
@@ -1084,7 +1131,10 @@ function HomeContent() {
                     setHideBalance(!hideBalance);
                     vibrate(10);
                   }}
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-slate-700 dark:hover:text-gray-300 active:scale-95"
+                  type="button"
+                  aria-label={hideBalance ? "Mostrar saldos" : "Ocultar saldos"}
+                  aria-pressed={hideBalance}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200/80 bg-white/65 text-slate-500 transition-colors hover:bg-white hover:text-slate-800 active:scale-95 dark:border-slate-600/60 dark:bg-slate-700/50 dark:text-slate-300 dark:hover:bg-slate-700 motion-reduce:transition-none"
                 >
                   {hideBalance ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -1095,10 +1145,12 @@ function HomeContent() {
                   vibrate([5])
                   router.push('/transactions')
                 }}
-                className="relative z-10 w-full text-left group transition-transform active:scale-[0.98]"
+                type="button"
+                aria-label="Ver transações"
+                className="group relative z-10 block w-full min-w-0 text-left transition-transform active:scale-[0.99] motion-reduce:transition-none"
               >
                 <h1
-                  className={`text-[34px] leading-none font-semibold ${
+                  className={`min-w-0 break-words text-[clamp(1.75rem,7.5vw,2.35rem)] leading-[1.14] font-bold tabular-nums ${
                     hideBalance
                       ? "text-gray-900 dark:text-gray-50 tracking-[0.18em]"
                       : totalAccountsBalance > 0
@@ -1117,19 +1169,19 @@ function HomeContent() {
         )
       case 'income-expense':
         return (
-          <div key="income-expense" className="mb-5">
-            <div className="overflow-hidden rounded-[22px] border border-gray-200/80 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <div key="income-expense" className="mb-4 sm:mb-5">
+            <div className="overflow-hidden rounded-[24px] border border-slate-200/80 bg-white shadow-[0_7px_24px_rgba(15,23,42,0.045)] dark:border-slate-700/80 dark:bg-slate-800 dark:shadow-none">
               <div className="px-4 pt-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
                   Movimentação do mês
                 </p>
               </div>
 
-              <div className="grid grid-cols-2">
+              <div className="grid grid-cols-2 divide-x divide-slate-100 dark:divide-slate-700/70">
                 <button
                   type="button"
                   onClick={() => router.push("/transactions?filter=income")}
-                  className="group flex min-w-0 items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 dark:hover:bg-slate-700/40 dark:active:bg-slate-700"
+                  className="group flex min-w-0 items-start gap-2.5 px-3 py-4 text-left transition-colors sm:items-center sm:gap-3 sm:px-4 hover:bg-gray-50 active:bg-gray-100 dark:hover:bg-slate-700/40 dark:active:bg-slate-700"
                 >
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10 dark:text-emerald-400">
                     <ArrowUp size={18} />
@@ -1139,7 +1191,7 @@ function HomeContent() {
                     <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
                       Receitas
                     </p>
-                    <p className="mt-1 truncate text-[17px] font-bold leading-none text-emerald-600 dark:text-emerald-400">
+                    <p className="mt-1 break-words text-[clamp(0.85rem,3.5vw,1.08rem)] font-bold leading-tight tabular-nums text-emerald-600 dark:text-emerald-400">
                       {hideBalance ? "••••" : formatCurrency(summary.income)}
                     </p>
                   </div>
@@ -1148,7 +1200,7 @@ function HomeContent() {
                 <button
                   type="button"
                   onClick={() => router.push("/transactions?filter=expense")}
-                  className="group flex min-w-0 items-center gap-3 border-l border-gray-100 px-4 py-4 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 dark:border-slate-700/70 dark:hover:bg-slate-700/40 dark:active:bg-slate-700"
+                  className="group flex min-w-0 items-start gap-2.5 px-3 py-4 text-left transition-colors sm:items-center sm:gap-3 sm:px-4 hover:bg-gray-50 active:bg-gray-100 dark:border-slate-700/70 dark:hover:bg-slate-700/40 dark:active:bg-slate-700"
                 >
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400">
                     <ArrowDown size={18} />
@@ -1158,7 +1210,7 @@ function HomeContent() {
                     <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
                       Despesas
                     </p>
-                    <p className="mt-1 truncate text-[17px] font-bold leading-none text-red-500 dark:text-red-400">
+                    <p className="mt-1 break-words text-[clamp(0.85rem,3.5vw,1.08rem)] font-bold leading-tight tabular-nums text-red-500 dark:text-red-400">
                       {hideBalance ? "••••" : formatCurrency(summary.expense)}
                     </p>
                   </div>
@@ -1180,7 +1232,7 @@ function HomeContent() {
                 </div>
 
                 <p
-                  className={`text-[15px] font-bold ${
+                  className={`max-w-[52%] break-words text-right text-[15px] font-bold tabular-nums ${
                     summary.balance > 0
                       ? 'text-emerald-600 dark:text-emerald-400'
                       : summary.balance < 0
@@ -1487,7 +1539,7 @@ function HomeContent() {
                   <p className="text-[9px] font-black uppercase tracking-[0.1em] text-teal-700/70 dark:text-teal-400/70">
                     Disponível operacional
                   </p>
-                  <p className={`mt-1 truncate text-[15px] font-black ${
+                  <p className={`mt-1 break-words text-[clamp(0.82rem,3.5vw,0.94rem)] font-black leading-tight tabular-nums ${
                     operationalAvailable < 0
                       ? 'text-red-600 dark:text-red-400'
                       : 'text-teal-800 dark:text-teal-300'
@@ -2018,15 +2070,17 @@ function HomeContent() {
         return (
           <div key="accounts" className="mb-5">
             <div className="overflow-hidden rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
-              <div
-                className="flex items-center justify-between px-4 py-3.5 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/30 active:bg-gray-100 dark:active:bg-slate-700"
+              <button
+                type="button"
+                aria-label="Abrir contas"
+                className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500 dark:hover:bg-slate-700/30 dark:active:bg-slate-700 motion-reduce:transition-none"
                 onClick={() => router.push("/accounts")}
               >
                 <h3 className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
                   Contas
                 </h3>
-                <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
-              </div>
+                <ChevronRight size={18} className="shrink-0 text-gray-400 dark:text-gray-500" />
+              </button>
 
               <div className="flex flex-col">
                 {accounts.length === 0 ? (
@@ -2039,10 +2093,11 @@ function HomeContent() {
                   </div>
                 ) : (
                   accounts.slice(0, 4).map((acc: any, index: number) => (
-                    <div
+                    <button
+                      type="button"
                       key={acc.id}
                       onClick={() => goToAccount(acc.id)}
-                      className={`flex items-center justify-between gap-3 px-4 py-3.5 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
+                      className={`flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500 dark:hover:bg-slate-700/50 active:bg-gray-100 motion-reduce:transition-none ${
                         index !== Math.min(accounts.length, 4) - 1 ? "border-b border-gray-100 dark:border-slate-700/50" : ""
                       }`}
                     >
@@ -2058,8 +2113,8 @@ function HomeContent() {
                         </div>
                       </div>
 
-                      <div className="shrink-0 text-right">
-                        <p className={`text-[15px] ${getBalanceStyle(safeNumber(acc.balance))}`}>
+                      <div className="min-w-0 max-w-[55%] text-right">
+                        <p className={`break-words text-[clamp(0.82rem,3.5vw,0.94rem)] tabular-nums ${getBalanceStyle(safeNumber(acc.balance))}`}>
                           {hideBalance ? "••••" : formatCurrency(safeNumber(acc.balance))}
                         </p>
                         <p
@@ -2070,7 +2125,7 @@ function HomeContent() {
                           {hideBalance ? "••••" : formatCurrency(safeNumber(acc.previsto))}
                         </p>
                       </div>
-                    </div>
+                    </button>
                   ))
                 )}
 
@@ -2092,15 +2147,17 @@ function HomeContent() {
         return (
           <div key="cards" className="mb-5">
             <div className="overflow-hidden rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
-              <div
-                className="flex items-center justify-between px-4 py-3.5 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/30 active:bg-gray-100 dark:active:bg-slate-700"
+              <button
+                type="button"
+                aria-label="Abrir cartões"
+                className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500 dark:hover:bg-slate-700/30 dark:active:bg-slate-700 motion-reduce:transition-none"
                 onClick={() => router.push("/cards")}
               >
                 <h3 className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
                   Cartões de Crédito
                 </h3>
-                <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
-              </div>
+                <ChevronRight size={18} className="shrink-0 text-gray-400 dark:text-gray-500" />
+              </button>
 
               <div className="flex flex-col">
                 {cards.length === 0 ? (
@@ -2115,10 +2172,11 @@ function HomeContent() {
                   </div>
                 ) : (
                   cards.map((card: any, index: number) => (
-                    <div
+                    <button
+                      type="button"
                       key={card.id}
                       onClick={() => goToCard(card.id)}
-                      className={`flex items-center justify-between gap-3 px-4 py-3.5 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
+                      className={`flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500 dark:hover:bg-slate-700/50 active:bg-gray-100 motion-reduce:transition-none ${
                         index !== cards.length - 1 ? "border-b border-gray-100 dark:border-slate-700/50" : ""
                       }`}
                     >
@@ -2140,9 +2198,9 @@ function HomeContent() {
                         </div>
                       </div>
 
-                      <div className="shrink-0 text-right">
+                      <div className="min-w-0 max-w-[55%] text-right">
                         <p
-                          className={`text-[15px] font-bold ${
+                          className={`break-words text-[clamp(0.82rem,3.5vw,0.94rem)] font-bold tabular-nums ${
                             safeNumber(card.faturaAtual) > 0 ? "text-orange-500" : "text-gray-400 dark:text-gray-500"
                           }`}
                         >
@@ -2152,7 +2210,7 @@ function HomeContent() {
                           Vence dia {card.due_day}
                         </p>
                       </div>
-                    </div>
+                    </button>
                   ))
                 )}
               </div>
@@ -2163,15 +2221,17 @@ function HomeContent() {
         return (
           <div key="recent" className="mb-5">
             <div className="overflow-hidden rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
-              <div
-                className="flex items-center justify-between px-4 py-3.5 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/30 active:bg-gray-100 dark:active:bg-slate-700"
+              <button
+                type="button"
+                aria-label="Abrir transações"
+                className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500 dark:hover:bg-slate-700/30 dark:active:bg-slate-700 motion-reduce:transition-none"
                 onClick={() => router.push("/transactions")}
               >
                 <h3 className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
                   Transações Recentes
                 </h3>
-                <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
-              </div>
+                <ChevronRight size={18} className="shrink-0 text-gray-400 dark:text-gray-500" />
+              </button>
 
               <div className="flex flex-col">
                 {recentTransactions.length === 0 ? (
@@ -2262,24 +2322,17 @@ function HomeContent() {
   }
 
   if (isInitialLoad || (isDataLoading && !localTransactions.length && !localAccountsData.length)) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 p-4 pt-6">
-        <Skeleton count={1} className="h-10 w-full mb-6 rounded-2xl" />
-        <Skeleton count={1} className="h-32 w-full rounded-[32px] mb-6" />
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <Skeleton count={1} className="h-24 w-full rounded-[28px]" />
-          <Skeleton count={1} className="h-24 w-full rounded-[28px]" />
-        </div>
-        <Skeleton count={1} className="h-48 w-full rounded-[28px]" />
-      </div>
-    )
+    return <HomeLoadingSkeleton />
   }
 
   return (
     <div ref={containerRef} className="relative mx-auto min-h-[100dvh] w-full max-w-2xl bg-gray-50 px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-3 font-sans transition-colors duration-300 dark:bg-slate-900">
       {(isDataLoading || isSyncing) && (
-        <div className="fixed top-20 right-4 z-50">
-          <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse shadow-md shadow-teal-500/40" />
+        <div role="status" aria-live="polite" className="pointer-events-none fixed right-4 top-[calc(4.75rem+env(safe-area-inset-top))] z-50">
+          <div className="flex items-center gap-2 rounded-full border border-teal-500/20 bg-white/95 px-3 py-2 text-xs font-semibold text-teal-800 shadow-lg shadow-black/10 backdrop-blur-xl dark:border-teal-400/20 dark:bg-slate-800/95 dark:text-teal-200">
+            <span aria-hidden="true" className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-teal-500 motion-reduce:animate-none" />
+            {isSyncing ? 'Sincronizando dados' : 'Preparando informações'}
+          </div>
         </div>
       )}
 
@@ -2322,10 +2375,10 @@ function HomeContent() {
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 rounded-full border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 px-1.5 py-1 shadow-sm backdrop-blur-sm">
-            <button onClick={() => { setCurrentDate(subMonths(currentDate, 1)); vibrate(10) }} className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-slate-700 dark:hover:text-gray-200 active:scale-95"><ChevronLeft size={14} /></button>
-            <span className="min-w-[82px] text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-700 dark:text-gray-200">{monthLabel}</span>
-            <button onClick={() => { setCurrentDate(addMonths(currentDate, 1)); vibrate(10) }} className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-slate-700 dark:hover:text-gray-200 active:scale-95"><ChevronRight size={14} /></button>
+          <div role="group" aria-label="Selecionar mês da Home" className="flex min-w-0 items-center gap-1 rounded-full border border-gray-200/70 bg-white/90 px-1.5 py-1 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/90">
+            <button type="button" aria-label="Mês anterior" onClick={() => { setCurrentDate(previous => subMonths(previous, 1)); vibrate(10) }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-teal-500 active:scale-95 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-gray-200 motion-reduce:transition-none"><ChevronLeft size={16} aria-hidden="true" /></button>
+            <span aria-live="polite" className="min-w-[82px] max-w-[120px] truncate text-center text-[11px] font-bold uppercase tracking-[0.10em] text-gray-700 dark:text-gray-200">{monthLabel}</span>
+            <button type="button" aria-label="Próximo mês" onClick={() => { setCurrentDate(previous => addMonths(previous, 1)); vibrate(10) }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-teal-500 active:scale-95 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-gray-200 motion-reduce:transition-none"><ChevronRight size={16} aria-hidden="true" /></button>
           </div>
         </div>
       </div>
@@ -2342,8 +2395,9 @@ function HomeContent() {
       })()}
 
       <button
+        type="button"
         onClick={openPersonalize}
-        className="mt-1 flex w-full items-center justify-center gap-2 rounded-[18px] border border-gray-200/80 bg-white py-3 text-[13px] font-semibold text-gray-500 shadow-sm transition-all hover:bg-gray-50 active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700"
+        className="mt-1 flex min-h-12 w-full items-center justify-center gap-2 rounded-[18px] border border-gray-200/80 bg-white px-4 py-3 text-[13px] font-semibold text-gray-600 shadow-sm transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500 active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700 motion-reduce:transition-none"
       >
         <Settings2 size={20} />
         <span>Personalizar início</span>

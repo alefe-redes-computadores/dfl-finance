@@ -1,7 +1,7 @@
 // src/components/ReceiptModal.tsx
 'use client'
 
-import type { ChangeEvent } from 'react'
+import { useEffect, useRef, type ChangeEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Camera, ChevronRight, FileText, Image as ImageIcon, X } from 'lucide-react'
 
@@ -13,6 +13,35 @@ interface ReceiptModalProps {
 }
 
 export default function ReceiptModal({ isOpen, onClose, onCamera, onFileSelect }: ReceiptModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!isOpen || typeof document === 'undefined') return
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const frame = window.requestAnimationFrame(() => dialogRef.current?.querySelector<HTMLButtonElement>('button')?.focus())
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); onClose() }
+      if (event.key === 'Tab' && dialogRef.current) {
+        const focusables = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])')).filter((el) => el.getClientRects().length > 0)
+        const first = focusables[0]
+        const last = focusables[focusables.length - 1]
+        if (first && last) {
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+        }
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      document.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = previousOverflow
+      if (previouslyFocused?.isConnected) previouslyFocused.focus()
+    }
+  }, [isOpen, onClose])
+
   if (!isOpen || typeof document === 'undefined') return null
 
   const handleFile = (event: ChangeEvent<HTMLInputElement>) => {
@@ -34,6 +63,7 @@ export default function ReceiptModal({ isOpen, onClose, onCamera, onFileSelect }
       <div
         className="app-sheet-panel px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 animate-in slide-in-from-bottom-6 duration-200"
         onClick={(event) => event.stopPropagation()}
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Anexar comprovante"
@@ -74,7 +104,7 @@ export default function ReceiptModal({ isOpen, onClose, onCamera, onFileSelect }
             <ChevronRight size={18} className="text-gray-300 dark:text-slate-600" />
           </button>
 
-          <label className="flex w-full cursor-pointer items-center gap-3 rounded-[20px] border border-gray-200/70 bg-gray-50 p-4 text-left transition-all active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800">
+          <label className="focus-within:ring-2 focus-within:ring-teal-500/40 flex w-full cursor-pointer items-center gap-3 rounded-[20px] border border-gray-200/70 bg-gray-50 p-4 text-left transition-all active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800">
             <input type="file" accept="image/*" className="sr-only" onChange={handleFile} />
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] bg-blue-50 text-blue-600 dark:bg-blue-900/25 dark:text-blue-400">
               <ImageIcon size={20} />
@@ -86,7 +116,7 @@ export default function ReceiptModal({ isOpen, onClose, onCamera, onFileSelect }
             <ChevronRight size={18} className="text-gray-300 dark:text-slate-600" />
           </label>
 
-          <label className="flex w-full cursor-pointer items-center gap-3 rounded-[20px] border border-gray-200/70 bg-gray-50 p-4 text-left transition-all active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800">
+          <label className="focus-within:ring-2 focus-within:ring-teal-500/40 flex w-full cursor-pointer items-center gap-3 rounded-[20px] border border-gray-200/70 bg-gray-50 p-4 text-left transition-all active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800">
             <input type="file" accept="application/pdf,.pdf" className="sr-only" onChange={handleFile} />
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400">
               <FileText size={20} />

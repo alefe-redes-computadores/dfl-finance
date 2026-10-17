@@ -2,13 +2,15 @@
 
 import { useState } from 'react'
 import { useLocalSync } from '@/hooks/useLocalSync'
-import { Loader2, Check, RefreshCw, WifiOff } from 'lucide-react'
+import { Loader2, Check, RefreshCw, WifiOff, AlertTriangle } from 'lucide-react'
 import SyncStatusModal from './SyncStatusModal'
 
 export function SyncStatusIndicator() {
   const localSync = useLocalSync()
   const syncStatus = localSync?.syncStatus ?? 'idle'
   const pendingCount = Number(localSync?.pendingCount ?? 0)
+  const lastSyncError = localSync?.lastSyncError
+  const hasSyncError = Boolean(lastSyncError)
 
   const [isModalOpen, setIsModalOpen] = useState(false)
 
@@ -26,13 +28,14 @@ export function SyncStatusIndicator() {
       case 'offline':
         return 'bg-gray-400 text-white'
       default:
-        return pendingCount > 0 ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white'
+        return hasSyncError || pendingCount > 0 ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white'
     }
   }
 
   const getIcon = () => {
     if (syncStatus === 'syncing') return <Loader2 size={18} className="animate-spin" />
     if (syncStatus === 'offline') return <WifiOff size={18} />
+    if (hasSyncError) return <AlertTriangle size={18} />
     if (pendingCount > 0) return <RefreshCw size={18} />
     return <Check size={18} />
   }
@@ -42,7 +45,8 @@ export function SyncStatusIndicator() {
       <button
         onClick={handlePress}
         className={`fixed top-[5rem] right-4 z-40 flex items-center justify-center w-12 h-12 rounded-full shadow-lg backdrop-blur-md border border-white/20 transition-all active:scale-90 ${getStatusStyle()}`}
-        title={pendingCount > 0 ? `${pendingCount} itens pendentes` : 'Tudo sincronizado'}
+        title={syncStatus === 'offline' ? 'Sem conexão; alterações locais preservadas' : syncStatus === 'syncing' ? 'Sincronização em andamento' : hasSyncError ? 'Última sincronização incompleta; toque para detalhes' : pendingCount > 0 ? `${pendingCount} itens pendentes` : 'Tudo sincronizado'}
+        aria-label={syncStatus === 'offline' ? 'Sem conexão; abrir detalhes da sincronização' : hasSyncError ? 'Sincronização incompleta; abrir detalhes' : pendingCount > 0 ? `${pendingCount} itens pendentes; abrir detalhes` : 'Abrir detalhes da sincronização'}
         type="button"
       >
         {getIcon()}

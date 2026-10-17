@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, CheckCircle2, X } from 'lucide-react'
 
@@ -27,14 +27,46 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const titleId = useId()
+  const descriptionId = useId()
+  const dialogRef = useRef<HTMLElement>(null)
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  const onCancelRef = useRef(onCancel)
+  onCancelRef.current = onCancel
+
+  useEffect(() => {
+    if (!open) return
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const priorOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    cancelRef.current?.focus()
+    return () => {
+      document.body.style.overflow = priorOverflow
+      previouslyFocused?.focus()
+    }
+  }, [open])
+
   useEffect(() => {
     if (!open) return
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !busy) onCancel()
+      if (event.key === 'Escape') {
+        if (!busy) { event.preventDefault(); onCancelRef.current() }
+        return
+      }
+      if (event.key !== 'Tab') return
+      const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])') ?? [])
+        .filter(el => el.getClientRects().length > 0)
+      if (!controls.length) { event.preventDefault(); return }
+      const first = controls[0], last = controls[controls.length - 1]
+      if (event.shiftKey && (document.activeElement === first || !dialogRef.current?.contains(document.activeElement))) {
+        event.preventDefault(); last.focus()
+      } else if (!event.shiftKey && (document.activeElement === last || !dialogRef.current?.contains(document.activeElement))) {
+        event.preventDefault(); first.focus()
+      }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [open, busy, onCancel])
+  }, [open, busy])
 
   if (!open || typeof document === 'undefined') return null
 
@@ -49,10 +81,11 @@ export default function ConfirmDialog({
         onClick={() => !busy && onCancel()}
       />
       <section
+        ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
-        aria-labelledby="confirm-dialog-title"
-        aria-describedby="confirm-dialog-description"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
         className="app-sheet-panel max-w-md p-5 sm:rounded-[22px] sm:border-b"
       >
         <div className="app-sheet-handle sm:hidden" />
@@ -61,15 +94,15 @@ export default function ConfirmDialog({
             {danger ? <AlertTriangle size={21} /> : <CheckCircle2 size={21} />}
           </div>
           <div className="min-w-0 flex-1">
-            <h2 id="confirm-dialog-title" className="text-lg font-bold text-gray-900 dark:text-gray-100">{title}</h2>
-            <p id="confirm-dialog-description" className="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">{description}</p>
+            <h2 id={titleId} className="text-lg font-bold text-gray-900 dark:text-gray-100">{title}</h2>
+            <p id={descriptionId} className="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">{description}</p>
           </div>
           <button type="button" onClick={onCancel} disabled={busy} className="rounded-xl p-2 text-gray-400 transition hover:bg-gray-100 disabled:opacity-50 dark:hover:bg-slate-800" aria-label="Fechar">
             <X size={20} />
           </button>
         </div>
         <div className="mt-6 grid grid-cols-2 gap-3">
-          <button type="button" onClick={onCancel} disabled={busy} className="min-h-12 rounded-2xl bg-gray-100 px-4 font-semibold text-gray-700 transition active:scale-[0.98] disabled:opacity-50 dark:bg-slate-800 dark:text-gray-200">
+          <button ref={cancelRef} type="button" onClick={onCancel} disabled={busy} className="min-h-12 rounded-2xl bg-gray-100 px-4 font-semibold text-gray-700 transition active:scale-[0.98] disabled:opacity-50 dark:bg-slate-800 dark:text-gray-200">
             {cancelLabel}
           </button>
           <button type="button" onClick={onConfirm} disabled={busy} className={`min-h-12 rounded-2xl px-4 font-semibold text-white transition active:scale-[0.98] disabled:opacity-50 ${danger ? 'bg-red-600 hover:bg-red-700' : 'bg-teal-700 hover:bg-teal-800 dark:bg-teal-600'}`}>
