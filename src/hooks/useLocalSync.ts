@@ -45,7 +45,7 @@ export function useLocalSync() {
     return reconcileAccountBalancesFast(user.id)
   }, [user?.id])
 
-  const forceSync = useCallback(async (): Promise<SyncCycleResult> => {
+  const forceSync = useCallback(async (options?: { silentSuccess?: boolean }): Promise<SyncCycleResult> => {
     configureSyncEngine(user?.id ?? null)
 
     if (!user?.id) {
@@ -112,7 +112,7 @@ export function useLocalSync() {
         )
       }
     } else if (
-      result.success
+      result.success && !options?.silentSuccess
     ) {
       showToast(
         'Sincronização concluída.',

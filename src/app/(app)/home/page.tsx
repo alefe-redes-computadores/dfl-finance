@@ -246,7 +246,7 @@ function HomeContent() {
        * accounts reconcilia primeiro; o sync completo continua depois.
        */
       reconcileBalance()
-        .then(() => forceSync())
+        .then(() => forceSync({ silentSuccess: true }))
         .then(() => setSyncAttempted(true))
         .catch((err) => {
           console.error('Home: erro na sincronização de abertura:', err)

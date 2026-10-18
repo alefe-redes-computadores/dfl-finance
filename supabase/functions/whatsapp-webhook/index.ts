@@ -30,7 +30,8 @@ const txCorrectionFocus=(raw:string):string|null=>{
   return null;
 };
 const txCorrectionSegments=(raw:string):string[]=>{
-  const pieces=raw.replace(/\r/g,"")
+  const normalizedStart=raw.replace(/^\s*(?:corrigir|corrige|mudar|muda|altera(?:r)?|troca(?:r)?|ajusta(?:r)?)\s+(?=(?:o\s+|a\s+)?(?:nome|descri(?:cao|ção)|t[ií]tulo|hist[oó]rico|valor|quantia|preco|conta|banco|categoria|contexto|data)\b)/i,"");
+  const pieces=normalizedStart.replace(/\r/g,"")
     .replace(/\b(?:na|pela|em)\s+conta\b/gi,m=>m.replace(/\s+/g,"_"))
     .replace(/\s+(?:e\s+)?(?=(?:(?:corrigir|corrige|mudar|altera(?:r)?|troca(?:r)?)\s+)?(?:nome|descricao|descrição|titulo|título|valor|categoria|na_conta|pela_conta|em_conta|conta|no banco|contexto|data)\b)/gi,"\n")
     .split(/[\n;]+/).map(x=>x.trim().replace(/\b(?:na|pela|em)_conta\b/gi,m=>m.replace("_"," "))).filter(Boolean);
@@ -412,7 +413,10 @@ if(s?.step==="TX_AMOUNT"){
 }
 if(s?.step==="TX_CONFIRM"){
   const choice=conversationalChoice(text,"TX_CONFIRM");
-  if(choice==="correct"){
+  /* V163: a correção direta do rascunho NÃO equivale à confirmação financeira. */
+  const parsedInline=txCorrectionPatch(text);
+  const inlineCorrection=choice!=="confirm" && parsedInline.fields.length>0 && parsedInline.errors.length===0;
+  if(choice==="correct"&&!inlineCorrection){
     const focus=txCorrectionFocus(text);
     await save(phone,"TX_CORRECT",{...sd,correction_focus:focus});
     const o=await reply(focus==="description"
@@ -425,11 +429,17 @@ if(s?.step==="TX_CONFIRM"){
       :"✏️ *O que quer corrigir?*\nPode mandar um ou vários campos:\n• *nome Vendas do dia 17*\n• *valor 300,00*\n• *conta Carteira*\n• *data 17/10*\n• *categoria Vendas*\n\nTambém entendo vários campos, cada um em uma linha. Para recomeçar: *refazer*.");
     await done(aid,"extracted",o,{action:"transaction.correction.request",focus});return new Response("OK")
   }
-  if(choice!=="confirm"){
+  if(choice==="confirm"){
+    await afterConfirm(u,phone,sd,reply,aid);return new Response("OK")
+  }
+  if(inlineCorrection){
+    /* A mesma mensagem cai no handler TX_CORRECT abaixo, sem chamar RPC. */
+    s={...s,step:"TX_CORRECT"};
+    sd={...sd,correction_focus:null};
+  }else{
     const o=await reply("Pode dizer *sim* para confirmar, *corrigir nome*, *corrigir valor*, *corrigir conta* ou apenas *2* para editar. Também pode *cancelar*.");
     await done(aid,"extracted",o);return new Response("OK")
   }
-  await afterConfirm(u,phone,sd,reply,aid);return new Response("OK")
 }
 if(s?.step==="TX_CORRECT"){
   if(n==="refazer"){
