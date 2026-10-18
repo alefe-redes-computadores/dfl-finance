@@ -18,6 +18,73 @@ const voiceAmount=(kind:string,seed:string,retry=false)=>{
 const voiceConfirm=(seed:string)=>voicePick(seed,"confirmation",["🤖 *Entendi assim:*","🤖 *Beleza, confere pra mim:*","🤖 *Certo, ficou assim:*","🤖 *Peguei. Antes de registrar:*","🤖 *Olha se está certinho:*","🤖 *Organizei assim:*"]);
 const voiceConfirmQuestion=(seed:string)=>voicePick(seed,"confirmation.question",["Tá certo?","Posso registrar assim?","Confere?","Está tudo certo?"]);
 /* V155: state-scoped conversational choices; no ambiguous money movement. */
+/* V162_CORRECTION_HELPERS_START: rascunho financeiro puro; sem qualquer RPC. */
+const txCorrectionFocus=(raw:string):string|null=>{
+  const n=N(raw).replace(/\s+/g," ").trim();
+  if(/\b(nome|descricao|titulo|historico)\b/.test(n))return "description";
+  if(/\b(valor|quantia|preco)\b/.test(n))return "amount";
+  if(/\b(conta|banco|carteira)\b/.test(n))return "account";
+  if(/\b(categoria)\b/.test(n))return "category";
+  if(/\b(contexto|empresa|pessoal)\b/.test(n))return "context";
+  if(/\b(data|dia|quando)\b/.test(n))return "date";
+  return null;
+};
+const txCorrectionSegments=(raw:string):string[]=>{
+  const pieces=raw.replace(/\r/g,"")
+    .replace(/\b(?:na|pela|em)\s+conta\b/gi,m=>m.replace(/\s+/g,"_"))
+    .replace(/\s+(?:e\s+)?(?=(?:(?:corrigir|corrige|mudar|altera(?:r)?|troca(?:r)?)\s+)?(?:nome|descricao|descrição|titulo|título|valor|categoria|na_conta|pela_conta|em_conta|conta|no banco|contexto|data)\b)/gi,"\n")
+    .split(/[\n;]+/).map(x=>x.trim().replace(/\b(?:na|pela|em)_conta\b/gi,m=>m.replace("_"," "))).filter(Boolean);
+  const out:string[]=[];
+  for(let i=0;i<pieces.length;i++){
+    const x=pieces[i];
+    if(/^(?:na\s+conta|pela\s+conta|em\s+conta|conta|no\s+banco)\s*:?$/i.test(x)&&i+1<pieces.length){out.push(x+" "+pieces[++i]);continue}
+    out.push(x);
+  }
+  return out;
+};
+const txCorrectionPatch=(raw:string,focus:string|null=null)=>{
+  const patch:any={},errors:string[]=[],fields:string[]=[];
+  const parts=txCorrectionSegments(raw);
+  const put=(key:string,value:any)=>{patch[key]=value;if(!fields.includes(key))fields.push(key)};
+  for(const piece of parts){
+    const n=N(piece);
+    const amountMatch=n.match(/^(?:(?:corrigir|corrige|mudar|altera(?:r)?|troca(?:r)?|ajustar)\s+)?(?:o\s+)?(?:valor|quantia|preco)\s*(?:para|de|:|=)?\s*(.+)$/i);
+    const descMatch=piece.match(/^(?:(?:corrigir|corrige|mudar|altera(?:r)?|troca(?:r)?|ajustar)\s+)?(?:o\s+|a\s+)?(?:nome(?:\s+d[ao]\s+(?:lancamento|lançamento|transacao|transação))?|descri(?:cao|ção)|t[ií]tulo|hist[oó]rico)\s*(?:para|de|:|=)?\s*(.+)$/i);
+    const shortDesc=piece.match(/^de\s+["“']?(.+?)['”"]?$/i);
+    const accountMatch=piece.match(/^(?:(?:corrigir|corrige|mudar|altera(?:r)?|troca(?:r)?|ajustar)\s+)?(?:a\s+|o\s+)?(?:na\s+conta|pela\s+conta|em\s+conta|conta|no\s+banco|banco)\s*(?:para|de|:|=)?\s*(.+)$/i);
+    const catMatch=piece.match(/^(?:(?:corrigir|corrige|mudar|altera(?:r)?|troca(?:r)?|ajustar)\s+)?(?:a\s+)?categoria\s*(?:para|de|:|=)?\s*(.+)$/i);
+    const contextMatch=piece.match(/^(?:(?:corrigir|corrige|mudar|altera(?:r)?|troca(?:r)?|ajustar)\s+)?(?:o\s+)?contexto\s*(?:para|de|:|=)?\s*(.+)$/i);
+    const dateMatch=piece.match(/^(?:(?:corrigir|corrige|mudar|altera(?:r)?|troca(?:r)?|ajustar)\s+)?(?:a\s+)?data\s*(?:para|de|:|=)?\s*(.+)$/i);
+    const clean=(x:string)=>x.replace(/^\s*(?:para|de)\s+/i,"").trim().replace(/^["'“”]+|["'“”]+$/g,"").trim();
+    if(amountMatch || (focus==="amount"&&parts.length===1)){
+      const x=amount(amountMatch?amountMatch[1]:piece);
+      if(!x)errors.push("Valor inválido: "+piece);else put("amount",x);
+    }else if(descMatch||shortDesc||(focus==="description"&&parts.length===1)){
+      const value=clean(descMatch?descMatch[1]:shortDesc?shortDesc[1]:piece).replace(/[{}\[\]]/g," ").replace(/\s+/g," ").trim();
+      if(!value||value.length>160)errors.push("Nome/descrição inválido: "+piece);else put("description",value);
+    }else if(accountMatch||(focus==="account"&&parts.length===1)){
+      const value=clean(accountMatch?accountMatch[1]:piece);
+      if(!value)errors.push("Conta vazia");else put("accountName",value);
+    }else if(catMatch||(focus==="category"&&parts.length===1)){
+      const value=clean(catMatch?catMatch[1]:piece);
+      if(!value)errors.push("Categoria vazia");else put("categoryName",value);
+    }else if(contextMatch||(focus==="context"&&parts.length===1)){
+      const value=N(contextMatch?contextMatch[1]:piece);
+      if(/^(empresa|empresarial|dfl|da familia)$/.test(value))put("context","dfl");
+      else if(/^(pessoal|personal)$/.test(value))put("context","personal");
+      else errors.push("Contexto não reconhecido: "+piece);
+    }else if(dateMatch||/\b(ontem|anteontem|hoje|amanha|amanhã)\b/i.test(piece)||((focus==="date"&&parts.length===1))){
+      const dateInput=dateMatch?dateMatch[1]:piece;
+      const iso=explicitDate(dateInput)||(/\b(ontem|anteontem|hoje|amanha|amanhã)\b/i.test(dateInput)?naturalDate(dateInput):null);
+      if(!iso)errors.push("Data inválida: "+piece);else put("date",iso);
+    }else{
+      errors.push("Não entendi: "+piece);
+    }
+  }
+  return{patch,fields,errors};
+};
+/* V162_CORRECTION_HELPERS_END */
+
 const conversationalChoice=(raw:string,step:"TX_CONFIRM"|"TX_SETTLE"|"TR_CONFIRM")=>{
  const v=N(String(raw||"")).replace(/[.!?]+$/g,"").replace(/\s+/g," ").trim();
  const yes=new Set(["1","sim","isso","isso mesmo","correto","confirmo","confirmar","confirma","pode","pode sim","pode confirmar","pode registrar","ta certo","esta certo","certinho","ok","beleza","fechado"]);
@@ -25,7 +92,7 @@ const conversationalChoice=(raw:string,step:"TX_CONFIRM"|"TX_SETTLE"|"TR_CONFIRM
  const settle=new Set(["1","efetivar","efetiva","pode efetivar","efetive","confirmar pagamento","ja paguei","ja recebi","foi pago","foi recebido"]);
  const pending=new Set(["2","pendente","deixa pendente","deixar pendente","manter pendente","mantem pendente","nao efetivar","depois","mais tarde","ainda nao"]);
  const cancel=new Set(["2","nao","cancelar transferencia","nao transfere"]);
- if(step==="TX_CONFIRM")return yes.has(v)?"confirm":correct.has(v)?"correct":null;
+ if(step==="TX_CONFIRM")return yes.has(v)?"confirm":(correct.has(v)||/^(?:(?:quero|preciso|pode|vamos)\s+)?(?:corrigir|corrige|alterar|mudar|trocar|editar|ajustar)\b/.test(v))?"correct":null;
  if(step==="TX_SETTLE")return settle.has(v)?"settle":pending.has(v)?"pending":null;
  return yes.has(v)?"confirm":cancel.has(v)?"cancel":null;
 };
@@ -37,7 +104,7 @@ const monthAliases:any={jan:1,janeiro:1,fev:2,fevereiro:2,mar:3,marco:3,abril:4,
 const pendingPeriod=(s:string)=>{const n=N(s),today=day(),cy=Number(today.slice(0,4)),cm=Number(today.slice(5,7));let y=cy,m=cm,found=false;const iso=n.match(/\b(20\d{2})[-\/](0?[1-9]|1[0-2])\b/);if(iso){y=Number(iso[1]);m=Number(iso[2]);found=true}else{const num=n.match(/\b(0?[1-9]|1[0-2])\s*[\/\-]\s*(\d{2}|20\d{2})\b/);if(num){m=Number(num[1]);y=Number(num[2].length===2?"20"+num[2]:num[2]);found=true}else{for(const [k,v] of Object.entries(monthAliases)){if(new RegExp("\\b"+k+"\\b").test(n)){m=Number(v);found=true;const ym=n.match(/\b(20\d{2})\b/);if(ym)y=Number(ym[1]);break}}if(!found){const only=n.match(/(?:pendencias|pendentes).*?\b(0?[1-9]|1[0-2])\b/);if(only){m=Number(only[1]);found=true}}}}const start=`${y}-${String(m).padStart(2,"0")}-01`;const endDate=new Date(Date.UTC(y,m,0));const end=`${y}-${String(m).padStart(2,"0")}-${String(endDate.getUTCDate()).padStart(2,"0")}`;const label=`${monthNames[m-1].charAt(0).toUpperCase()+monthNames[m-1].slice(1)}/${y}`;return{year:y,month:m,start,end,label,explicit:found}};
 const pendingFilters=(s:string)=>{const n=N(s);return{type:/\b(receitas?|entradas?)\b/.test(n)?"income":/\b(despesas?|gastos?|saidas?)\b/.test(n)?"expense":null,context:/\b(empresa|dfl|empresarial)\b/.test(n)?"dfl":/\b(pessoal|personal)\b/.test(n)?"personal":null}};
 const amount=(s:string)=>{const m=s.match(/(?:r[$][ ]*)?([0-9]+(?:[.][0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:[.][0-9]{1,2})?)/i);if(!m)return null;const raw=m[1];const normalized=raw.includes(",")?raw.split(".").join("").replace(",","."):raw;const x=Number(normalized);return Number.isFinite(x)&&x>0?x:null};
-const typeOf=(s:string)=>/\b(recebi|recebido|receita|entrada|registrar receita|registrar uma receita|entrou|ganhei|vendi|venda|salario|faturei|pix recebido)\b/.test(N(s))?"income":/\b(gastei|paguei|comprei|despesa|registrar despesa|registrar uma despesa|gasto|saiu|debito|debitei|pago)\b/.test(N(s))?"expense":null;
+const typeOf=(s:string)=>/\b(recebi|recebido|receita|entrada|registrar receita|registrar uma receita|entrou|ganhei|vendi|venda|vendas|salario|faturei|pix recebido)\b/.test(N(s))?"income":/\b(gastei|paguei|comprei|despesa|registrar despesa|registrar uma despesa|gasto|saiu|debito|debitei|pago)\b/.test(N(s))?"expense":null;
 const explicitCategory=(s:string)=>{const m=s.match(/(?:categoria|categorizar(?:\s+como)?|coloca(?:r)?\s+(?:na|em)\s+categoria)\s*[:=-]?\s*["']?([^,;\n]+?)["']?(?=\s+(?:no|na|pela|pelo|conta|cartao|cartão|empresa|pessoal|hoje|ontem|amanha|amanhã|todo|toda|mensal|semanal|quinzenal)\b|$)/i);return m?.[1]?.trim()||null};
 const explicitContext=(s:string)=>{const n=N(s);if(/\b(empresa|empresarial|dfl|da familia)\b/.test(n))return"dfl";if(/\b(pessoal|personal)\b/.test(n))return"personal";return null};
 const explicitAccount=(s:string)=>{const strong=s.match(/(?:pela|pelo|conta)\s+(?:conta\s+)?["\']?([^,;\n]+?)["\']?(?=\s+(?:categoria|empresa|pessoal|hoje|ontem|amanha|amanhã|todo|toda|mensal|semanal|quinzenal)\b|$)/i);if(strong?.[1])return strong[1].trim();const trailing=s.match(/\bem\s+["\']?([^,;\n]+?)["\']?(?=\s+(?:empresa|pessoal|hoje|ontem|amanha|amanhã|categoria)\b|$)/i);return trailing?.[1]?.trim()||null};
@@ -48,7 +115,7 @@ const transfer=(s:string)=>/\b(transfere|transferir|transferi|transferencia)\b/.
 const naturalDate=(s:string)=>{const n=N(s),d=new Date(),fmt=(x:Date)=>new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(x);if(/\banteontem\b/.test(n)){d.setDate(d.getDate()-2);return fmt(d)}if(/\bontem\b/.test(n)){d.setDate(d.getDate()-1);return fmt(d)}if(/\bamanha\b/.test(n)){d.setDate(d.getDate()+1);return fmt(d)}return day()};
 const explicitDate=(s:string)=>{const m=s.match(/\b(0?[1-9]|[12]\d|3[01])[\/-](0?[1-9]|1[0-2])(?:[\/-](\d{2}|\d{4}))?\b/);if(!m)return null;const yy=m[3]?Number(m[3].length===2?"20"+m[3]:m[3]):Number(day().slice(0,4)),mm=Number(m[2]),dd=Number(m[1]),x=new Date(Date.UTC(yy,mm-1,dd,12));if(x.getUTCFullYear()!==yy||x.getUTCMonth()!==mm-1||x.getUTCDate()!==dd)return null;return `${yy}-${String(mm).padStart(2,"0")}-${String(dd).padStart(2,"0")}`};
 const brDate=(v:string|null|undefined)=>{if(!v)return "";const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);return m?`${m[3]}/${m[2]}/${m[1]}`:String(v)};
-const cleanDescription=(s:string,ty:string,acc:string|null,ctx:string|null,cat:string|null)=>{let x=s.trim();x=x.replace(/\b(?:0?[1-9]|[12]\d|3[01])[\/-](?:0?[1-9]|1[0-2])(?:[\/-](?:\d{2}|\d{4}))?\b/g," ");x=x.replace(/(?:r\$\s*)?\d+(?:[.]\d{3})*(?:,\d{1,2})?/gi," ");x=x.replace(/\b(recebi|recebido|entrou|ganhei|faturei|vendi|venda|gastei|paguei|comprei|despesa|gasto|saiu|debito|debitei|pago)\b/gi," ");x=x.replace(/\b(hoje|ontem|anteontem|amanha|amanhã)\b/gi," ");if(acc){const q=acc.replace(/[.*+?^$()|[\]{}\\]/g,"\\$&");x=x.replace(new RegExp("\\b(?:pela|pelo|conta|em)\\s+(?:conta\\s+)?"+q+"\\b","i")," ")}if(ctx)x=x.replace(/\b(empresa|empresarial|dfl|da familia|pessoal|personal)\b/gi," ");if(cat){const q=cat.replace(/[.*+?^$()|[\]{}\\]/g,"\\$&");x=x.replace(new RegExp("\\b(?:categoria|categorizar(?:\\s+como)?|na categoria|em categoria)\\s*[:=-]?\\s*"+q+"\\b","i")," ")}x=x.replace(/\s+/g," ").trim().replace(/^[,;:\- ]+|[,;:\- ]+$/g,"");x=x.replace(/^(?:de|do|da|em|no|na|para|pra|pela|pelo)\s+/i,"").trim();x=x.replace(/\s+(?:pela|pelo|na conta|no cartão|no cartao|na conta)\s+.+$/i,"").trim();if(cat){const parts=x.split(/\s+/);if(parts.length>1&&N(parts[0])===N(cat))x=parts.slice(1).join(" ")}if(!x)return ty==="income"?"Receita":"Despesa";return x.charAt(0).toUpperCase()+x.slice(1)};
+const cleanDescription=(s:string,ty:string,acc:string|null,ctx:string|null,cat:string|null)=>{let x=s.trim();x=x.replace(/\b(?:0?[1-9]|[12]\d|3[01])[\/-](?:0?[1-9]|1[0-2])(?:[\/-](?:\d{2}|\d{4}))?\b/g," ");x=x.replace(/(?:r\$\s*)?\d+(?:[.]\d{3})*(?:,\d{1,2})?/gi," ");x=x.replace(/\b(recebi|recebido|entrou|ganhei|faturei|vendi|venda|gastei|paguei|comprei|despesa|gasto|saiu|debito|debitei|pago)\b/gi," ");x=x.replace(/\b(hoje|ontem|anteontem|amanha|amanhã)\b/gi," ");if(acc){const q=acc.replace(/[.*+?^$()|[\]{}\\]/g,"\\$&");x=x.replace(new RegExp("\\b(?:pela|pelo|conta|em)\\s+(?:conta\\s+)?"+q+"\\b","i")," ")}if(ctx)x=x.replace(/\b(empresa|empresarial|dfl|da familia|pessoal|personal)\b/gi," ");if(cat){const q=cat.replace(/[.*+?^$()|[\]{}\\]/g,"\\$&");x=x.replace(new RegExp("\\b(?:categoria|categorizar(?:\\s+como)?|na categoria|em categoria)\\s*[:=-]?\\s*"+q+"\\b","i")," ")}x=x.replace(/\s+/g," ").trim().replace(/^[,;:\- ]+|[,;:\- ]+$/g,"");x=x.replace(/^(?:de|do|da|em|no|na|para|pra|pela|pelo)\s+/i,"").trim();x=x.replace(/\s+(?:pela|pelo|na conta|no cartão|no cartao|na conta)\s+.+$/i,"").trim();if(cat){const parts=x.split(/\s+/);if(parts.length>1&&N(parts[0])===N(cat))x=parts.slice(1).join(" ")}x=x.replace(/[{}\[\]]/g," ").replace(/\s+/g," ").trim().replace(/\s+\b(?:na|no|em|conta)\b\s*$/i,"").trim();if(!x)return ty==="income"?"Receita":"Despesa";return x.charAt(0).toUpperCase()+x.slice(1)};
 const merchantKey=(s:string)=>N(s).replace(/r?\$?\s*\d+[\d.,]*/g," ").replace(/\b(recebi|recebido|entrou|ganhei|vendi|venda|faturei|paguei|gastei|comprei|despesa|gasto|categoria|conta|empresa|pessoal|hoje|ontem|anteontem|amanha|em|na|no|de|do|da|pela|pelo)\b/g," ").replace(/\s+/g," ").trim().split(" ").filter(x=>x.length>2).slice(0,3).join(" ");
 const allAccs=async(u:string)=>{const r=await db.from("accounts").select("id,name,balance,context").eq("user_id",u).eq("is_archived",false).order("name");return r.data||[]};
 async function learnCategory(u:string,description:string,categoryId:string|null){const key=merchantKey(description);if(!key||!categoryId)return;const q=await db.from("categorization_rules").select("id").eq("user_id",u).eq("match_text",key).maybeSingle();if(q.data)await db.from("categorization_rules").update({category_id:categoryId,confidence:1,last_used_at:new Date().toISOString()}).eq("id",q.data.id);else await db.from("categorization_rules").insert({user_id:u,match_text:key,category_id:categoryId,confidence:1,last_used_at:new Date().toISOString()})}
@@ -343,21 +410,66 @@ if(s?.step==="TX_AMOUNT"){
   text=synthetic;
   n=N(text);
 }
-if(s?.step==="TX_CONFIRM"){const choice=conversationalChoice(text,"TX_CONFIRM");
-  if(choice==="correct"){await save(phone,"TX_CORRECT",sd);const o=await reply("✏️ *O que quer corrigir?*\n\nPode escrever, por exemplo:\n• *valor 35,90*\n• *foi ontem*\n• *descrição Dipel*\n\nPara conta/categoria/contexto, mande *refazer* e eu reconstruo o lançamento.");await done(aid,"extracted",o);return new Response("OK")}
-  if(choice!=="confirm"){const o=await reply("Pode dizer *sim* para confirmar, *corrigir* para ajustar ou *cancelar* para sair. Também aceito *1* e *2*.");await done(aid,"extracted",o);return new Response("OK")}
+if(s?.step==="TX_CONFIRM"){
+  const choice=conversationalChoice(text,"TX_CONFIRM");
+  if(choice==="correct"){
+    const focus=txCorrectionFocus(text);
+    await save(phone,"TX_CORRECT",{...sd,correction_focus:focus});
+    const o=await reply(focus==="description"
+      ?"✏️ *Qual é o nome/descrição correto do lançamento?*\nPode responder só com o nome, por exemplo *Vendas do dia 17*."
+      :focus==="amount"?"✏️ *Qual o valor correto?* Ex.: *300,00*."
+      :focus==="account"?"✏️ *Qual conta correta?* Responda pelo nome da conta cadastrada."
+      :focus==="category"?"✏️ *Qual categoria correta?* Responda pelo nome."
+      :focus==="date"?"✏️ *Qual data correta?* Ex.: *17/10* ou *ontem*."
+      :focus==="context"?"✏️ *É Empresa ou Pessoal?*"
+      :"✏️ *O que quer corrigir?*\nPode mandar um ou vários campos:\n• *nome Vendas do dia 17*\n• *valor 300,00*\n• *conta Carteira*\n• *data 17/10*\n• *categoria Vendas*\n\nTambém entendo vários campos, cada um em uma linha. Para recomeçar: *refazer*.");
+    await done(aid,"extracted",o,{action:"transaction.correction.request",focus});return new Response("OK")
+  }
+  if(choice!=="confirm"){
+    const o=await reply("Pode dizer *sim* para confirmar, *corrigir nome*, *corrigir valor*, *corrigir conta* ou apenas *2* para editar. Também pode *cancelar*.");
+    await done(aid,"extracted",o);return new Response("OK")
+  }
   await afterConfirm(u,phone,sd,reply,aid);return new Response("OK")
 }
 if(s?.step==="TX_CORRECT"){
-  if(n==="refazer"){await clear(phone);const o=await reply("✏️ Certo. Mande o lançamento novamente do seu jeito.");await done(aid,"extracted",o);return new Response("OK")}
-  const vm=n.match(/^(?:valor|muda(?: o)? valor(?: para)?|corrige(?: o)? valor(?: para)?)\s+(?:r\$\s*)?([\d.,]+)/);
-  const dm=n.match(/^(?:descricao|descrição|muda(?: a)? descricao(?: para)?|muda(?: a)? descrição(?: para)?)\s+(.+)/i);
-  let next={...sd},changed="";
-  if(vm){const v=amount(vm[1]);if(v){next.amount=v;changed=`valor para *${money(v)}*`}}
-  else if(/\b(ontem|anteontem|hoje|amanha|amanhã)\b/.test(n)){next.date=naturalDate(n);changed=`data para *${next.date}*`}
-  else if(dm){next.description=dm[1].trim().slice(0,160);changed=`descrição para *${next.description}*`}
-  if(!changed){const o=await reply("Não consegui aplicar essa correção com segurança. Use *valor 35,90*, *foi ontem*, *descrição ...* ou *refazer*.");await done(aid,"extracted",o);return new Response("OK")}
-  await save(phone,"TX_CONFIRM",next);const o=await reply(`✏️ Corrigi ${changed}.\n\n${next.type==="income"?"🟢 Receita":"🔴 Despesa"} · *${money(next.amount)}*\n📝 ${next.description||"Sem descrição"}\n📅 ${next.date}\n\n*1* — Confirmar\n*2* — Corrigir novamente`);await done(aid,"extracted",o,{action:"transaction.correct"});return new Response("OK")
+  if(n==="refazer"){
+    await clear(phone);const o=await reply("✏️ Certo. Mande o lançamento novamente do seu jeito.");
+    await done(aid,"extracted",o);return new Response("OK")
+  }
+  const parsed=txCorrectionPatch(text,sd.correction_focus||null);
+  if(parsed.errors.length||!parsed.fields.length){
+    const reason=parsed.errors[0]||"Nenhum campo identificado.";
+    const o=await reply(`⚠️ ${reason}\n\nTente *nome Vendas*, *valor 300,00*, *conta Carteira*, *data 17/10* ou envie um campo por linha. Nada foi alterado.`);
+    await done(aid,"extracted",o,{action:"transaction.correction.retry"});return new Response("OK")
+  }
+  const patch=parsed.patch,next={...sd};delete next.correction_focus;
+  if(patch.accountName){
+    const all=await allAccs(u.user_id),name=N(patch.accountName);
+    const exact=all.filter((a:any)=>N(String(a.name||""))===name);
+    const candidates=exact.length?exact:all.filter((a:any)=>N(String(a.name||"")).includes(name));
+    const narrowed=patch.context?candidates.filter((a:any)=>a.context===patch.context):candidates;
+    if(narrowed.length!==1){
+      const suffix=narrowed.length>1?"Encontrei mais de uma conta com esse nome; informe também *contexto Empresa* ou *contexto Pessoal*.":"Não encontrei essa conta cadastrada no contexto informado.";
+      const o=await reply(`⚠️ ${suffix}\nNenhuma alteração foi aplicada. Pode enviar os campos novamente.`);
+      await done(aid,"extracted",o,{action:"transaction.correction.account_ambiguous"});return new Response("OK")
+    }
+    next.account=narrowed[0];next.account_explicit=narrowed[0].name;next.account_ambiguous=false;
+    next.context=narrowed[0].context;
+  }else if(patch.context){
+    next.context=patch.context;
+    if(next.account?.context!==patch.context){next.account=null;next.account_explicit=null;next.account_ambiguous=false;}
+  }
+  if(patch.amount!==undefined)next.amount=patch.amount;
+  if(patch.description!==undefined){next.description=patch.description;
+    if(!patch.categoryName&&!next.category_explicit)next.category_hint=hint(next.description,next.type);
+  }
+  if(patch.date!==undefined)next.date=patch.date;
+  if(patch.categoryName!==undefined){next.category_explicit=patch.categoryName;next.category_hint=null;}
+  await save(phone,"TX_CONFIRM",next);
+  const labels:Record<string,string>={amount:"valor",description:"nome/descrição",accountName:"conta",categoryName:"categoria",context:"contexto",date:"data"};
+  const changes=parsed.fields.map((f:string)=>labels[f]||f).join(", ");
+  const o=await reply(`✏️ *Rascunho atualizado:* ${changes}.\n\n${next.type==="income"?"🟢 Receita":"🔴 Despesa"} · *${money(next.amount)}*\n📝 *${next.description||"Sem descrição"}*\n📅 *${brDate(next.date)}*\n🏦 ${next.account?.name||next.account_explicit||"Conta a confirmar"}\n🏷️ ${next.category_explicit||next.category_hint||"Categoria a confirmar"}\n${next.context==="dfl"?"🏢 Empresa":next.context==="personal"?"👤 Pessoal":"Contexto a confirmar"}\n\n*1* — Confirmar\n*2* — Corrigir novamente\n\n_Nenhum lançamento foi registrado nesta correção._`);
+  await done(aid,"extracted",o,{action:"transaction.correct",fields:parsed.fields});return new Response("OK")
 }
 if(s?.step==="TX_SETTLE"){const choice=conversationalChoice(text,"TX_SETTLE");if(choice==="pending"){await clear(phone);const o=await reply("🕒 *Mantida como pendente.*\nVocê pode revisar e efetivar depois no DFL Finance.");await done(aid,"extracted",o);return new Response("OK")}if(choice!=="settle"){const o=await reply("Diga *efetivar* para atualizar o saldo ou *deixa pendente* para decidir depois. Também aceito *1* e *2*.");await done(aid,"extracted",o);return new Response("OK")}const rr=await db.rpc("bot_settle_transaction",{p_user_id:u.user_id,p_transaction_id:sd.transaction_id});if(rr.error)throw rr.error;await clear(phone);const meta=rr.data||{},desc=meta.description||"Movimentação",receipt=meta.receipt_attached===true;const o=await reply(`✅ *${sd.type==="income"?"Receita":"Despesa"} efetivada!*\n\n💰 *${money(sd.amount)}*\n📝 ${desc}\n🏦 *${sd.account?.name||"Conta"}*${sd.category?.name?`\n🏷️ *${sd.category.name}*`:""}${receipt?"\n📎 Comprovante anexado":""}\n📊 Novo saldo: *${money(meta.new_balance)}*`);await done(aid,"extracted",o,{settled:true,transaction_id:sd.transaction_id,receipt_attached:receipt,new_balance:meta.new_balance});return new Response("OK")}
 if(s?.step==="TX_CTX"){const c=conversationalContext(text);if(!c){const o=await reply("Pode responder *Empresa* ou *Pessoal*.");await done(aid,"extracted",o);return new Response("OK")}await afterConfirm(u,phone,{...sd,context:c},reply,aid);return new Response("OK")}
@@ -424,5 +536,5 @@ if(/^(criar |nova |cadastrar )?categoria\b/.test(n)){const nm=text.replace(/^(cr
 if(transfer(text)){const v=amount(text);if(!v){const o=await reply("💸 Entendi a transferência, mas faltou o valor.");await done(aid,"extracted",o);return new Response("OK")}const temp={kind:"transfer",amount:v,description:text,date:naturalDate(text),provider_message_id:k,audit_message_id:aid},aa=await allAccs(u.user_id),pair=N(text).match(/(?:da|do|de)\s+(.+?)\s+para\s+(.+?)(?=\s+(?:hoje|ontem|anteontem|amanha)\b|$)/),from=pair?matchNamed(aa,pair[1]):null,to=pair?matchNamed(aa,pair[2]):null;if(from&&to&&from.id!==to.id){const fromAfter=Number(from.balance||0)-v,toAfter=Number(to.balance||0)+v;await save(phone,"TR_CONFIRM",{...temp,from,to,fromAfter,toAfter});const warning=fromAfter<0?"\n⚠️ *A origem ficará negativa.*":"";const o=await reply(`🔄 *Confirmar transferência*\n\n*${from.name}* → *${to.name}*\nValor: *${money(v)}*\n\nOrigem: ${money(from.balance)} → *${money(fromAfter)}*\nDestino: ${money(to.balance)} → *${money(toAfter)}*${warning}\n\n*1* — Confirmar\n*2* — Cancelar`);await done(aid,"extracted",o,temp);return new Response("OK")}await save(phone,"TR_CTX",temp);const o=await reply(`💸 *Transferência de ${money(v)}*\n\nNão consegui identificar as duas contas com segurança.\n\nQual o contexto?\n*1* - 🏢 Empresa\n*2* - 👤 Pessoal`);await done(aid,"extracted",o,temp);return new Response("OK")}
 const si=subInfo(text),v=amount(text),ec=explicitCategory(text);if(si&&v){const o=await reply("🔁 Entendi que é uma assinatura. Você pode dizer, por exemplo: *assinatura Netflix por 44,90 dia 10* — ou mandar *criar assinatura*.");await done(aid,"extracted",o,{kind:"subscription",action:"subscription.clarify"});return new Response("OK")}
 const ty=typeOf(text);if(ty&&!v){await save(phone,"TX_AMOUNT",{kind:"transaction_start",type:ty,provider_message_id:k,audit_message_id:aid});const o=await reply(voiceAmount(ty,k));await done(aid,"extracted",o,{action:"clarify.amount",type:ty});return new Response("OK")}if(!ty){const o=await reply("🤔 Não consegui identificar com segurança o que você quer fazer.\n\nTente escrever naturalmente o lançamento ou digite *ajuda* para ver tudo que eu consigo fazer.");await done(aid,"extracted",o,{action:"fallback.help"});return new Response("OK")}
-const rc=recur(text),ih=hint(text,ty),knownAccounts=await allAccs(u.user_id),accountHit=accountsInText(knownAccounts,text),matchedAccount=accountHit.account,ctx=explicitContext(text)||matchedAccount?.context||null,ea=matchedAccount?.name||explicitAccount(text);let desc=cleanDescription(text,ty,ea,ctx,ec).slice(0,120);if(matchedAccount)desc=stripMatchedAccount(desc,matchedAccount).slice(0,120);const semanticCat=ec||ih;if(semanticCat){const dp=desc.split(/\s+/),cn=N(semanticCat);if(dp.length>1&&N(dp[0])===cn)desc=dp.slice(1).join(" ");else if(dp.length>1&&N(dp[dp.length-1])===cn)desc=dp.slice(0,-1).join(" ")}if(!desc.trim())desc=ty==="income"?"Receita":"Despesa";const temp={kind:"transaction",type:ty,amount:v,description:desc,category_explicit:ec,category_hint:ih,account_explicit:ea,account:matchedAccount,account_ambiguous:accountHit.ambiguous===true,account_matches:accountHit.ambiguous?accountHit.matches:undefined,context:ctx,date:naturalDate(text),provider_message_id:k,audit_message_id:aid,recurrence:rc};await save(phone,"TX_CONFIRM",temp);const lines=[voiceConfirm(k),``,`${ty==="income"?"🟢 Receita":"🔴 Despesa"} de *${money(v)}*`,`📝 ${temp.description}`,ec?`🏷️ Categoria informada: *${ec}*`:ih?`🏷️ Sugestão: *${ih}*`:"🏷️ Categoria: vou confirmar depois",matchedAccount?`🏦 *${matchedAccount.name}*`:ea?`🏦 Conta informada: *${ea}*`:"🏦 Conta: vou confirmar se necessário",matchedAccount?`${matchedAccount.context==="dfl"?"🏢 Empresa":"👤 Pessoal"} · identificado pela conta`:ctx?`${ctx==="dfl"?"🏢 Empresa":"👤 Pessoal"}`:"🏢 Contexto: vou perguntar se necessário",rc?`🔁 Recorrência ${rc.label}`:"",`📅 ${temp.date}`,``,voiceConfirmQuestion(k),`*1* - ✅ Confirmar`,`*2* - ✏️ Corrigir`].filter(Boolean).join("\n");const o=await reply(lines);await done(aid,"extracted",o,temp);return new Response("OK")
+const rc=recur(text),ih=hint(text,ty),knownAccounts=await allAccs(u.user_id),accountHit=accountsInText(knownAccounts,text),matchedAccount=accountHit.account,ctx=explicitContext(text)||matchedAccount?.context||null,ea=matchedAccount?.name||explicitAccount(text);let desc=cleanDescription(text,ty,ea,ctx,ec).slice(0,120);if(matchedAccount)desc=stripMatchedAccount(desc,matchedAccount).slice(0,120);const semanticCat=ec;if(semanticCat){const dp=desc.split(/\s+/),cn=N(semanticCat);if(dp.length>1&&N(dp[0])===cn)desc=dp.slice(1).join(" ");else if(dp.length>1&&N(dp[dp.length-1])===cn)desc=dp.slice(0,-1).join(" ")}if(!desc.trim())desc=ty==="income"?"Receita":"Despesa";const temp={kind:"transaction",type:ty,amount:v,description:desc,category_explicit:ec,category_hint:ih,account_explicit:ea,account:matchedAccount,account_ambiguous:accountHit.ambiguous===true,account_matches:accountHit.ambiguous?accountHit.matches:undefined,context:ctx,date:explicitDate(text)||naturalDate(text),provider_message_id:k,audit_message_id:aid,recurrence:rc};await save(phone,"TX_CONFIRM",temp);const lines=[voiceConfirm(k),``,`${ty==="income"?"🟢 Receita":"🔴 Despesa"} de *${money(v)}*`,`📝 ${temp.description}`,ec?`🏷️ Categoria informada: *${ec}*`:ih?`🏷️ Sugestão: *${ih}*`:"🏷️ Categoria: vou confirmar depois",matchedAccount?`🏦 *${matchedAccount.name}*`:ea?`🏦 Conta informada: *${ea}*`:"🏦 Conta: vou confirmar se necessário",matchedAccount?`${matchedAccount.context==="dfl"?"🏢 Empresa":"👤 Pessoal"} · identificado pela conta`:ctx?`${ctx==="dfl"?"🏢 Empresa":"👤 Pessoal"}`:"🏢 Contexto: vou perguntar se necessário",rc?`🔁 Recorrência ${rc.label}`:"",`📅 ${temp.date}`,``,voiceConfirmQuestion(k),`*1* - ✅ Confirmar`,`*2* - ✏️ Corrigir`].filter(Boolean).join("\n");const o=await reply(lines);await done(aid,"extracted",o,temp);return new Response("OK")
 }catch(e){console.error("[DFL_FINANCE_V153_WEBHOOK_ERROR]",e);return new Response("OK")}});
