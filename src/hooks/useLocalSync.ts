@@ -70,7 +70,10 @@ export function useLocalSync() {
       await processSyncQueue(
         true,
         true
-      )
+      ).catch((): SyncCycleResult => ({
+        ...EMPTY_RESULT,
+        pendingCount: getSyncSnapshot().pendingCount,
+      }))
 
     if (!result.success && !result.pullSuccess && result.pendingCount === 0) {
       showToast(
@@ -84,10 +87,13 @@ export function useLocalSync() {
     } else if (
       result.pendingCount > 0
     ) {
-      const diagnostics =
-        await getSyncQueueDiagnostics(
-          user.id
-        )
+      let diagnostics: Awaited<ReturnType<typeof getSyncQueueDiagnostics>>
+      try {
+        diagnostics = await getSyncQueueDiagnostics(user.id)
+      } catch {
+        showToast('Não foi possível verificar a fila local. Nenhuma limpeza foi solicitada; tente novamente.', 'error')
+        return { ...result, success: false }
+      }
 
       const failed =
         diagnostics.filter(
@@ -143,7 +149,10 @@ export function useLocalSync() {
       await processSyncQueue(
         true,
         true
-      )
+      ).catch((): SyncCycleResult => ({
+        ...EMPTY_RESULT,
+        pendingCount: getSyncSnapshot().pendingCount,
+      }))
 
     if (result.success) {
       showToast('Ressincronização completa concluída.', 'success')

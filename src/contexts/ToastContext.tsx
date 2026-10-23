@@ -1,7 +1,7 @@
 // src/contexts/ToastContext.tsx
 'use client'
 
-import React, { createContext, useCallback, useContext, useState } from 'react'
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import Toast from '@/components/Toast'
 
 type ToastType = 'success' | 'error' | 'info' | 'warning'
@@ -41,8 +41,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setToasts((current) => current.filter((toast) => toast.id !== id))
   }, [])
 
+  const contextValue = useMemo(() => ({ showToast }), [showToast])
+
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={contextValue}>
       {children}
       <div className="pointer-events-none fixed left-1/2 top-[max(1rem,env(safe-area-inset-top))] z-[200000] flex w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 flex-col gap-2">
         {toasts.map((toast) => (

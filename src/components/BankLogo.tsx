@@ -1,3 +1,6 @@
+'use client'
+
+import { useState } from 'react'
 import { Landmark } from 'lucide-react'
 import {
   getBankIcon,
@@ -25,6 +28,7 @@ export default function BankLogo({
   color,
   size = 'md',
 }: BankLogoProps) {
+  const [failedAsset, setFailedAsset] = useState<string | null>(null)
   const canonicalName =
     canonicalizeBankName(name)
 
@@ -43,7 +47,7 @@ export default function BankLogo({
    * Os quatro assets abaixo são arquivos SVG
    * locais reais do projeto.
    */
-  if (asset) {
+  if (asset && failedAsset !== asset.src) {
     return (
       <div
         className={`${BANK_LOGO_SIZE_CLASSES[size]} ${BANK_LOGO_CONTAINER_CLASS} bg-white`}
@@ -62,6 +66,8 @@ export default function BankLogo({
             transformOrigin: 'center center',
           }}
           draggable={false}
+          decoding="async"
+          onError={() => setFailedAsset(asset.src)}
         />
       </div>
     )
