@@ -1,7 +1,7 @@
 // src/components/BottomNav.tsx
 'use client'
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import {
   Home,
@@ -13,6 +13,7 @@ import {
   CreditCard,
   Plus,
   Search,
+  Zap,
 } from 'lucide-react'
 import TransferModal from './TransferModal'
 import FAB from './FAB'
@@ -34,6 +35,14 @@ export default function BottomNav() {
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false)
   const [quickActionOpen, setQuickActionOpen] = useState(false)
   const [quickActionType, setQuickActionType] = useState<'expense' | 'income'>('expense')
+
+  const isHome = pathname === '/home'
+
+  // V167: atalhos e FAB não persistem entre telas.
+  useEffect(() => {
+    setIsOpen(false)
+    setQuickActionOpen(false)
+  }, [pathname])
 
   // Visibilidade vem do hook compartilhado.
   // É a mesma fonte de verdade usada pelo AppLayout
@@ -91,26 +100,30 @@ export default function BottomNav() {
     setIsOpen((v) => !v)
   }
 
-  const isTransactionsRoot = pathname === '/transactions'
-
   const handleCentralAction = () => {
-    // Contrato V81:
-    // Transações possui entrada rica; Ação rápida é um atalho global.
-    // A página de Transações também possui seu CTA próprio, portanto
-    // o fluxo completo não depende exclusivamente deste botão central.
-    if (isTransactionsRoot) {
-      vibrate([15])
-      setIsOpen(false)
-      setQuickActionOpen(false)
-      navigateSafely('/transactions/new')
-      return
-    }
-
-    toggleMenu()
+    // V167: o botão + principal SEMPRE abre o cadastro completo.
+    // Lançamento rápido é opcional e acessível apenas nos atalhos da Home.
+    vibrate([15])
+    setIsOpen(false)
+    setQuickActionOpen(false)
+    navigateSafely('/transactions/new')
   }
 
   return (
     <>
+      {isHome && (
+        <>
+          {!isOpen && !quickActionOpen && (
+            <button
+              type="button"
+              onClick={toggleMenu}
+              aria-label="Abrir atalhos da Home"
+              className="fixed bottom-[calc(92px+var(--safe-area-bottom))] left-4 z-[60] flex h-10 items-center gap-1.5 rounded-full border border-teal-600/20 bg-slate-900 px-3.5 text-[11px] font-semibold text-white shadow-lg shadow-slate-900/20 transition active:scale-95 dark:border-slate-600 dark:bg-slate-700"
+            >
+              <Zap size={15} aria-hidden="true" />
+              Atalhos
+            </button>
+          )}
       <div
         className={`fixed inset-0 z-[50] bg-black/60 dark:bg-[#121414]/80 backdrop-blur-sm transition-opacity duration-300 ${
           isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
@@ -128,14 +141,13 @@ export default function BottomNav() {
         aria-hidden={!isOpen}
       >
         <div className="app-nav-quick-panel">
-          <div className="grid grid-cols-5 gap-1">
+          <div className="grid grid-cols-3 gap-1">
             <button
               type="button"
               onClick={() => {
                 vibrate([10])
                 setIsOpen(false)
-                setQuickActionType('income')
-                setQuickActionOpen(true)
+                navigateSafely('/transactions/new?type=income')
               }}
               className="app-nav-quick-action"
               aria-label="Nova receita"
@@ -153,8 +165,7 @@ export default function BottomNav() {
               onClick={() => {
                 vibrate([10])
                 setIsOpen(false)
-                setQuickActionType('expense')
-                setQuickActionOpen(true)
+                navigateSafely('/transactions/new?type=expense')
               }}
               className="app-nav-quick-action"
               aria-label="Nova despesa"
@@ -198,9 +209,29 @@ export default function BottomNav() {
                 Transferir
               </span>
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                vibrate([10])
+                setIsOpen(false)
+                setQuickActionType('expense')
+                setQuickActionOpen(true)
+              }}
+              className="app-nav-quick-action"
+              aria-label="Lançamento rápido opcional"
+            >
+              <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-slate-100 dark:bg-slate-700">
+                <Zap size={21} className="text-slate-600 dark:text-slate-300" />
+              </div>
+              <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300">
+                Rápido
+              </span>
+            </button>
           </div>
         </div>
       </div>
+        </>
+      )}
 
       <nav
         className="app-nav-shell"
@@ -322,24 +353,9 @@ export default function BottomNav() {
               <button
                 type="button"
                 onClick={handleCentralAction}
-                className={`relative flex h-[56px] w-[56px] items-center justify-center rounded-full text-white shadow-[0_7px_22px_rgba(15,118,110,0.30)] transition-all duration-200 active:scale-[0.92] ${
-                  !isTransactionsRoot &&
-                  isOpen
-                    ? 'rotate-45 bg-slate-700 dark:bg-slate-600'
-                    : 'rotate-0 bg-teal-700 dark:bg-teal-600'
-                }`}
-                aria-label={
-                  isTransactionsRoot
-                    ? 'Nova transação'
-                    : isOpen
-                      ? 'Fechar menu'
-                      : 'Abrir menu'
-                }
-                aria-expanded={
-                  isTransactionsRoot
-                    ? false
-                    : isOpen
-                }
+                className="relative flex h-[56px] w-[56px] items-center justify-center rounded-full bg-teal-700 text-white shadow-[0_7px_22px_rgba(15,118,110,0.30)] transition-all duration-200 active:scale-[0.92] dark:bg-teal-600"
+                aria-label="Nova transação completa"
+                aria-expanded={false}
               >
                 <Plus size={27} />
               </button>
@@ -348,11 +364,13 @@ export default function BottomNav() {
         </div>
       </nav>
 
-      <FAB
-        isOpen={quickActionOpen}
-        initialType={quickActionType}
-        onClose={() => setQuickActionOpen(false)}
-      />
+      {isHome && (
+        <FAB
+          isOpen={quickActionOpen}
+          initialType={quickActionType}
+          onClose={() => setQuickActionOpen(false)}
+        />
+      )}
 
       <TransferModal
         isOpen={isTransferModalOpen}
