@@ -4,7 +4,10 @@ import { supabase } from '@/lib/supabase'
 export type ThemePreference = 'light' | 'dark'
 export type AppMode = 'full' | 'personal_only'
 
+export type DefaultAccountMap = { dfl: string; personal: string }
+
 export interface UserPreferences {
+  default_accounts: DefaultAccountMap
   ai_enabled: boolean
   auto_categorize: boolean
   weekly_report: boolean
@@ -13,6 +16,8 @@ export interface UserPreferences {
   notification_hour: number
   notification_lead_days: number[]
   notification_overdue: boolean
+  notification_grouping: boolean
+  notification_action_open: boolean
   notification_categories: {
     invoices: boolean
     transactions: boolean
@@ -49,6 +54,7 @@ export interface UserSettingsSaveResult {
 }
 
 export const DEFAULT_USER_PREFERENCES: UserPreferences = {
+  default_accounts: { dfl: '', personal: '' },
   ai_enabled: true,
   auto_categorize: true,
   weekly_report: true,
@@ -57,6 +63,8 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   notification_hour: 9,
   notification_lead_days: [3, 1, 0],
   notification_overdue: true,
+  notification_grouping: true,
+  notification_action_open: true,
   notification_categories: {
     invoices: true,
     transactions: true,
@@ -122,6 +130,10 @@ function normalizePreferences(value: unknown): UserPreferences {
   return {
     ...DEFAULT_USER_PREFERENCES,
     ...raw,
+    default_accounts: {
+      dfl: typeof (raw.default_accounts as Record<string, unknown> | undefined)?.dfl === 'string' ? String((raw.default_accounts as Record<string, unknown>).dfl) : '',
+      personal: typeof (raw.default_accounts as Record<string, unknown> | undefined)?.personal === 'string' ? String((raw.default_accounts as Record<string, unknown>).personal) : '',
+    },
     ai_enabled:
       typeof raw.ai_enabled === 'boolean'
         ? raw.ai_enabled
@@ -157,6 +169,8 @@ function normalizePreferences(value: unknown): UserPreferences {
       typeof raw.notification_overdue === 'boolean'
         ? raw.notification_overdue
         : DEFAULT_USER_PREFERENCES.notification_overdue,
+    notification_grouping: typeof raw.notification_grouping === 'boolean' ? raw.notification_grouping : true,
+    notification_action_open: typeof raw.notification_action_open === 'boolean' ? raw.notification_action_open : true,
     notification_categories: {
       ...DEFAULT_USER_PREFERENCES.notification_categories,
       ...(raw.notification_categories &&

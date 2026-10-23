@@ -4,8 +4,9 @@
 import { localISODate } from '@/lib/civilDate'
 
 import SelectField from '@/components/SelectField'
+import DatePickerSheet, { formatDateLabel } from '@/components/DatePickerSheet'
 
-import { useEffect, useState, Suspense, useMemo } from 'react'
+import { useEffect, useState, Suspense, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft, Save, RefreshCw, HandCoins, Calendar, Landmark, DollarSign,
@@ -76,6 +77,7 @@ function NewLoanContent() {
 
   const [initialized, setInitialized] = useState(!editId)
   const [saving, setSaving] = useState(false)
+  const saveLockRef = useRef(false)
 
   const [description, setDescription] = useState("")
   const [amountNum, setAmountNum] = useState(0)
@@ -83,6 +85,7 @@ function NewLoanContent() {
   const [lender, setLender] = useState("")
   const [date, setDate] = useState(localISODate())
   const [dueDate, setDueDate] = useState("")
+  const [openDateField, setOpenDateField] = useState<"date" | "due" | null>(null)
   const [interestRate, setInterestRate] = useState("")
   const [notes, setNotes] = useState("")
   const [status, setStatus] = useState("active")
@@ -155,6 +158,7 @@ function NewLoanContent() {
   }
 
   const handleSave = async () => {
+    if (saveLockRef.current) return
     if (!description.trim()) {
       errorHaptic()
       showToast("Informe uma descrição para identificar o empréstimo.", "warning")
@@ -166,6 +170,7 @@ function NewLoanContent() {
       return
     }
 
+    saveLockRef.current = true
     setSaving(true)
     try {
       const payload = {
@@ -207,6 +212,7 @@ function NewLoanContent() {
       errorHaptic()
       showToast(`Não foi possível salvar o empréstimo: ${err.message}`, "error")
     } finally {
+      saveLockRef.current = false
       setSaving(false)
     }
   }
@@ -327,21 +333,20 @@ function NewLoanContent() {
 
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Data">
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="app-field text-[13px]"
-              />
+              <button type="button" onClick={() => setOpenDateField("date")} className="app-field flex min-h-12 items-center justify-between gap-1 text-left text-[13px] font-semibold focus-visible:ring-2 focus-visible:ring-teal-500/40" aria-label="Escolher data do empréstimo">
+                <span className="min-w-0 truncate">{formatDateLabel(date)}</span>
+                <CalendarDays size={16} className="shrink-0 text-gray-400" />
+              </button>
             </FormField>
 
             <FormField label="Vencimento">
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="app-field text-[13px]"
-              />
+              <div className="flex min-w-0 items-center gap-1">
+                <button type="button" onClick={() => setOpenDateField("due")} className="app-field flex min-h-12 min-w-0 flex-1 items-center justify-between gap-1 text-left text-[13px] font-semibold focus-visible:ring-2 focus-visible:ring-teal-500/40" aria-label="Escolher vencimento do empréstimo">
+                  <span className="min-w-0 truncate">{dueDate ? formatDateLabel(dueDate) : 'Sem data'}</span>
+                  <CalendarDays size={16} className="shrink-0 text-gray-400" />
+                </button>
+                {dueDate && <button type="button" onClick={() => setDueDate('')} className="rounded-full p-2 text-gray-400 focus-visible:ring-2 focus-visible:ring-teal-500/40" aria-label="Limpar vencimento"><X size={16} /></button>}
+              </div>
             </FormField>
 
             <FormField label="Juros % a.m." helper="Deixe em branco se for sem juros.">
@@ -419,6 +424,8 @@ function NewLoanContent() {
           {editId ? "Atualizar Empréstimo" : "Criar Empréstimo"}
         </button>
       </div>
+      <DatePickerSheet isOpen={openDateField === "date"} value={date} onChange={setDate} onClose={() => setOpenDateField(null)} title="Data do empréstimo" />
+      <DatePickerSheet isOpen={openDateField === "due"} value={dueDate} onChange={setDueDate} onClose={() => setOpenDateField(null)} title="Vencimento do empréstimo" />
     </div>
   )
 }

@@ -416,6 +416,9 @@ function AssistantChatContent() {
     history: Message[],
     currentSessionId: string
   ) => {
+    // Pintura do streaming limitada a aproximadamente 12 fps.
+    // Nenhum fragmento é descartado da resposta persistida pelo servidor.
+    let lastStreamPaint = 0
     setIsSending(true)
     setFailedRequest(false)
     setRequestError(null)
@@ -433,7 +436,11 @@ function AssistantChatContent() {
           ),
           financialContext,
           (fullText) => {
-            setStreamingContent(fullText)
+            const now = Date.now()
+            if (now - lastStreamPaint >= 85 || fullText.length <= 50) {
+              lastStreamPaint = now
+              setStreamingContent(fullText)
+            }
           },
           (stage) => {
             setProcessingStage(stage)

@@ -23,6 +23,9 @@ interface NativeNotificationSchema {
   channelId?: string
   smallIcon?: string
   iconColor?: string
+  group?: string
+  groupSummary?: boolean
+  actionTypeId?: string
   extra?: Record<string, unknown>
 }
 
@@ -44,6 +47,10 @@ interface LocalNotificationsPlugin {
     vibration?: boolean
     lights?: boolean
     lightColor?: string
+  }): Promise<void>
+
+  registerActionTypes(options: {
+    types: Array<{ id: string; actions: Array<{ id: string; title: string; foreground?: boolean }> }>
   }): Promise<void>
 
   schedule(options: {
@@ -86,6 +93,8 @@ export interface NativeNotificationPreferences {
   notification_hour?: number
   notification_lead_days?: number[]
   notification_overdue?: boolean
+  notification_grouping?: boolean
+  notification_action_open?: boolean
   notification_categories?: Partial<NotificationCategoryPreferences>
 }
 
@@ -600,6 +609,19 @@ export async function syncNativeFinancialReminders(
 
   await ensureChannel()
 
+  // A única ação explícita é ABRIR. Nunca paga, recebe ou concilia no background.
+  let canShowOpenAction = false
+  if (preferences.notification_action_open !== false) {
+    try {
+      await LocalNotifications.registerActionTypes({
+        types: [{ id: 'dfl-finance-open', actions: [{ id: 'open', title: 'Abrir', foreground: true }] }],
+      })
+      canShowOpenAction = true
+    } catch (error) {
+      console.warn('[NativeNotifications] Ação Abrir indisponível; toque padrão mantido.', error)
+    }
+  }
+
   const candidates = await collectReminderCandidates(
     userId,
     preferences
@@ -663,6 +685,7 @@ export async function syncNativeFinancialReminders(
       channelId: DFL_NOTIFICATION_CHANNEL_ID,
       smallIcon: DFL_NOTIFICATION_SMALL_ICON,
       iconColor: '#0f766e',
+      actionTypeId: canShowOpenAction ? 'dfl-finance-open' : undefined,
       extra: {
         managedBy: 'dfl-finance',
         key,
@@ -714,6 +737,42 @@ export async function syncNativeFinancialReminders(
         occurrenceTitle(candidate.title, days),
         at
       )
+    }
+  }
+
+  // No Android, várias pendências do mesmo horário formam um único grupo.
+  // Um resumo separado é criado apenas quando há pelo menos dois itens.
+  if (preferences.notification_grouping !== false) {
+    const grouped = new Map<string, NativeNotificationSchema[]>()
+    for (const notification of notifications) {
+      const when = notification.schedule?.at
+      if (!when) continue
+      const key = `dfl-finance-${toISODate(when)}-${when.getHours()}`
+      const current = grouped.get(key) || []
+      current.push(notification)
+      grouped.set(key, current)
+    }
+    for (const [key, groupItems] of Array.from(grouped.entries())) {
+      if (groupItems.length < 2 || notifications.length >= 60) continue
+      for (const item of groupItems) item.group = key
+      const when = groupItems[0].schedule?.at
+      if (!when) continue
+      let summaryId = stableNotificationId(`group:${key}`)
+      while (usedIds.has(summaryId)) summaryId = summaryId >= 1_999_999_999 ? 1 : summaryId + 1
+      usedIds.add(summaryId)
+      notifications.push({
+        id: summaryId,
+        title: `${groupItems.length} lembretes financeiros`,
+        body: 'Toque para revisar as pendências no Finance.',
+        schedule: { at: new Date(when.getTime() + 1000), allowWhileIdle: true },
+        group: key,
+        groupSummary: true,
+        channelId: DFL_NOTIFICATION_CHANNEL_ID,
+        smallIcon: DFL_NOTIFICATION_SMALL_ICON,
+        iconColor: '#0f766e',
+        actionTypeId: canShowOpenAction ? 'dfl-finance-open' : undefined,
+        extra: { managedBy: 'dfl-finance', key: `summary:${key}`, route: '/notifications' },
+      })
     }
   }
 

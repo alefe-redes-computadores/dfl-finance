@@ -6,6 +6,8 @@ import { applyAccountCashDelta } from '@/lib/cashOperations'
 import { useState, useCallback, useEffect, Suspense, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { useUserSettings } from '@/hooks/useUserSettings'
+import { validDefaultAccountId } from '@/lib/defaultAccount'
 import {
   ChevronLeft, Tag, Wallet, ChevronDown, ChevronUp, Check,
   Camera, Plus, ArrowRightLeft, Building, HandCoins, X,
@@ -83,6 +85,8 @@ function NewTransactionContent() {
 
   const { context: globalContext, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : globalContext
+  const { settings } = useUserSettings()
+  const manualAccountRef = useRef(false)
   const [type, setType] = useState<TxType>((searchParams.get('type') as TxType) || 'expense')
   const [amountNum, setAmountNum] = useState(0)
   const [isPaid, setIsPaid] = useState(true)
@@ -125,9 +129,11 @@ function NewTransactionContent() {
     }
 
     if (s.credit_card_id && type === 'expense') {
+      manualAccountRef.current = true
       setCreditCardId(s.credit_card_id)
       setAccountId('')
     } else if (s.account_id) {
+      manualAccountRef.current = true
       setAccountId(s.account_id)
       setCreditCardId('')
     }
@@ -240,12 +246,19 @@ function NewTransactionContent() {
   )
 
   useEffect(() => {
+    manualAccountRef.current = false
     setAccountId('')
     setCategoryId('')
     setCreditCardId('')
     setContactId('')
     setSelectedTags([])
   }, [effectiveContext])
+
+  useEffect(() => {
+    if (manualAccountRef.current || creditCardId || accountId || type === 'transfer') return
+    const suggested = validDefaultAccountId(settings, effectiveContext, accounts || [])
+    if (suggested) setAccountId(suggested)
+  }, [settings, effectiveContext, accounts, accountId, creditCardId, type])
 
   useEffect(() => {
     if (!requestedContactId) return
@@ -640,6 +653,7 @@ function NewTransactionContent() {
       const res = await safeAdd('accounts', payload)
       if (!res.success) throw new Error(res.error)
 
+      manualAccountRef.current = true
       setAccountId(id)
       setShowCreateAccModal(false)
       setNewAccName('')
@@ -1693,7 +1707,7 @@ function NewTransactionContent() {
               {(accounts || []).map(acc => {
                 const isActive = acc.id === accountId
                 return (
-                  <button key={acc.id} onClick={() => { vibrate([5]); setAccountId(acc.id); setShowAccModal(false) }} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-transform active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50' : 'bg-gray-50 dark:bg-slate-700/40 border border-transparent hover:bg-gray-100 dark:hover:bg-slate-700'}`}>
+                  <button key={acc.id} onClick={() => { vibrate([5]); manualAccountRef.current = true; setAccountId(acc.id); setShowAccModal(false) }} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-transform active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50' : 'bg-gray-50 dark:bg-slate-700/40 border border-transparent hover:bg-gray-100 dark:hover:bg-slate-700'}`}>
                     <BankLogo color={acc.color} name={acc.bank || acc.name} size="md" />
                     <span className={`flex-1 text-left text-[15px] font-bold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
@@ -1719,7 +1733,7 @@ function NewTransactionContent() {
               {(creditCards || []).map(card => {
                 const isActive = card.id === creditCardId
                 return (
-                  <button key={card.id} onClick={() => { vibrate([5]); setCreditCardId(card.id); setAccountId(''); setShowCardModal(false) }} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-transform active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50' : 'bg-gray-50 dark:bg-slate-700/40 border border-transparent hover:bg-gray-100 dark:hover:bg-slate-700'}`}>
+                  <button key={card.id} onClick={() => { vibrate([5]); manualAccountRef.current = true; setCreditCardId(card.id); setAccountId(''); setShowCardModal(false) }} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-transform active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50' : 'bg-gray-50 dark:bg-slate-700/40 border border-transparent hover:bg-gray-100 dark:hover:bg-slate-700'}`}>
                     <div className="w-12 h-12 rounded-[16px] flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: card.color || '#f97316' }}><CreditCard size={22} /></div>
                     <span className={`flex-1 text-left text-[15px] font-bold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{card.name}</span>
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}

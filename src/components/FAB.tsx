@@ -9,6 +9,8 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { useUserSettings } from '@/hooks/useUserSettings'
+import { validDefaultAccountId } from '@/lib/defaultAccount'
 import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
 import { useAccountsList } from '@/hooks/useAccountsList' // ✅ HOOK ESPECÍFICO
@@ -38,6 +40,8 @@ export default function FAB({
 }: Props) {
   const { user } = useAuth()
   const { effectiveContext, appMode } = useContext_()
+  const { settings } = useUserSettings()
+  const manualAccountRef = useRef(false)
   const { showToast } = useToast()
   const { vibrate, success, error: hapticError } = useHapticFeedback()
 
@@ -66,6 +70,7 @@ export default function FAB({
       setQuickContext(effectiveContext)
       setAmount(0)
       setCategory('')
+      manualAccountRef.current = false
       setAccountId('')
       operationId.current = crypto.randomUUID()
       setShowAccModal(false)
@@ -77,6 +82,12 @@ export default function FAB({
       .filter((a: any) => !a.is_archived && (a?.context ?? 'dfl') === quickContext)
       .sort((a: any, b: any) => String(a?.name ?? '').localeCompare(String(b?.name ?? '')))
   }, [allAccounts, quickContext])
+
+  useEffect(() => {
+    if (!showModal || manualAccountRef.current || accountId) return
+    const suggested = validDefaultAccountId(settings, quickContext, accounts)
+    if (suggested) setAccountId(suggested)
+  }, [showModal, settings, quickContext, accounts, accountId])
 
   const selectedAccount = useMemo(() => {
     return accounts.find((a: any) => a?.id === accountId) ?? null
@@ -98,6 +109,7 @@ export default function FAB({
   const resetForm = useCallback(() => {
     setAmount(0)
     setCategory('')
+    manualAccountRef.current = false
     setAccountId('')
     setSaving(false)
     operationId.current = null
@@ -233,6 +245,7 @@ export default function FAB({
                     key={c}
                     type="button"
                     onClick={() => {
+                      manualAccountRef.current = false
                       setQuickContext(c)
                       setAccountId('')
                       vibrate([10])
@@ -415,6 +428,7 @@ export default function FAB({
                     key={acc.id}
                     type="button"
                     onClick={() => {
+                      manualAccountRef.current = true
                       setAccountId(acc.id)
                       setShowAccModal(false)
                       vibrate([10])

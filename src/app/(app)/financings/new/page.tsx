@@ -3,6 +3,7 @@
 
 import { localISODate } from '@/lib/civilDate'
 import SelectField from '@/components/SelectField'
+import DatePickerSheet, { formatDateLabel } from '@/components/DatePickerSheet'
 
 import { Suspense, useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -68,6 +69,7 @@ function NewFinancingContent() {
   const { data: financing, loading, notFound } = useFinancingById(editId)
 
   const [saving, setSaving] = useState(false)
+  const saveLockRef = useRef(false)
   const [refreshing, setRefreshing] = useState(false)
   const [initialized, setInitialized] = useState(!editId)
   const touchStartY = useRef(0)
@@ -81,6 +83,7 @@ function NewFinancingContent() {
   const [asset, setAsset] = useState("")
   const [startDate, setStartDate] = useState(today())
   const [firstDueDate, setFirstDueDate] = useState("")
+  const [openDateField, setOpenDateField] = useState<"start" | "due" | null>(null)
   const [notes, setNotes] = useState("")
   const [status, setStatus] = useState<FinancingStatus>("active")
 
@@ -141,7 +144,7 @@ function NewFinancingContent() {
   )
 
   const handleSave = useCallback(async () => {
-    if (saving) return
+    if (saving || saveLockRef.current) return
 
     const trimmedDescription = description.trim()
     const trimmedBank = bank.trim()
@@ -181,6 +184,7 @@ function NewFinancingContent() {
       return
     }
 
+    saveLockRef.current = true
     setSaving(true)
 
     try {
@@ -253,6 +257,7 @@ function NewFinancingContent() {
       errorHaptic()
       showToast(`Não foi possível salvar o financiamento: ${err.message}`, "error")
     } finally {
+      saveLockRef.current = false
       setSaving(false)
     }
   }, [
@@ -616,12 +621,10 @@ function NewFinancingContent() {
               <label className={labelClass}>Data de início</label>
               <div className="flex items-center gap-2">
                 <CalendarDays size={16} className="shrink-0 text-gray-400" />
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="app-input text-[13px] font-semibold"
-                />
+                <button type="button" onClick={() => setOpenDateField("start")} className="app-input flex min-h-10 min-w-0 flex-1 items-center justify-between gap-1 text-left text-[13px] font-semibold focus-visible:ring-2 focus-visible:ring-teal-500/40" aria-label="Escolher data de início">
+                  <span className="min-w-0 truncate">{formatDateLabel(startDate)}</span>
+                  <CalendarDays size={16} className="shrink-0 text-gray-400" />
+                </button>
               </div>
             </div>
 
@@ -629,12 +632,10 @@ function NewFinancingContent() {
               <label className={labelClass}>Primeiro vencimento</label>
               <div className="flex items-center gap-2">
                 <CalendarDays size={16} className="shrink-0 text-gray-400" />
-                <input
-                  type="date"
-                  value={firstDueDate}
-                  onChange={(e) => setFirstDueDate(e.target.value)}
-                  className="app-input text-[13px] font-semibold"
-                />
+                <button type="button" onClick={() => setOpenDateField("due")} className="app-input flex min-h-10 min-w-0 flex-1 items-center justify-between gap-1 text-left text-[13px] font-semibold focus-visible:ring-2 focus-visible:ring-teal-500/40" aria-label="Escolher primeiro vencimento">
+                  <span className="min-w-0 truncate">{firstDueDate ? formatDateLabel(firstDueDate) : 'Selecionar data'}</span>
+                  <CalendarDays size={16} className="shrink-0 text-gray-400" />
+                </button>
               </div>
             </div>
           </div>
@@ -675,6 +676,8 @@ function NewFinancingContent() {
           {editId ? "Atualizar Financiamento" : "Criar Financiamento"}
         </button>
       </div>
+      <DatePickerSheet isOpen={openDateField === "start"} value={startDate} onChange={setStartDate} onClose={() => setOpenDateField(null)} title="Início do financiamento" />
+      <DatePickerSheet isOpen={openDateField === "due"} value={firstDueDate} onChange={setFirstDueDate} onClose={() => setOpenDateField(null)} title="Primeiro vencimento" />
     </div>
   )
 }

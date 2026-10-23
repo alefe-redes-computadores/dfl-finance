@@ -30,6 +30,8 @@ import { useAccountsList } from '@/hooks/useAccountsList'
 import { useLocalSync } from '@/hooks/useLocalSync'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { useUserSettings } from '@/hooks/useUserSettings'
+import { validDefaultAccountId } from '@/lib/defaultAccount'
 import {
   getAccountInstitutionLabel,
   getAccountTypeLabel,
@@ -43,6 +45,7 @@ function AccountsContent() {
   const { success, error: errorHaptic, vibrate } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
+  const { settings } = useUserSettings()
   const { appMode, effectiveContext } = useContext_()
   const { safeDelete } = useSafeDb()
 
@@ -123,6 +126,8 @@ function AccountsContent() {
       // Preferência local é opcional.
     }
   }
+
+  const defaultAccountId = validDefaultAccountId(settings, effectiveContext, accounts || [])
 
   const activeAccounts = useMemo(
     () => (accounts || []).filter((account: any) => !isAccountArchived(account)),
@@ -445,6 +450,7 @@ function AccountsContent() {
                     <div className="min-w-0 flex-1">
                       <div className="flex min-w-0 items-center gap-2">
                         <p className="truncate text-[14px] font-semibold text-gray-950 dark:text-gray-100">{account.name}</p>
+                        {String(account.id) === defaultAccountId && <span className="shrink-0 rounded-full bg-teal-50 px-2 py-0.5 text-[9.5px] font-semibold text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">Padrão</span>}
                         <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[9.5px] font-semibold text-gray-500 dark:bg-slate-800 dark:text-gray-400">{getAccountTypeLabel(account.type)}</span>
                       </div>
                     </div>

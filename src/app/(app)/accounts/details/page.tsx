@@ -19,6 +19,8 @@ import { useAccountTransactions } from "@/hooks/useAccountTransactions"
 import { useSafeDb } from "@/hooks/useSafeDb"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { useUserSettings } from '@/hooks/useUserSettings'
+import { defaultAccountPatch } from '@/lib/defaultAccount'
 import Skeleton from '@/components/Skeleton'
 import BankLogo from '@/components/BankLogo'
 import MoneyInput from '@/components/MoneyInput'
@@ -65,6 +67,8 @@ function AccountDetailContent() {
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
   const { safeDelete } = useSafeDb()
+  const { settings, updateSettings } = useUserSettings()
+  const [savingDefault, setSavingDefault] = useState(false)
 
   //  SÓ CHAMA O HOOK SE TIVER ID VÁLIDO
   const { data: accountData, loading, notFound } = useAccountById(accountId)
@@ -391,6 +395,20 @@ function AccountDetailContent() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" disabled={savingDefault || !settings || isAccountArchived(account)} onClick={async () => {
+                    if (savingDefault) return
+                    setSavingDefault(true)
+                    const accountContext = account.context === 'personal' ? 'personal' : 'dfl'
+                    const currentId = settings?.preferences.default_accounts?.[accountContext] || ''
+                    const nextId = currentId === account.id ? '' : account.id
+                    try {
+                      const response = await updateSettings({ preferences: defaultAccountPatch(settings, accountContext, nextId) })
+                      showToast(response.synced ? (nextId ? 'Conta definida como padrão.' : 'Conta padrão removida.') : 'Preferência salva no aparelho; sincronização pendente.', response.synced ? 'success' : 'info')
+                    } catch { showToast('Não foi possível atualizar a conta padrão.', 'error') }
+                    finally { setSavingDefault(false) }
+                  }} className="rounded-full border border-teal-400/20 bg-teal-500/20 px-3 py-1.5 text-[11px] font-semibold text-teal-100 transition active:scale-[0.98] disabled:opacity-50">
+                    {settings?.preferences.default_accounts?.[account.context === 'personal' ? 'personal' : 'dfl'] === account.id ? '★ Conta padrão · Remover' : '☆ Definir como padrão'}
+                  </button>
                   <span className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300">
                     {getAccountTypeLabel(account.type)}
                   </span>

@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState, useMemo } from 'react'
+import { Suspense, useEffect, useState, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -18,6 +18,8 @@ import {
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import MoneyInput from '@/components/MoneyInput'
+import BankLogo from '@/components/BankLogo'
+import DatePickerSheet, { formatDateLabel } from '@/components/DatePickerSheet'
 import {
   getDebtPaidAmountFromTransactions,
   getDebtStatusFromAmounts,
@@ -42,6 +44,7 @@ function NewDebtContent() {
   const { debt: localDebt, loading: debtLoading, notFound: debtNotFound } = useDebtById(editId)
 
   const [saving, setSaving] = useState(false)
+  const saveLockRef = useRef(false)
   const [initialized, setInitialized] = useState(false)
 
   const [personName, setPersonName] = useState('')
@@ -57,6 +60,7 @@ function NewDebtContent() {
   const [showCatModal, setShowCatModal] = useState(false)
   const [showAccModal, setShowAccModal] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
+  const [showDueDatePicker, setShowDueDatePicker] = useState(false)
 
   const { data: localCategories } = useLocalData({
     table: 'categories' as any,
@@ -102,12 +106,14 @@ function NewDebtContent() {
   }, [editId, debtLoading, debtNotFound, localDebt, context, router, showToast, initialized])
 
   const handleSave = async () => {
+    if (saveLockRef.current) return
     if (!user?.id || !personName.trim() || amountNum <= 0 || isNaN(amountNum)) {
       errorHaptic()
       showToast('Preencha nome e um valor válido.', 'warning')
       return
     }
 
+    saveLockRef.current = true
     setSaving(true)
 
     const now = new Date().toISOString()
@@ -181,7 +187,7 @@ function NewDebtContent() {
         })
 
         success()
-        showToast('Empréstimo atualizado!', 'success')
+        showToast('Valor a receber atualizado!', 'success')
       } else {
         const id = crypto.randomUUID()
 
@@ -233,7 +239,7 @@ function NewDebtContent() {
           }
         })
         success()
-        showToast('Empréstimo registrado!', 'success')
+        showToast('Valor a receber registrado!', 'success')
       }
 
       router.replace('/debts')
@@ -241,6 +247,7 @@ function NewDebtContent() {
       errorHaptic()
       showToast(`Erro: ${err?.message || 'Erro desconhecido ao salvar'}`, 'error')
     } finally {
+      saveLockRef.current = false
       setSaving(false)
     }
   }
@@ -261,7 +268,7 @@ function NewDebtContent() {
         </div>
         <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Registro não encontrado</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
-          O empréstimo que você está tentando editar pode ter sido excluído ou você não tem permissão.
+          O valor a receber que você está tentando editar pode ter sido excluído ou você não tem permissão.
         </p>
         <button
           onClick={() => router.replace('/debts')}
@@ -284,6 +291,7 @@ function NewDebtContent() {
   const selectedCat = (localCategories || []).find((c: any) => c.id === categoryId) as any
   const selectedAcc = (localAccounts || []).find((a: any) => a.id === accountId) as any
   const IconComp = getDynamicIcon(icon)
+  const SelectedCategoryIcon = getDynamicIcon(selectedCat?.icon)
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
@@ -301,7 +309,7 @@ function NewDebtContent() {
               <ChevronLeft size={24} />
             </button>
             <h2 className="text-[17px] font-bold tracking-tight text-gray-800 dark:text-gray-100">
-              {editId ? 'Editar Empréstimo' : 'Novo Empréstimo'}
+              {editId ? 'Editar valor a receber' : 'Novo valor a receber'}
             </h2>
             <div className="h-10 w-10" />
           </div>
@@ -378,12 +386,20 @@ function NewDebtContent() {
               </label>
               <div className="flex items-center gap-2">
                 <Calendar size={16} className="shrink-0 text-gray-400 dark:text-gray-500" />
-                <input
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                  className="app-input text-[13px] font-semibold"
-                />
+                <button
+                  type="button"
+                  onClick={() => { vibrate([5]); setShowDueDatePicker(true) }}
+                  className="app-input flex min-h-10 flex-1 items-center justify-between gap-2 text-left text-[13px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
+                  aria-label="Escolher vencimento"
+                >
+                  <span className="min-w-0 truncate">{dueDate ? formatDateLabel(dueDate) : 'Selecionar data'}</span>
+                  <Calendar size={16} className="shrink-0 text-gray-400" />
+                </button>
+                {dueDate && (
+                  <button type="button" onClick={() => setDueDate('')} aria-label="Remover vencimento" className="rounded-full p-2 text-gray-400 focus-visible:ring-2 focus-visible:ring-teal-500/40">
+                    <X size={15} />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -414,8 +430,11 @@ function NewDebtContent() {
               className="flex w-full items-center justify-between rounded-[28px] border border-gray-100 bg-white p-4 shadow-sm transition-transform active:scale-[0.98] dark:border-slate-700/50 dark:bg-slate-800"
             >
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-gray-50 text-gray-400 shadow-sm dark:bg-slate-700/50 dark:text-gray-500">
-                  <Tag size={18} />
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-gray-50 text-gray-400 shadow-sm dark:bg-slate-700/50 dark:text-gray-500"
+                  style={selectedCat ? { backgroundColor: `${selectedCat.color || '#14b8a6'}20`, color: selectedCat.color || '#14b8a6' } : undefined}
+                >
+                  {selectedCat ? <SelectedCategoryIcon size={20} /> : <Tag size={18} />}
                 </div>
                 <div className="text-left">
                   <span className="block text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500">
@@ -438,12 +457,14 @@ function NewDebtContent() {
               className="flex w-full items-center justify-between rounded-[28px] border border-gray-100 bg-white p-4 shadow-sm transition-transform active:scale-[0.98] dark:border-slate-700/50 dark:bg-slate-800"
             >
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-gray-50 text-gray-400 shadow-sm dark:bg-slate-700/50 dark:text-gray-500">
-                  <Wallet size={18} />
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-gray-50 text-gray-400 shadow-sm dark:bg-slate-700/50 dark:text-gray-500">
+                  {selectedAcc
+                    ? <BankLogo name={selectedAcc.bank || selectedAcc.name} color={selectedAcc.color} size="md" />
+                    : <Wallet size={18} />}
                 </div>
                 <div className="text-left">
                   <span className="block text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500">
-                    Conta para depósito
+                    Conta de recebimento previsto
                   </span>
                   <span className="text-[15px] font-semibold text-gray-800 dark:text-gray-200">
                     {selectedAcc ? selectedAcc.name : 'Nenhuma'}
@@ -454,11 +475,15 @@ function NewDebtContent() {
             </button>
           </div>
 
+          <p className="px-1 text-[11px] font-medium leading-5 text-gray-500 dark:text-gray-400">
+            Apenas registrar este valor não movimenta o saldo da conta. O dinheiro entra no caixa quando o recebimento for efetivado.
+          </p>
+
           <section className="app-form-section">
             <label className="app-form-label">
               Cor
             </label>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-3 pt-2">
               {COLORS.map((c) => (
                 <button
                   key={c}
@@ -467,14 +492,17 @@ function NewDebtContent() {
                     vibrate([5])
                     setColor(c)
                   }}
-                  className={`h-9 w-9 rounded-full transition-transform active:scale-90 ${
+                  className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-shadow active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${
                     color === c
-                      ? 'scale-125 ring-2 ring-gray-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-800'
-                      : 'hover:scale-110'
+                      ? 'ring-2 ring-teal-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-800'
+                      : 'ring-1 ring-black/5 dark:ring-white/10'
                   }`}
                   style={{ backgroundColor: c }}
                   aria-label={`Selecionar cor ${c}`}
-                />
+                  aria-pressed={color === c}
+                >
+                  {color === c && <Check size={16} className="text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.7)]" />}
+                </button>
               ))}
             </div>
           </section>
@@ -518,7 +546,7 @@ function NewDebtContent() {
             className="mx-auto flex w-full max-w-md items-center justify-center gap-2 rounded-[18px] bg-teal-600 py-4 text-[16px] font-bold text-white shadow-lg shadow-teal-600/25 transition-transform active:scale-[0.98] disabled:opacity-50"
           >
             {saving ? <Loader2 size={22} className="animate-spin" /> : <Check size={22} />}
-            {editId ? 'Atualizar Empréstimo' : 'Criar Empréstimo'}
+            {editId ? 'Atualizar valor a receber' : 'Registrar valor a receber'}
           </button>
         </div>
       </div>
@@ -652,12 +680,7 @@ function NewDebtContent() {
                         : 'border-transparent bg-gray-50 dark:bg-slate-700/40 hover:bg-gray-100 dark:hover:bg-slate-700'
                     }`}
                   >
-                    <div
-                      className="flex h-12 w-12 items-center justify-center rounded-[16px] text-[14px] font-black text-white shadow-sm"
-                      style={{ backgroundColor: acc.color || '#14b8a6' }}
-                    >
-                      {acc.name.substring(0, 2).toUpperCase()}
-                    </div>
+                    <BankLogo name={acc.bank || acc.name} color={acc.color} size="lg" />
                     <span className={`flex-1 text-left text-[15px] font-bold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>
                       {acc.name}
                     </span>
@@ -670,6 +693,14 @@ function NewDebtContent() {
         </div>,
         document.body
       )}
+
+      <DatePickerSheet
+        isOpen={showDueDatePicker}
+        value={dueDate}
+        onChange={setDueDate}
+        onClose={() => setShowDueDatePicker(false)}
+        title="Vencimento do valor a receber"
+      />
 
       <IconPicker
         isOpen={showIconModal}

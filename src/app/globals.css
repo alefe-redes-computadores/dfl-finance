@@ -408,7 +408,11 @@ html[data-native-shell='true'] body {
  * somar env(safe-area-inset-top) individualmente.
  */
 html[data-native-shell='true'] .app-page {
-  padding-top: var(--safe-area-top);
+  /* V165: o scroll começa DEPOIS da status bar; cabeçalhos sticky não a invadem. */
+  padding-top: 0;
+  margin-top: max(var(--safe-area-top), 24px);
+  height: calc(100dvh - max(var(--safe-area-top), 24px));
+  min-height: 0;
 }
 
 /*

@@ -351,6 +351,17 @@ export default function NotificationPreferencesCard() {
             </div>
           </button>
 
+          <p className="mb-2 mt-5 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Apresentação no Android</p>
+          {([
+            { key: 'notification_grouping' as const, title: 'Agrupar avisos do mesmo horário', desc: 'Reúne cobranças e vencimentos que chegam juntos.' },
+            { key: 'notification_action_open' as const, title: 'Botão Abrir nos avisos', desc: 'Abre o item correspondente; não movimenta dinheiro.' },
+          ]).map(({ key, title, desc }) => (
+            <button key={key} type="button" role="switch" aria-checked={prefs[key] !== false} disabled={saving} onClick={() => save({ [key]: prefs[key] === false })} className="mb-2 flex w-full items-center justify-between gap-3 rounded-[18px] bg-gray-50 p-3 text-left disabled:opacity-60 dark:bg-slate-900/40">
+              <span className="min-w-0"><span className="block text-[12px] font-bold text-gray-700 dark:text-gray-200">{title}</span><span className="mt-1 block text-[10px] text-gray-400">{desc}</span></span>
+              <span aria-hidden="true" className={`relative h-6 w-11 shrink-0 rounded-full ${prefs[key] !== false ? 'bg-teal-500' : 'bg-gray-300 dark:bg-slate-600'}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white ${prefs[key] !== false ? 'right-1' : 'left-1'}`} /></span>
+            </button>
+          ))}
+
           <p className="mb-2 mt-5 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">
             O que avisar
           </p>

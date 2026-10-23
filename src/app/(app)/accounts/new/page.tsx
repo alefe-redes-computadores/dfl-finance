@@ -25,6 +25,8 @@ import { useContext_ } from "@/components/ContextToggle"
 import { useAuth } from "@/lib/hooks/useAuth"
 import Skeleton from "@/components/Skeleton"
 import { useSafeDb } from "@/hooks/useSafeDb"
+import { useUserSettings } from '@/hooks/useUserSettings'
+import { defaultAccountPatch } from '@/lib/defaultAccount'
 import BankLogo from '@/components/BankLogo'
 import BankPickerField from '@/components/BankPickerField'
 import SelectField from '@/components/SelectField'
@@ -87,6 +89,8 @@ function AccountFormContent() {
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { safeAdd, safeUpdate } = useSafeDb()
+  const { settings, updateSettings } = useUserSettings()
+  const [makeDefault, setMakeDefault] = useState(false)
 
   const [saving, setSaving] = useState(false)
   const [initialized, setInitialized] = useState(!editId)
@@ -229,6 +233,13 @@ function AccountFormContent() {
         if (!result.success) {
           throw new Error(result.error || "Erro ao atualizar conta")
         }
+        if (makeDefault) {
+          try {
+            const accountContext = accountData?.context === 'personal' ? 'personal' : 'dfl'
+            const preference = await updateSettings({ preferences: defaultAccountPatch(settings, accountContext, editId) })
+            if (!preference.synced) showToast('Conta padrão salva no aparelho, aguardando sincronização.', 'info')
+          } catch { showToast('Conta atualizada; não foi possível alterar a preferência padrão.', 'warning') }
+        }
         success()
         showToast("Conta atualizada com sucesso!", "success")
       } else {
@@ -247,6 +258,12 @@ function AccountFormContent() {
         const result = await safeAdd("accounts", newPayload)
         if (!result.success) {
           throw new Error(result.error || "Erro ao criar conta")
+        }
+        if (makeDefault) {
+          try {
+            const preference = await updateSettings({ preferences: defaultAccountPatch(settings, effectiveContext, newId) })
+            if (!preference.synced) showToast('Conta padrão salva no aparelho, aguardando sincronização.', 'info')
+          } catch { showToast('Conta criada; não foi possível alterar a preferência padrão.', 'warning') }
         }
         success()
         showToast("Conta criada com sucesso!", "success")
@@ -428,6 +445,14 @@ function AccountFormContent() {
               ))}
             </div>
           </div>
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-[20px] border border-teal-500/15 bg-teal-50/60 p-4 dark:border-teal-500/15 dark:bg-teal-500/10">
+            <input type="checkbox" checked={makeDefault} onChange={(e) => setMakeDefault(e.target.checked)} className="mt-1 h-4 w-4 accent-teal-600" />
+            <span className="min-w-0">
+              <span className="block text-[13px] font-semibold text-gray-900 dark:text-gray-100">Definir como padrão neste contexto</span>
+              <span className="mt-1 block text-[11px] leading-4 text-gray-500 dark:text-gray-400">Usar esta conta como sugestão inicial nos próximos lançamentos. Você poderá trocar a conta sempre que quiser.</span>
+            </span>
+          </label>
 
           <div className="flex gap-3 pt-2">
             <button

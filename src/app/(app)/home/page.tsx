@@ -2400,6 +2400,26 @@ function HomeContent() {
         </div>
       </div>
 
+      {!isDataLoading && syncAttempted && isOnline && !isSyncing && !hasSyncFailure && accounts.length === 0 && localTransactions.length === 0 && (
+        <section aria-label="Primeiros passos no Finance" className="mb-4 rounded-[24px] border border-teal-500/20 bg-white p-4 shadow-sm dark:bg-slate-800/90">
+          <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-teal-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">
+            Primeiros passos
+          </div>
+          <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">Comece pelo saldo real</h2>
+          <p className="mt-1 text-[12px] leading-5 text-gray-500 dark:text-gray-400">
+            Cadastre uma conta e confira o saldo inicial antes de lançar movimentações. Receitas pendentes não devem aumentar seu caixa.
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => router.push('/accounts/new')} className="flex min-h-11 items-center justify-center gap-2 rounded-[14px] bg-teal-600 px-3 text-[12px] font-bold text-white transition active:scale-[0.98]">
+              <Wallet size={16} /> Cadastrar conta
+            </button>
+            <button type="button" onClick={() => router.push('/transactions/new')} className="flex min-h-11 items-center justify-center gap-2 rounded-[14px] border border-gray-200 bg-gray-50 px-3 text-[12px] font-bold text-gray-700 transition active:scale-[0.98] dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100">
+              <Plus size={16} /> Novo lançamento
+            </button>
+          </div>
+        </section>
+      )}
+
       {(() => {
         const order = [...enabledSections]
         const insightIndex = order.indexOf('intelligence')

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, Suspense } from 'react'
+import { useEffect, useMemo, useState, Suspense, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import { format } from 'date-fns'
@@ -22,6 +22,7 @@ import { useLocalData } from '@/hooks/useLocalData'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import MoneyInput from '@/components/MoneyInput'
+import DatePickerSheet, { formatDateLabel } from '@/components/DatePickerSheet'
 import Skeleton from '@/components/Skeleton'
 
 const COLORS = [
@@ -346,6 +347,7 @@ function NewGoalContent() {
 
   const [initialized, setInitialized] = useState(!editId)
   const [saving, setSaving] = useState(false)
+  const saveLockRef = useRef(false)
   const [categories, setCategories] = useState<any[]>([])
 
   const [name, setName] = useState('')
@@ -359,6 +361,7 @@ function NewGoalContent() {
   const [initialContributionFormatted, setInitialContributionFormatted] = useState('0,00')
   const [description, setDescription] = useState('')
   const [showCatModal, setShowCatModal] = useState(false)
+  const [showDeadlinePicker, setShowDeadlinePicker] = useState(false)
 
   const { data: localCategories } = useLocalData({
     table: 'categories' as any,
@@ -396,6 +399,7 @@ function NewGoalContent() {
     () => categories.find((c: any) => c.id === categoryId),
     [categories, categoryId]
   )
+  const SelectedCategoryIcon = getDynamicIcon(selectedCat?.icon)
 
   // SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
   if (editId && notFound && !loading) {
@@ -417,12 +421,14 @@ function NewGoalContent() {
   }
 
   const handleSave = async () => {
+    if (saveLockRef.current) return
     if (!user?.id || !name.trim() || targetAmountNum <= 0 || !deadline) {
       errorHaptic()
       showToast('Preencha nome, valor e data limite.', 'warning')
       return
     }
 
+    saveLockRef.current = true
     setSaving(true)
 
     const payload = {
@@ -497,6 +503,7 @@ function NewGoalContent() {
       errorHaptic()
       showToast(`Erro: ${err.message}`, 'error')
     } finally {
+      saveLockRef.current = false
       setSaving(false)
     }
   }
@@ -556,12 +563,11 @@ function NewGoalContent() {
               <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-gray-50 text-gray-400 dark:bg-slate-700/50 dark:text-gray-500">
                 <Calendar size={18} className="shrink-0" />
               </div>
-              <input
-                type="date"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                className="w-full bg-transparent text-[15px] font-bold text-gray-800 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 dark:text-gray-200"
-              />
+              <button type="button" onClick={() => { vibrate([5]); setShowDeadlinePicker(true) }} className="flex min-h-10 min-w-0 flex-1 items-center justify-between gap-2 bg-transparent text-left text-[15px] font-bold text-gray-800 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40 dark:text-gray-200" aria-label="Escolher data limite da meta">
+                <span className="min-w-0 truncate">{deadline ? formatDateLabel(deadline) : 'Sem data limite'}</span>
+                <Calendar size={17} className="shrink-0 text-gray-400" />
+              </button>
+              {deadline && <button type="button" onClick={() => setDeadline('')} aria-label="Remover data limite" className="rounded-full p-2 text-gray-400"><X size={16} /></button>}
             </div>
           </SectionCard>
 
@@ -574,8 +580,11 @@ function NewGoalContent() {
           >
             <div className="flex items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-gray-50 text-gray-400 shadow-sm dark:bg-slate-700/50 dark:text-gray-500">
-                  <Target size={18} />
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-gray-50 text-gray-400 shadow-sm dark:bg-slate-700/50 dark:text-gray-500"
+                  style={selectedCat ? {backgroundColor: `${selectedCat.color || '#14b8a6'}20`, color: selectedCat.color || '#14b8a6'} : undefined}
+                >
+                  {selectedCat ? <SelectedCategoryIcon size={20} /> : <Target size={18} />}
                 </div>
                 <div className="min-w-0">
                   <span className="block text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400 dark:text-gray-500">
@@ -596,7 +605,7 @@ function NewGoalContent() {
 
           <SectionCard className="p-4">
             <SectionLabel>Cor</SectionLabel>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-3 pt-2">
               {COLORS.map((c) => (
                 <button
                   key={c}
@@ -604,14 +613,17 @@ function NewGoalContent() {
                     vibrate([5])
                     setColor(c)
                   }}
-                  className={`h-10 w-10 rounded-full transition-all active:scale-90 ${
+                  className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-shadow active:opacity-80 focus-visible:ring-2 focus-visible:ring-teal-500 ${
                     color === c
-                      ? 'scale-110 ring-2 ring-gray-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-800'
-                      : 'hover:scale-105'
+                      ? 'ring-2 ring-teal-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-800'
+                      : 'ring-1 ring-black/5 dark:ring-white/10'
                   }`}
                   style={{ backgroundColor: c }}
                   aria-label={`Selecionar cor ${c}`}
-                />
+                  aria-pressed={color === c}
+                >
+                  {color === c && <Check size={16} className="text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.7)]" />}
+                </button>
               ))}
             </div>
           </SectionCard>
@@ -709,6 +721,7 @@ function NewGoalContent() {
         </button>
       </div>
 
+      <DatePickerSheet isOpen={showDeadlinePicker} value={deadline} onChange={setDeadline} onClose={() => setShowDeadlinePicker(false)} title="Data limite da meta" />
       <CategoryModal
         open={showCatModal}
         onClose={() => setShowCatModal(false)}

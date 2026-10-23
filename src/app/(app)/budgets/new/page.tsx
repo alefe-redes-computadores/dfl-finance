@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import * as Icons from 'lucide-react'
@@ -147,6 +147,7 @@ function NewBudgetContent() {
       : context
 
   const [saving, setSaving] = useState(false)
+  const saveLockRef = useRef(false)
   const [initialized, setInitialized] = useState(!editId)
 
   const [name, setName] = useState('')
@@ -193,6 +194,7 @@ function NewBudgetContent() {
   }, [editId, budgetData, initialized])
 
   const selectedCat = categories.find((c: any) => c.id === categoryId)
+  const SelectedBudgetCategoryIcon = getDynamicIcon(selectedCat?.icon)
   const IconComp = getDynamicIcon(icon)
 
   const previewPeriodLabel = useMemo(() => {
@@ -255,12 +257,14 @@ function NewBudgetContent() {
   }
 
   const handleSave = async () => {
+    if (saveLockRef.current) return
     if (!user?.id || !(name || '').trim() || amountNum <= 0) {
       showToast('Preencha nome e valor do orçamento.', 'warning')
       errorHaptic()
       return
     }
 
+    saveLockRef.current = true
     setSaving(true)
 
     const payload = {
@@ -302,6 +306,7 @@ function NewBudgetContent() {
       showToast(`Erro ao salvar: ${err?.message || 'tente novamente.'}`, 'error')
       errorHaptic()
     } finally {
+      saveLockRef.current = false
       setSaving(false)
     }
   }
@@ -417,8 +422,13 @@ function NewBudgetContent() {
                   }}
                   className="flex h-12 w-full items-center justify-between rounded-[16px] border border-slate-200 bg-slate-50 px-4 text-left transition active:scale-[0.98] dark:border-slate-800 dark:bg-slate-950"
                 >
-                  <div className="min-w-0">
-                    <p className="truncate text-[15px] font-semibold text-slate-900 dark:text-slate-100">
+                  <div className="flex min-w-0 items-center gap-3">
+                    {selectedCat && (
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px]" style={{ backgroundColor: `${selectedCat.color || '#14b8a6'}20`, color: selectedCat.color || '#14b8a6' }}>
+                        <SelectedBudgetCategoryIcon size={16} />
+                      </div>
+                    )}
+                    <p className="min-w-0 truncate text-[15px] font-semibold text-slate-900 dark:text-slate-100">
                       {selectedCat ? selectedCat.name : 'Todas as categorias'}
                     </p>
                   </div>
