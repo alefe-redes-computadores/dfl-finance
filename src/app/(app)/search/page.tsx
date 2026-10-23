@@ -329,6 +329,8 @@ export default function Page() {
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<GlobalSearchResult[]>([])
   const [loading, setLoading] = useState(false)
+  const [searchError, setSearchError] = useState(false)
+  const [searchAttempt, setSearchAttempt] = useState(0)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [activeFilters, setActiveFilters] = useState<SearchFilter[]>([])
 
@@ -360,6 +362,7 @@ export default function Page() {
     if (!user?.id || trimmedQuery.length < 2) {
       setItems([])
       setLoading(false)
+      setSearchError(false)
       return
     }
 
@@ -367,6 +370,7 @@ export default function Page() {
 
     const timer = setTimeout(async () => {
       setLoading(true)
+      setSearchError(false)
       try {
         const result = await searchFinancialData(
           user.id,
@@ -374,6 +378,11 @@ export default function Page() {
           trimmedQuery
         )
         if (active) setItems(result)
+      } catch {
+        if (active) {
+          setItems([])
+          setSearchError(true)
+        }
       } finally {
         if (active) setLoading(false)
       }
@@ -383,7 +392,7 @@ export default function Page() {
       active = false
       clearTimeout(timer)
     }
-  }, [trimmedQuery, user?.id, context])
+  }, [trimmedQuery, user?.id, context, searchAttempt])
 
   const openResult = (item: GlobalSearchResult) => {
     vibrate([10])
@@ -576,6 +585,25 @@ export default function Page() {
               Busque valores, meses, contas e transações ou use comandos como
               “nova despesa”, “pendências” e “comprovantes”. Seus dados continuam locais e privados.
             </p>
+          </div>
+        ) : searchError ? (
+          <div className="mt-10 flex flex-col items-center px-7 text-center" role="alert">
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[20px] bg-amber-500/10 text-amber-500">
+              <Search size={24} />
+            </div>
+            <p className="text-[15px] font-extrabold text-slate-800 dark:text-slate-200">
+              A busca não respondeu
+            </p>
+            <p className="mt-1.5 text-[12px] text-slate-500">
+              Seus dados continuam preservados. Tente consultar novamente.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSearchAttempt((current) => current + 1)}
+              className="mt-4 rounded-full bg-teal-600 px-5 py-2.5 text-[12px] font-extrabold text-white active:scale-95"
+            >
+              Tentar novamente
+            </button>
           </div>
         ) : loading && items.length === 0 ? (
           <div className="mt-10 flex items-center justify-center gap-2 text-sm font-semibold text-slate-400">

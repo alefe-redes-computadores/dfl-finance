@@ -58,18 +58,23 @@ export default function FAB({
   const { data: allAccounts } = useAccountsList(quickContext)
 
   useEffect(() => {
+    if (savingRef.current) return
     setShowModal(isOpen)
 
     if (isOpen) {
       setQuickType(initialType)
       setQuickContext(effectiveContext)
+      setAmount(0)
+      setCategory('')
+      setAccountId('')
       operationId.current = crypto.randomUUID()
+      setShowAccModal(false)
     }
   }, [isOpen, initialType, effectiveContext])
 
   const accounts = useMemo(() => {
     return (allAccounts || [])
-      .filter((a: any) => (a?.context ?? 'dfl') === quickContext)
+      .filter((a: any) => !a.is_archived && (a?.context ?? 'dfl') === quickContext)
       .sort((a: any, b: any) => String(a?.name ?? '').localeCompare(String(b?.name ?? '')))
   }, [allAccounts, quickContext])
 
@@ -99,6 +104,7 @@ export default function FAB({
   }, [])
 
   const closeAll = useCallback(() => {
+    if (savingRef.current) return
     setShowAccModal(false)
     setShowModal(false)
     onClose?.()
@@ -112,7 +118,7 @@ export default function FAB({
       return
     }
 
-    if (!amount || Number(amount) <= 0) {
+    if (!Number.isFinite(amount) || Number(amount) <= 0) {
       hapticError()
       showToast('Informe um valor válido.', 'warning')
       return
@@ -129,22 +135,27 @@ export default function FAB({
         date: format(new Date(), 'yyyy-MM-dd'),
       })
 
-      success()
-      showToast(
-        `${quickType === 'income' ? 'Receita' : 'Despesa'} salva com sucesso.`,
-        'success'
-      )
-
-      closeAll()
-      resetForm()
-      onSave?.()
     } catch (err: any) {
-      console.error('FAB save error:', err)
+      if (process.env.NODE_ENV !== 'production') console.error('FAB save error:', err)
       hapticError()
       showToast(`Erro ao salvar: ${err?.message || 'erro inesperado'}`, 'error')
+      return
     } finally {
       savingRef.current = false
       setSaving(false)
+    }
+
+    // The ledger is already committed. A UI callback must never report it as a failed save.
+    setShowAccModal(false)
+    setShowModal(false)
+    resetForm()
+    try {
+      success()
+      showToast(`${quickType === 'income' ? 'Receita' : 'Despesa'} salva com sucesso.`, 'success')
+      onClose?.()
+      onSave?.()
+    } catch {
+      showToast('Lançamento salvo. Reabra a tela para atualizar o resumo.', 'warning')
     }
   }
 
@@ -158,6 +169,10 @@ export default function FAB({
           <div className="app-overlay" />
 
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Ação rápida"
+            aria-busy={saving}
             className="app-sheet-panel max-h-[90dvh] overflow-y-auto p-6 pb-[max(1.5rem,var(--safe-area-bottom))]"
             onClick={(e) => e.stopPropagation()}
           >
@@ -170,12 +185,15 @@ export default function FAB({
               <button
                 type="button"
                 onClick={closeAll}
+                disabled={saving}
+                aria-label="Fechar ação rápida"
                 className="app-icon-action"
               >
                 <X size={20} />
               </button>
             </div>
 
+            <fieldset disabled={saving} className="min-w-0">
             <div className="grid grid-cols-2 gap-3 mb-6">
               <div className="flex bg-gray-50 dark:bg-slate-700 p-1 rounded-full border border-gray-100 dark:border-slate-600">
                 <button
@@ -354,6 +372,7 @@ export default function FAB({
                 </>
               )}
             </button>
+            </fieldset>
           </div>
         </div>
       )}
@@ -365,6 +384,9 @@ export default function FAB({
         >
           <div className="app-overlay" />
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Escolha a conta"
             className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-6 max-h-[70vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
@@ -375,6 +397,7 @@ export default function FAB({
               <button
                 type="button"
                 onClick={() => setShowAccModal(false)}
+                aria-label="Fechar contas"
                 className="p-2 bg-gray-100 dark:bg-slate-700 rounded-full active:scale-95"
               >
                 <X size={18} />
