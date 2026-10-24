@@ -5,7 +5,7 @@ import SelectField from '@/components/SelectField'
 import TransferModal from '@/components/TransferModal'
 export const dynamic = 'force-dynamic'
 
-import { useDeferredValue, useEffect, useState, useRef, useMemo } from 'react'
+import React, { useDeferredValue, useEffect, useState, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
@@ -311,7 +311,7 @@ function PendingCard({
           ))}
 
           {txs.map((tx, index) => (
-            <TransactionItem
+            <MemoTransactionItem
               key={tx.id}
               transaction={tx}
               index={index}
@@ -508,6 +508,11 @@ function TransactionItem({ transaction, index, totalItems }: { transaction: any;
     </button>
   )
 }
+
+// V192: memoizacao sem comparador por ID.
+// Alteracoes nas propriedades continuam atualizando o card.
+const MemoTransactionItem = React.memo(TransactionItem)
+MemoTransactionItem.displayName = 'MemoTransactionItem'
 
 export default function TransactionsPage() {
   const { user } = useAuth()
@@ -1631,7 +1636,7 @@ export default function TransactionsPage() {
 
                   <div className="overflow-hidden rounded-[18px] border border-gray-200/70 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.025)] dark:border-slate-800 dark:bg-slate-800/80">
                     {grouped[date].map((t, index) => (
-                      <TransactionItem
+                      <MemoTransactionItem
                         key={t.id}
                         transaction={t}
                         index={index}
