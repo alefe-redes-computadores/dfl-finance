@@ -711,6 +711,7 @@ export default function MorePage() {
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 space-y-1">
             <MenuItem iconName="bot" label="Assistente financeiro" href="/assistant" badge="IA" colorClass="text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-900/30" />
             <MenuItem iconName="calendar-days" label="Agenda Financeira 360" href="/agenda" colorClass="text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30" />
+            <MenuItem iconName="calendar-check" label="Revisão Mensal Inteligente" href="/monthly-review" colorClass="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
             <MenuItem iconName="search-check" label="Central de Revisão Inteligente" href="/review" colorClass="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
             <MenuItem iconName="check-square" label="Inbox financeira" href="/conciliation" colorClass="text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/30" />
             <MenuItem iconName="receipt" label="Central de Comprovantes" href="/receipts" colorClass="text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
