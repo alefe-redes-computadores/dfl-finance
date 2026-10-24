@@ -139,6 +139,8 @@ function HomeContent() {
     forceSync,
     reconcileBalance,
     lastSyncError,
+    lastSuccessfulSyncAt,
+    hasFinancialOutbox,
   } = useLocalSync()
   const hasSyncFailure = Boolean(lastSyncError)
 
@@ -2373,6 +2375,9 @@ function HomeContent() {
                   pendingCount={typeof pendingCount === 'number' ? pendingCount : 0}
                   isSyncing={!!isSyncing}
                   isOnline={!!isOnline}
+                  hasFinancialOutbox={!!hasFinancialOutbox}
+                  lastSuccessfulSyncAt={lastSuccessfulSyncAt}
+                  lastSyncError={lastSyncError}
                   onSync={forceSync}
                   onClick={() => setIsSyncModalOpen(true)}
                 />

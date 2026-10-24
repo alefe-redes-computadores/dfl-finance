@@ -1,60 +1,88 @@
 'use client'
 
 import { useState } from 'react'
+import {
+  AlertTriangle,
+  Clock3,
+  Loader2,
+  RefreshCw,
+  ShieldCheck,
+  WifiOff
+} from 'lucide-react'
+
 import { useLocalSync } from '@/hooks/useLocalSync'
-import { Loader2, Check, RefreshCw, WifiOff, AlertTriangle } from 'lucide-react'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import { getSyncBadgePresentation } from '@/lib/syncBadgePresentation'
 import SyncStatusModal from './SyncStatusModal'
 
+const icons = {
+  offline: WifiOff,
+  syncing: Loader2,
+  error: AlertTriangle,
+  pending: RefreshCw,
+  verified: ShieldCheck,
+  unverified: Clock3
+}
+
 export function SyncStatusIndicator() {
-  const localSync = useLocalSync()
-  const syncStatus = localSync?.syncStatus ?? 'idle'
-  const pendingCount = Number(localSync?.pendingCount ?? 0)
-  const lastSyncError = localSync?.lastSyncError
-  const hasSyncError = Boolean(lastSyncError)
+  const sync = useLocalSync()
+  const { light } = useHapticFeedback()
+  const [open, setOpen] = useState(false)
 
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  const status = getSyncBadgePresentation({
+    isOnline: sync.isOnline,
+    isSyncing: sync.isSyncing,
+    pendingCount: sync.pendingCount,
+    hasFinancialOutbox: sync.hasFinancialOutbox,
+    lastSuccessfulSyncAt: sync.lastSuccessfulSyncAt,
+    lastSyncError: sync.lastSyncError
+  })
 
-  const handlePress = () => {
-    if (typeof window !== 'undefined' && 'navigator' in window && navigator.vibrate) {
-      navigator.vibrate(20)
-    }
-    setIsModalOpen(true)
-  }
+  const Icon = icons[status.kind]
 
-  const getStatusStyle = () => {
-    switch (syncStatus) {
-      case 'syncing':
-        return 'bg-blue-500 text-white animate-pulse'
-      case 'offline':
-        return 'bg-gray-400 text-white'
-      default:
-        return hasSyncError || pendingCount > 0 ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white'
-    }
-  }
-
-  const getIcon = () => {
-    if (syncStatus === 'syncing') return <Loader2 size={18} className="animate-spin" />
-    if (syncStatus === 'offline') return <WifiOff size={18} />
-    if (hasSyncError) return <AlertTriangle size={18} />
-    if (pendingCount > 0) return <RefreshCw size={18} />
-    return <Check size={18} />
-  }
+  const tone =
+    status.kind === 'error'
+      ? 'border-rose-200 text-rose-600 dark:border-rose-900 dark:text-rose-300'
+      : status.kind === 'pending'
+        ? 'border-amber-200 text-amber-600 dark:border-amber-900 dark:text-amber-300'
+        : status.kind === 'verified'
+          ? 'border-teal-200 text-teal-600 dark:border-teal-900 dark:text-teal-300'
+          : 'border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-300'
 
   return (
     <>
       <button
-        onClick={handlePress}
-        className={`fixed top-[5rem] right-4 z-40 flex items-center justify-center w-12 h-12 rounded-full shadow-lg backdrop-blur-md border border-white/20 transition-all active:scale-90 ${getStatusStyle()}`}
-        title={syncStatus === 'offline' ? 'Sem conexão; alterações locais preservadas' : syncStatus === 'syncing' ? 'Sincronização em andamento' : hasSyncError ? 'Última sincronização incompleta; toque para detalhes' : pendingCount > 0 ? `${pendingCount} itens pendentes` : 'Tudo sincronizado'}
-        aria-label={syncStatus === 'offline' ? 'Sem conexão; abrir detalhes da sincronização' : hasSyncError ? 'Sincronização incompleta; abrir detalhes' : pendingCount > 0 ? `${pendingCount} itens pendentes; abrir detalhes` : 'Abrir detalhes da sincronização'}
         type="button"
+        title={status.detail}
+        aria-label={`${status.label}. Abrir detalhes`}
+        onClick={() => {
+          light()
+          setOpen(true)
+        }}
+        className={`fixed right-3 top-[calc(4.5rem+var(--safe-area-top))] z-40 flex h-10 w-10 items-center justify-center rounded-2xl border bg-white/95 shadow-md backdrop-blur-xl transition-transform active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:bg-slate-900/95 motion-reduce:transition-none ${tone}`}
       >
-        {getIcon()}
+        <Icon
+          size={19}
+          aria-hidden="true"
+          className={
+            status.kind === 'syncing'
+              ? 'animate-spin motion-reduce:animate-none'
+              : ''
+          }
+        />
+        {status.pending > 0 && (
+          <span
+            aria-hidden="true"
+            className="absolute -right-1 -top-1 flex h-[19px] min-w-[19px] items-center justify-center rounded-full bg-amber-600 px-1 text-[9px] font-bold text-white"
+          >
+            {status.pending > 99 ? '99+' : status.pending}
+          </span>
+        )}
       </button>
 
       <SyncStatusModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        isOpen={open}
+        onClose={() => setOpen(false)}
       />
     </>
   )

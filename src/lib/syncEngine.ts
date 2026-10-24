@@ -115,7 +115,10 @@ function setSnapshot(patch: Partial<SyncSnapshot>) {
     next.pendingCount === snapshot.pendingCount &&
     next.isSyncing === snapshot.isSyncing &&
     next.isBalanceReconciling === snapshot.isBalanceReconciling &&
-    next.balanceVerifiedAt === snapshot.balanceVerifiedAt
+    next.balanceVerifiedAt === snapshot.balanceVerifiedAt &&
+    next.hasFinancialOutbox === snapshot.hasFinancialOutbox &&
+    next.lastSuccessfulSyncAt === snapshot.lastSuccessfulSyncAt &&
+    next.lastSyncError === snapshot.lastSyncError
   ) {
     return
   }
