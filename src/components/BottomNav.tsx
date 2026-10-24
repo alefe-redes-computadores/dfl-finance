@@ -44,6 +44,21 @@ export default function BottomNav() {
     setQuickActionOpen(false)
   }, [pathname])
 
+  // V184: Escape fecha atalhos sem navegar ou alterar lancamentos.
+  useEffect(() => {
+    if (!isOpen) return
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setIsOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [isOpen])
+
   // Visibilidade vem do hook compartilhado.
   // É a mesma fonte de verdade usada pelo AppLayout
   // pra decidir o padding-bottom. Antes essa lógica vivia só aqui dentro,
@@ -52,28 +67,12 @@ export default function BottomNav() {
 
   if (!isVisible) return null
 
+  // V184: navegação client-side é a autoridade.
+  // Não forçar reload após 700ms: páginas lentas ou transições
+  // legítimas não significam falha de navegação.
   const navigateSafely = (path: string) => {
+    if (pathname === path) return
     router.push(path)
-
-    if (typeof window === 'undefined') return
-
-    const targetPath =
-      path.split('?')[0]
-
-    window.setTimeout(() => {
-      const currentPath =
-        window.location.pathname
-
-      const arrived =
-        currentPath === targetPath ||
-        currentPath.startsWith(
-          `${targetPath}/`
-        )
-
-      if (!arrived) {
-        window.location.assign(path)
-      }
-    }, 700)
   }
 
   const handleNavigate = (path: string) => {
@@ -118,6 +117,8 @@ export default function BottomNav() {
               type="button"
               onClick={toggleMenu}
               aria-label="Abrir atalhos da Home"
+              aria-expanded={isOpen}
+              aria-controls="dfl-home-quick-actions"
               className="fixed bottom-[calc(92px+var(--safe-area-bottom))] left-4 z-[60] flex h-10 items-center gap-1.5 rounded-full border border-teal-600/20 bg-slate-900 px-3.5 text-[11px] font-semibold text-white shadow-lg shadow-slate-900/20 transition active:scale-95 dark:border-slate-600 dark:bg-slate-700"
             >
               <Zap size={15} aria-hidden="true" />
@@ -133,7 +134,8 @@ export default function BottomNav() {
       />
 
       <div
-        className={`fixed bottom-[calc(76px+var(--safe-area-bottom))] left-4 right-4 z-[60] mx-auto max-w-md origin-bottom transition-all duration-200 ${
+        id="dfl-home-quick-actions"
+        className={`fixed bottom-[calc(76px+var(--safe-area-bottom))] left-4 right-4 z-[60] mx-auto max-w-md origin-bottom transition-all duration-200 motion-reduce:transition-none motion-reduce:transform-none ${
           isOpen
             ? 'translate-y-0 scale-100 opacity-100 pointer-events-auto'
             : 'translate-y-3 scale-[0.97] opacity-0 pointer-events-none'

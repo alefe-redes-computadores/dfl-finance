@@ -83,6 +83,7 @@ jobs:
           node scripts/check-v181-premium-foundation.mjs
           node scripts/check-v182-premium-modals.mjs
           node scripts/check-v183-network-premium.mjs
+          node scripts/check-v184-navigation-premium.mjs
           node scripts/check-v84-edge-runtime.mjs
 
       - name: Mobile contracts
