@@ -52,5 +52,15 @@ export function enqueueFinanceToast(
     retained.splice(removable >= 0 ? removable : 0, 1)
   }
 
+  // Quando um aviso informativo e descartado para preservar
+  // erros e alertas, o estado visual nao mudou.
+  // Reutilizar a identidade antiga evita renderizacao inutil.
+  if (
+    retained.length === current.length &&
+    retained.every((item, index) => item === current[index])
+  ) {
+    return current
+  }
+
   return retained
 }

@@ -86,6 +86,7 @@ jobs:
           node scripts/check-v184-navigation-premium.mjs
           node scripts/check-v185-local-query-performance.mjs
           node scripts/check-v186-dashboard-stability.mjs
+          node scripts/check-v187-toast-priority.mjs
           node scripts/check-v84-edge-runtime.mjs
 
       - name: Mobile contracts
