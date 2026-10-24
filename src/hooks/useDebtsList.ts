@@ -4,6 +4,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, LocalDebt } from '@/lib/db'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { stableLocalRows } from '@/lib/localQueryPolicy'
 
 export function useDebtsList(context?: 'dfl' | 'personal') {
   const { user } = useAuth()
@@ -29,7 +30,7 @@ export function useDebtsList(context?: 'dfl' | 'personal') {
   }, [user?.id, context])
 
   return {
-    data: (data ?? []) as LocalDebt[],
+    data: stableLocalRows(data) as LocalDebt[],
     loading: data === undefined,
   }
 }

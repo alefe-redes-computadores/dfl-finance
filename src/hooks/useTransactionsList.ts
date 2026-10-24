@@ -5,6 +5,10 @@ import Dexie from 'dexie'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/lib/db'
 import { useAuth } from '@/lib/hooks/useAuth'
+import {
+  localFilterSignature,
+  stableLocalRows
+} from '@/lib/localQueryPolicy'
 
 export function useTransactionsList(
   context?: 'dfl' | 'personal',
@@ -13,7 +17,7 @@ export function useTransactionsList(
   endDate?: string | null
 ) {
   const { user } = useAuth()
-  const filtersKey = JSON.stringify(filters || {})
+  const filtersKey = localFilterSignature(filters)
 
   const data = useLiveQuery(async () => {
     if (!user?.id) return []
@@ -94,7 +98,7 @@ export function useTransactionsList(
   ])
 
   return {
-    data: data ?? [],
+    data: stableLocalRows(data),
     loading: data === undefined,
   }
 }

@@ -5,6 +5,10 @@ import { useMemo, useState, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/lib/db'
 import { useAuth } from '@/lib/hooks/useAuth'
+import {
+  stableLocalRows,
+  localFilterSignature
+} from '@/lib/localQueryPolicy'
 
 type AllTables =
   | 'transactions'
@@ -119,7 +123,7 @@ export function useLocalData<T = any>({
   const [refreshKey, setRefreshKey] = useState(0)
 
   const filtersKey = useMemo(
-    () => JSON.stringify(filters || {}),
+    () => localFilterSignature(filters),
     [filters]
   )
 
@@ -241,7 +245,7 @@ export function useLocalData<T = any>({
   }, [])
 
   return {
-    data: data ?? [],
+    data: stableLocalRows(data),
     loading: data === undefined,
     reload,
   }
