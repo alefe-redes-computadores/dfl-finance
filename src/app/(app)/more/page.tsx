@@ -693,6 +693,7 @@ export default function MorePage() {
         <div>
           <SectionTitle>Planejamento e acompanhamento</SectionTitle>
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 space-y-1">
+            <MenuItem iconName="activity" label="Radar de Fôlego" href="/cash-pressure" colorClass="text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30" />
             <MenuItem iconName="piggy-bank" label="Meu plano financeiro" href="/planning" badge="V173" colorClass="text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30" />
             <MenuItem iconName="gauge" label="Ritmo Financeiro" href="/spending-pulse" badge="NOVO" colorClass="text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
             <MenuItem iconName="pie-chart" label="Orçamento" href="/budgets" colorClass="text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30" />

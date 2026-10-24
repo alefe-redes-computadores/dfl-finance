@@ -67,6 +67,7 @@ export default function AgendaPage(){
     </header>
     <button type="button" onClick={()=>router.push('/planning')} className="flex min-h-12 w-full items-center justify-between rounded-xl border border-violet-200 bg-violet-50 px-4 text-left text-[12px] font-bold text-violet-800 dark:border-violet-900/60 dark:bg-violet-950/20 dark:text-violet-300"><span>Planejar despesas não mensais e reservas</span><span>→</span></button>
     <ContextToggle />
+    <button type="button" onClick={()=>router.push('/cash-pressure')} className="flex min-h-12 w-full items-center justify-between rounded-2xl border border-rose-200 bg-rose-50 px-4 text-left text-[12px] font-bold text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/20 dark:text-rose-300">Radar de Fôlego · previsão de aperto nos compromissos <ChevronRight size={16}/></button>
     <section className={card}>
       <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-[14px] font-bold text-gray-900 dark:text-white">Janela de compromissos</h2><p className="mt-1 text-[11px] text-gray-500">Valores previstos, separados do saldo das contas</p></div><ShieldCheck size={19} className="text-teal-600"/></div>
       <div className="mb-3 grid grid-cols-3 gap-2">{([7,30,90] as const).map(n=><button type="button" key={n} onClick={()=>{setDays(n);setSelectedDate(null)}} aria-pressed={days===n} className={`rounded-[13px] px-3 py-2.5 text-[12px] font-semibold ${days===n?'bg-teal-700 text-white':'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-gray-300'}`}>{n} dias</button>)}</div>

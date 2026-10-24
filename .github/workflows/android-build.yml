@@ -73,6 +73,7 @@ jobs:
           node scripts/check-v171-bot-insights.mjs
           node scripts/check-v172-spending-pulse.mjs
           node scripts/check-v173-financial-planning.mjs
+          node scripts/check-v174-finance-pressure.mjs
           node scripts/check-v84-edge-runtime.mjs
 
       - name: Mobile contracts

@@ -80,6 +80,7 @@ export default function SpendingPulsePage() {
         <span className="rounded-full bg-teal-50 px-2.5 py-1 text-[10px] font-semibold text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">V172</span>
       </header>
       <ContextToggle />
+      <button type="button" onClick={()=>router.push('/cash-pressure')} className="flex min-h-12 w-full items-center justify-between rounded-2xl border border-rose-200 bg-rose-50 px-4 text-left text-[12px] font-bold text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/20 dark:text-rose-300">Radar de Fôlego · simular compromissos e caixa <TrendingUp size={16}/></button>
       <section className={shell}>
         <div className="flex items-center gap-2"><BarChart3 size={19} className="text-teal-600"/><h2 className="text-[15px] font-bold text-slate-900 dark:text-white">Seu mês em andamento</h2></div>
         <p className="mt-1 text-[11px] capitalize text-slate-500 dark:text-slate-400">{monthLabel} · {context === 'dfl' ? 'Empresa' : 'Pessoal'}</p>
