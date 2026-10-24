@@ -14,6 +14,12 @@ function evaluate(file, requireFn, deno = {}) {
   return exports
 }
 const security=evaluate('supabase/functions/_shared/requestSecurity.ts',()=>{throw Error('unexpected import')})
+// R4 V172: executar os módulos PUROS reais dentro da suíte V84. Não liberar imports genéricos.
+const financeComparisons=evaluate('supabase/functions/_shared/financeComparisons.ts',name=>{throw Error('Unexpected financeComparisons import '+name)})
+const financePace=evaluate('supabase/functions/_shared/financePace.ts',name=>{throw Error('Unexpected financePace import '+name)})
+assert.equal(typeof financeComparisons.parseFinanceComparison,'function')
+assert.equal(typeof financeComparisons.aggregateFinanceMonths,'function')
+assert.equal(typeof financePace.buildFinancePace,'function')
 const env={SUPABASE_URL:'https://example.test',SUPABASE_SERVICE_ROLE_KEY:'internal-test-secret',
  EVOLUTION_API_KEY:'evolution-test-secret',EVOLUTION_API_URL:'https://evolution.test',EVOLUTION_INSTANCE:'test'}
 const deno={env:{get:key=>env[key]}}
@@ -24,6 +30,8 @@ function handler(file, client, webPush={setVapidDetails(){},async sendNotificati
  let serveHandler
  evaluate(file,name=>{
   if(name.includes('requestSecurity'))return security
+  if(name==='../_shared/financeComparisons.ts')return financeComparisons
+  if(name==='../_shared/financePace.ts')return financePace
   if(name.includes('/http/server'))return{serve:fn=>{serveHandler=fn}}
   if(name.includes('supabase-js'))return{createClient:()=>client}
   if(name==='npm:web-push')return webPush

@@ -5,9 +5,11 @@ export type ThemePreference = 'light' | 'dark'
 export type AppMode = 'full' | 'personal_only'
 
 export type DefaultAccountMap = { dfl: string; personal: string }
+export type SpendingLimitMap = { dfl: number; personal: number }
 
 export interface UserPreferences {
   default_accounts: DefaultAccountMap
+  spending_limits: SpendingLimitMap
   ai_enabled: boolean
   auto_categorize: boolean
   weekly_report: boolean
@@ -55,6 +57,7 @@ export interface UserSettingsSaveResult {
 
 export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   default_accounts: { dfl: '', personal: '' },
+  spending_limits: { dfl: 0, personal: 0 },
   ai_enabled: true,
   auto_categorize: true,
   weekly_report: true,
@@ -121,6 +124,11 @@ function normalizeAppMode(value: unknown): AppMode {
   return value === 'personal_only' ? 'personal_only' : 'full'
 }
 
+function normalizeSpendingLimit(value: unknown): number {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? Math.round(Math.min(n, 100000000) * 100) / 100 : 0
+}
+
 function normalizePreferences(value: unknown): UserPreferences {
   const raw =
     value && typeof value === 'object' && !Array.isArray(value)
@@ -133,6 +141,10 @@ function normalizePreferences(value: unknown): UserPreferences {
     default_accounts: {
       dfl: typeof (raw.default_accounts as Record<string, unknown> | undefined)?.dfl === 'string' ? String((raw.default_accounts as Record<string, unknown>).dfl) : '',
       personal: typeof (raw.default_accounts as Record<string, unknown> | undefined)?.personal === 'string' ? String((raw.default_accounts as Record<string, unknown>).personal) : '',
+    },
+    spending_limits: {
+      dfl: normalizeSpendingLimit((raw.spending_limits as Record<string, unknown> | undefined)?.dfl),
+      personal: normalizeSpendingLimit((raw.spending_limits as Record<string, unknown> | undefined)?.personal),
     },
     ai_enabled:
       typeof raw.ai_enabled === 'boolean'

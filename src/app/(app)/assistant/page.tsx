@@ -658,6 +658,29 @@ function AssistantContent() {
               </div>
             </section>
 
+            <button
+              type="button"
+              onClick={() => router.push('/agenda')}
+              className="mb-3 flex w-full items-center gap-3 rounded-[22px] border border-indigo-200/70 bg-indigo-50/70 px-4 py-4 text-left active:scale-[0.99] dark:border-indigo-800/50 dark:bg-indigo-900/20"
+            >
+              <FileText size={20} className="shrink-0 text-indigo-700 dark:text-indigo-400" />
+              <span className="min-w-0 flex-1"><span className="block text-[13px] font-bold text-indigo-900 dark:text-indigo-200">Agenda Financeira 360</span><span className="mt-1 block text-[11px] text-indigo-800/80 dark:text-indigo-300/80">Faturas, pendências, cobranças e planejamento separados</span></span>
+              <ChevronRight size={16} className="text-indigo-700 dark:text-indigo-400" />
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push('/review')}
+              className="flex w-full items-center gap-3 rounded-[22px] border border-teal-200/70 bg-teal-50/70 px-4 py-4 text-left active:scale-[0.99] dark:border-teal-800/50 dark:bg-teal-900/20"
+            >
+              <Bot size={20} className="shrink-0 text-teal-700 dark:text-teal-400" />
+              <span className="min-w-0 flex-1"><span className="block text-[13px] font-bold text-teal-900 dark:text-teal-200">Central de Revisão Inteligente</span><span className="mt-1 block text-[11px] text-teal-800/80 dark:text-teal-300/80">Duplicações, recorrências, importações e gastos fora do padrão</span></span>
+              <ChevronRight size={16} className="text-teal-700 dark:text-teal-400" />
+            </button>
+
+            <button type="button" onClick={() => router.push('/spending-pulse')} className="mb-3 flex min-h-16 w-full items-center justify-between gap-3 rounded-[22px] border border-teal-200/60 bg-teal-50/70 px-4 py-3 text-left transition active:scale-[0.98] dark:border-teal-800/50 dark:bg-teal-900/20">
+              <span className="min-w-0"><span className="block text-[13px] font-bold text-teal-800 dark:text-teal-200">Ritmo Financeiro</span><span className="mt-1 block text-[11px] text-teal-700/80 dark:text-teal-300/80">Comparar meses, configurar limite e identificar gastos</span></span>
+              <ChevronRight size={19} className="shrink-0 text-teal-600"/>
+            </button>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
@@ -711,6 +734,29 @@ function AssistantContent() {
                 </p>
               </button>
             </div>
+
+            <section className="rounded-[28px] border border-gray-200/70 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div className="mb-2 flex items-center gap-2">
+                <Bot size={18} className="text-teal-600 dark:text-teal-400" />
+                <h2 className="text-[15px] font-bold text-gray-900 dark:text-white">Bot Finance no WhatsApp</h2>
+              </div>
+              <p className="text-[12px] leading-5 text-gray-500 dark:text-gray-400">
+                Diferente do chat Gemini acima. Use seu número já vinculado ao Finance para consultar e preparar lançamentos por mensagem.
+              </p>
+              <div className="mt-3 space-y-2 rounded-[18px] bg-gray-50 p-3 dark:bg-slate-800/70">
+                <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Exemplos de mensagens</p>
+                <p className="text-[12px] text-gray-600 dark:text-gray-300">• gastei 45 no posto pela Nubank</p>
+                <p className="text-[12px] text-gray-600 dark:text-gray-300">• pendências novembro empresa</p>
+                <p className="text-[12px] text-gray-600 dark:text-gray-300">• João me deve 150 vence 29/02/2028</p>
+                <p className="text-[12px] text-gray-600 dark:text-gray-300">• assinatura streaming 45 dia 31</p>
+                <p className="text-[12px] text-gray-600 dark:text-gray-300">• comparar setembro e outubro empresa
+                </p><p className="text-[12px] text-gray-600 dark:text-gray-300">• evolução últimos 6 meses pessoal
+                </p><p className="text-[12px] text-gray-600 dark:text-gray-300">• ajuda ou cancelar</p>
+              </div>
+              <p className="mt-3 text-[11px] leading-4 text-gray-500 dark:text-gray-400">
+                Revise as confirmações. Um valor a receber não vira saldo disponível só por ter sido cadastrado.
+              </p>
+            </section>
           </>
         )}
       </div>

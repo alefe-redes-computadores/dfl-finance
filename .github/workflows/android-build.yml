@@ -67,6 +67,11 @@ jobs:
           node scripts/check-v166-default-settings.mjs
           node scripts/check-v166-notifications-chat.mjs
           node scripts/check-v167-full-entry.mjs
+          node scripts/check-v168-bot-civil-dates.mjs
+          node scripts/check-v169-financial-review.mjs
+          node scripts/check-v170-finance-agenda.mjs
+          node scripts/check-v171-bot-insights.mjs
+          node scripts/check-v172-spending-pulse.mjs
           node scripts/check-v84-edge-runtime.mjs
 
       - name: Mobile contracts

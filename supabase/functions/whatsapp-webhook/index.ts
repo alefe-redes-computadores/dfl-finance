@@ -1,4 +1,6 @@
 import { trustedWebhook, readBoundedJson, receiptMimeMatches } from '../_shared/requestSecurity.ts';
+import { buildFinancePace } from '../_shared/financePace.ts';
+import { parseFinanceComparison, aggregateFinanceMonths, financeCompareDelta, monthLabel } from '../_shared/financeComparisons.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const db=createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -101,6 +103,47 @@ const voiceRegistered=(kind:string,seed:string)=>voicePick(seed,"registered",kin
 
 const day=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
 const monthNames=["janeiro","fevereiro","marco","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+
+/* V168_FINANCIAL_DATE_HELPERS_START - funcoes puras; nenhuma gravacao ou RPC */
+const botCivilDay=(year:number,month:number,dayNumber:number):string|null=>{
+  if(!Number.isInteger(year)||!Number.isInteger(month)||!Number.isInteger(dayNumber)||year<2000||year>2099||month<1||month>12||dayNumber<1||dayNumber>31)return null;
+  const probe=new Date(Date.UTC(year,month-1,dayNumber,12));
+  if(probe.getUTCFullYear()!==year||probe.getUTCMonth()!==month-1||probe.getUTCDate()!==dayNumber)return null;
+  return `${year}-${String(month).padStart(2,"0")}-${String(dayNumber).padStart(2,"0")}`;
+};
+const botShiftCivil=(civil:string,delta:number):string=>{
+  const [year,month,dayNumber]=civil.split("-").map(Number);
+  if(!botCivilDay(year,month,dayNumber))throw Error("Data de referencia invalida");
+  return new Date(Date.UTC(year,month-1,dayNumber+delta,12)).toISOString().slice(0,10);
+};
+const botParseReceivableDueDate=(raw:string,reference:string=day()):{ok:boolean;due:string|null}=>{
+  const value=N(String(raw||"")).replace(/\s+/g," ").trim();
+  if(/^(sem data|sem vencimento|sem prazo|nenhum|nao tem vencimento)$/.test(value))return{ok:true,due:null};
+  const relative:{[key:string]:number}={hoje:0,amanha:1,ontem:-1,anteontem:-2};
+  if(Object.prototype.hasOwnProperty.call(relative,value))return{ok:true,due:botShiftCivil(reference,relative[value])};
+  const iso=value.match(/^(20\d{2})-(0?[1-9]|1[0-2])-(0?[1-9]|[12]\d|3[01])$/);
+  if(iso){const due=botCivilDay(Number(iso[1]),Number(iso[2]),Number(iso[3]));return{ok:!!due,due};}
+  const match=value.match(/^([0-3]?\d)[\/-]([01]?\d)(?:[\/-](\d{2}|\d{4}))?$/);
+  if(!match)return{ok:false,due:null};
+  const year=match[3]?Number(match[3].length===2?"20"+match[3]:match[3]):Number(reference.slice(0,4));
+  const due=botCivilDay(year,Number(match[2]),Number(match[1]));
+  return{ok:!!due,due};
+};
+const botNextMonthlyDueCivil=(billingDay:number,reference:string=day()):string=>{
+  if(!Number.isInteger(billingDay)||billingDay<1||billingDay>31)throw Error("Dia mensal invalido");
+  const [year,month,date]=reference.split("-").map(Number);
+  if(!botCivilDay(year,month,date))throw Error("Data de referencia invalida");
+  for(let shift=0;shift<=2;shift++){
+    const monthDate=new Date(Date.UTC(year,month-1+shift,1,12));
+    const yy=monthDate.getUTCFullYear(),mm=monthDate.getUTCMonth()+1;
+    const lastDay=new Date(Date.UTC(yy,mm,0,12)).getUTCDate();
+    const candidate=botCivilDay(yy,mm,Math.min(billingDay,lastDay))!;
+    if(candidate>=reference)return candidate;
+  }
+  throw Error("Vencimento nao encontrado");
+};
+/* V168_FINANCIAL_DATE_HELPERS_END */
+
 const monthAliases:any={jan:1,janeiro:1,fev:2,fevereiro:2,mar:3,marco:3,abril:4,abr:4,maio:5,mai:5,jun:6,junho:6,jul:7,julho:7,ago:8,agosto:8,set:9,setembro:9,out:10,outubro:10,nov:11,novembro:11,dez:12,dezembro:12};
 const pendingPeriod=(s:string)=>{const n=N(s),today=day(),cy=Number(today.slice(0,4)),cm=Number(today.slice(5,7));let y=cy,m=cm,found=false;const iso=n.match(/\b(20\d{2})[-\/](0?[1-9]|1[0-2])\b/);if(iso){y=Number(iso[1]);m=Number(iso[2]);found=true}else{const num=n.match(/\b(0?[1-9]|1[0-2])\s*[\/\-]\s*(\d{2}|20\d{2})\b/);if(num){m=Number(num[1]);y=Number(num[2].length===2?"20"+num[2]:num[2]);found=true}else{for(const [k,v] of Object.entries(monthAliases)){if(new RegExp("\\b"+k+"\\b").test(n)){m=Number(v);found=true;const ym=n.match(/\b(20\d{2})\b/);if(ym)y=Number(ym[1]);break}}if(!found){const only=n.match(/(?:pendencias|pendentes).*?\b(0?[1-9]|1[0-2])\b/);if(only){m=Number(only[1]);found=true}}}}const start=`${y}-${String(m).padStart(2,"0")}-01`;const endDate=new Date(Date.UTC(y,m,0));const end=`${y}-${String(m).padStart(2,"0")}-${String(endDate.getUTCDate()).padStart(2,"0")}`;const label=`${monthNames[m-1].charAt(0).toUpperCase()+monthNames[m-1].slice(1)}/${y}`;return{year:y,month:m,start,end,label,explicit:found}};
 const pendingFilters=(s:string)=>{const n=N(s);return{type:/\b(receitas?|entradas?)\b/.test(n)?"income":/\b(despesas?|gastos?|saidas?)\b/.test(n)?"expense":null,context:/\b(empresa|dfl|empresarial)\b/.test(n)?"dfl":/\b(pessoal|personal)\b/.test(n)?"personal":null}};
@@ -364,12 +407,12 @@ if(!text){
 }const phone=u.phone,k=String(p.data?.key?.id||`${sender}:${p.data?.messageTimestamp||0}:${text}`),aid=await audit(u.user_id,sender,text,k);if(!aid)return new Response("OK");let n=N(text);const reply=(s:string)=>send(phone,s);await db.from("user_phones").update({last_interaction:new Date().toISOString()}).eq("user_id",u.user_id).eq("phone",phone);
 if(n==="/ping"){const o=await reply("🤖 *DFL Finance Bot operacional.*\n✅ Conectado e pronto para lançamentos, consultas e pendências.");await done(aid,"extracted",o,{command:"ping",self_chat:fromMe});return new Response("OK")}
 if(["cancelar","/cancelar","cancela","sair","parar","abortar","esquece","comecar de novo","começar de novo"].includes(n)){await clear(phone);const o=await reply("🚫 Operação cancelada. Pode começar outra quando quiser.");await done(aid,"extracted",o,{action:"session.cancel"});return new Response("OK")}
-if(n==="/ajuda"||n==="ajuda"||n==="comandos"||n==="o que voce faz"||n==="o que você faz"||n==="o que consegue fazer"||n==="o que voce consegue fazer"){const o=await reply("🤖 *DFL Finance — Central de Ajuda*\n\n*1* — 💸 Lançamentos, datas, recorrências e comprovantes\n*2* — 🕒 Pendências, filtros e correções\n*3* — 🔄 Transferências\n*4* — 👤 Quem me deve, pagamentos e crédito\n*5* — 🔁 Assinaturas\n*6* — 📊 Consultas, agenda, saldos, períodos e relatórios\n*7* — 🏷️ Categorias e organização\n\n*Atalhos:* /saldo · /resumo · /relatorio · cancelar\n\n*Dicas rápidas:*\n• *agenda financeira* — próximos vencimentos\n• *quem está atrasado* — cobranças vencidas\n• *resumo novembro* — visão mensal\n• *extrato novembro empresa* — lançamentos do período\n• *quanto gastei novembro pessoal* — consulta filtrada\n\n💡 *Você não precisa decorar comandos.* Fale naturalmente. Exemplos:\n• *gastei 45 no posto pela Nubank*\n• *recebi 250 de vendas em Carteira ontem*\n• *pendências despesas novembro*\n• *João pagou 50*\n• *transfere 100 da Carteira para Inter*\n• *quanto gastei novembro empresa*\n• *agenda financeira* / *o que vence nos próximos 15 dias*\n• *quem está atrasado*\n• *corrigir pendência* — escolhe uma pendência e altera só o campo necessário\n\nPara ir direto a um assunto: *ajuda lançamentos*, *ajuda comprovante*, *ajuda pendências*, *ajuda correções*, *ajuda quem me deve*, *ajuda transferências*, *ajuda assinaturas*, *ajuda consultas*, *ajuda agenda* ou *ajuda categorias*.");await save(phone,"HELP_MENU",{});await done(aid,"extracted",o,{action:"help.menu"});return new Response("OK")}
+if(n==="/ajuda"||n==="ajuda"||n==="comandos"||n==="o que voce faz"||n==="o que você faz"||n==="o que consegue fazer"||n==="o que voce consegue fazer"){const o=await reply("🤖 *DFL Finance — Central de Ajuda*\n\n*1* — 💸 Lançamentos, datas, recorrências e comprovantes\n*2* — 🕒 Pendências, filtros e correções\n*3* — 🔄 Transferências\n*4* — 👤 Quem me deve, pagamentos e crédito\n*5* — 🔁 Assinaturas\n*6* — 📊 Consultas, agenda, saldos, períodos e relatórios\n*7* — 🏷️ Categorias e organização\n\n*Atalhos:* /saldo · /resumo · /relatorio · /ritmo · cancelar\n\n*Dicas rápidas:*\n• *agenda financeira* — próximos vencimentos\n• *quem está atrasado* — cobranças vencidas\n• *resumo novembro* — visão mensal\n• *extrato novembro empresa* — lançamentos do período\n• *quanto gastei novembro pessoal* — consulta filtrada\n\n💡 *Você não precisa decorar comandos.* Fale naturalmente. Exemplos:\n• *gastei 45 no posto pela Nubank*\n• *recebi 250 de vendas em Carteira ontem*\n• *pendências despesas novembro*\n• *João pagou 50*\n• *transfere 100 da Carteira para Inter*\n• *quanto gastei novembro empresa*\n• *agenda financeira* / *o que vence nos próximos 15 dias*\n• *quem está atrasado*\n• *corrigir pendência* — escolhe uma pendência e altera só o campo necessário\n\nPara ir direto a um assunto: *ajuda lançamentos*, *ajuda comprovante*, *ajuda pendências*, *ajuda correções*, *ajuda quem me deve*, *ajuda transferências*, *ajuda assinaturas*, *ajuda consultas*, *ajuda agenda* ou *ajuda categorias*.");await save(phone,"HELP_MENU",{});await done(aid,"extracted",o,{action:"help.menu"});return new Response("OK")}
 if(/^ajuda\s+/.test(n)){const topic=n.replace(/^ajuda\s+/,"").trim();let msg="";if(/pendencia|corrigir|correcao/.test(topic))msg="🕒 *Pendências e correções*\n\n• *pendências* — mês atual\n• *pendências novembro*\n• *pendências nov/26*\n• *pendências 11/2026*\n• *pendências despesas novembro*\n• *pendências empresa*\n• *pendências pessoal nov/26*\n\nAo revisar uma pendência você pode efetivar, manter ou corrigir valor, descrição, data, conta e categoria. Fale naturalmente: *muda o valor para 35,90*, *foi ontem*, *troca a conta para Nubank*, *muda a categoria para Supermercado* ou *muda a descrição para Mercado*.";else if(/comprov|anexo|foto|pdf/.test(topic))msg="📎 *Comprovantes*\n\nCrie a receita/despesa e, enquanto ela estiver pendente, envie a foto ou PDF. O bot vincula o arquivo à transação sem alterar saldo sozinho. Depois você escolhe efetivar ou manter pendente.";else if(/deve|receber|cobranca/.test(topic))msg="👤 *Quem me deve*\n\n• *João me deve 150*\n• *João me deve 150 vence 15/10*\n• *João pagou 50* / *João pagou 50 ontem* / *João pagou 50 em 03/10*\n• *João vence 20/10* — altera vencimento com confirmação\n• *quanto João me deve?* — consulta o restante aberto\n• *quem me deve?*\n• pagamento parcial ou *quitar*\n• alterar vencimento, nome ou valor total\n• consultar quanto uma pessoa ainda deve\n• listar quem está atrasado\n• pagamento acima do restante é separado em *aplicado à cobrança* + *crédito do contato*\n• saldo da conta só muda depois da confirmação.";else if(/transfer/.test(topic))msg="🔄 *Transferências*\n\nEx.: *transfere 50 da Carteira para Inter*. O bot identifica as contas quando possível, mostra origem/destino, valor, saldos projetados e alerta se a origem ficar negativa antes de confirmar.";else if(/assinatura|recorr/.test(topic))msg="🔁 *Assinaturas e recorrências*\n\n• *criar assinatura*\n• *minhas assinaturas*\n• pausar/retomar\n• alterar valor\n• alterar vencimento\n• cancelar no Finance\n• consultar próximas dos 7 dias\n• lançamentos comuns também podem ser recorrentes (semanal, quinzenal, mensal, bimestral).";else if(/agenda|vencimento/.test(topic))msg="📅 *Agenda financeira*\n\n• *agenda financeira* — próximos 7 dias\n• *o que vence nos próximos 15 dias*\n• *agenda 30 dias empresa*\n• reúne pendências de entrada/saída, assinaturas e valores a receber\n• *quem está atrasado* mostra cobranças vencidas";else if(/consulta|relatorio|saldo/.test(topic))msg="📊 *Consultas e relatórios*\n\n• quanto tenho na InfinitPay?\n• quais contas estão negativas?\n• quanto tenho na empresa?\n• quanto entrou hoje?\n• maiores despesas\n• onde gastei mais esse mês?\n• quanto tenho para receber?\n• assinaturas dos próximos 7 dias\n• como está a empresa hoje?\n• resumo de hoje\n• *resumo novembro* / *resumo nov/26*\n• *extrato novembro*\n• *quanto gastei novembro* / *quanto recebi novembro*\n• combine consultas com *empresa* ou *pessoal*\n• /saldo · /resumo · /relatorio";else if(/categoria|organiza/.test(topic))msg="🏷️ *Categorias e organização*\n\n• *criar categoria*\n• o bot sugere categoria pelo texto\n• aprende associações usadas anteriormente\n• respeita Receita/Despesa e Empresa/Pessoal\n• ao corrigir uma pendência, você também pode trocar a categoria.";else msg="💸 *Lançamentos*\n\n• *gastei 101,31 no Bernardão pela InfinitPay*\n• *recebi 250 de vendas em Carteira*\n• data padrão é hoje\n• use *ontem*, *anteontem* ou uma data explícita quando necessário\n• conta informada pode definir automaticamente Empresa/Pessoal\n• o bot pergunta apenas o que estiver faltando\n• a transação nasce pendente e só altera saldo quando você confirma\n• envie foto/PDF antes de efetivar se quiser anexar comprovante.";const o=await reply(msg+"\n\nDigite *ajuda* para voltar à Central de Ajuda.");await done(aid,"extracted",o,{action:"help.topic",topic});return new Response("OK")}
 const sr=await db.from("bot_sessions").select("*").eq("phone",phone).maybeSingle();let s=sr.data;let sd=s?.temp_data||{};
 const freshTransactionIntent=/^(?:registrar|nova|novo|criar|cadastrar)\s+(?:uma\s+)?(?:receita|despesa)\b/.test(n);
 if(s&&freshTransactionIntent){await clear(phone);s=null;sd={};console.log("[V153_SESSION_RESTART]",JSON.stringify({intent:n.startsWith("registrar receita")?"income":n.startsWith("registrar despesa")?"expense":"transaction"}))}
-const financeIntent=/^(?:\/|ajuda\b|cancelar\b|pendencias?\b|pendentes?\b|saldo\b|resumo\b|relatorio\b|extrato\b|quanto\b|como esta a empresa\b|quem me deve\b|transf(?:ere|erir|eri|erencia)\b|gastei\b|paguei\b|comprei\b|despesa\b|gasto\b|registrar receita\b|registrar uma receita\b|registrar despesa\b|registrar uma despesa\b|receita\b|entrada\b|recebi\b|recebido\b|entrou\b|ganhei\b|vendi\b|venda\b|faturei\b|pix recebido\b|.+\s+me deve\s+|.+\s+pagou\s+|.+\s+vence\s+)/.test(n);if(!s&&fromMe&&!financeIntent){await done(aid,"ignored","",{action:"ignored.non_finance_self_message"});return new Response("OK")}
+const financeIntent=/^(?:\/|ajuda\b|cancelar\b|agenda\b|o que vence\b|ritmo\b|comparar\b|compare\b|comparativo\b|evolucao\b|tendencia\b|pendencias?\b|pendentes?\b|saldo\b|resumo\b|relatorio\b|extrato\b|quanto\b|como esta a empresa\b|quem me deve\b|transf(?:ere|erir|eri|erencia)\b|gastei\b|paguei\b|comprei\b|despesa\b|gasto\b|registrar receita\b|registrar uma receita\b|registrar despesa\b|registrar uma despesa\b|receita\b|entrada\b|recebi\b|recebido\b|entrou\b|ganhei\b|vendi\b|venda\b|faturei\b|pix recebido\b|.+\s+me deve\s+|.+\s+pagou\s+|.+\s+vence\s+)/.test(n);if(!s&&fromMe&&!financeIntent){await done(aid,"ignored","",{action:"ignored.non_finance_self_message"});return new Response("OK")}
 if(s?.step==="HELP_MENU"&&/^\d+$/.test(text)===false){const topic=N(text);if(/pendencia|corrigir|correcao/.test(topic)){await clear(phone);const o=await reply("🕒 *Pendências e correções*\n\n• *pendências* — mês atual\n• *pendências novembro* / *nov/26* / *11/2026*\n• combine com *despesas*, *receitas*, *empresa* ou *pessoal*\n• corrija valor, descrição, data, conta ou categoria\n\nEx.: *muda o valor para 35,90*, *foi ontem*, *troca a conta para Nubank*, *muda a categoria para Supermercado*.");await done(aid,"extracted",o,{action:"help.free_topic",topic:"pendencias"});return new Response("OK")}if(/deve|receber|cobranca/.test(topic)){await clear(phone);const o=await reply("👤 *Quem me deve*\n\n• *João me deve 150*\n• *João pagou 50*\n• *João vence 20/10*\n• parcial, quitação e crédito excedente\n• alterar vencimento, nome ou valor total\n• consultar restante e atrasados.");await done(aid,"extracted",o,{action:"help.free_topic",topic:"recebiveis"});return new Response("OK")}if(/comprov|anexo|foto|pdf/.test(topic)){await clear(phone);const o=await reply("📎 *Comprovantes*\n\nEnvie foto ou PDF enquanto a transação estiver pendente. O anexo é vinculado ao lançamento e não altera o saldo sozinho. Depois você escolhe efetivar ou manter pendente.");await done(aid,"extracted",o,{action:"help.free_topic",topic:"comprovantes"});return new Response("OK")}}
 if(s?.step==="HELP_MENU"){const topics:any={"1":"lançamentos","2":"pendências","3":"transferências","4":"quem me deve","5":"assinaturas","6":"consultas","7":"categorias"};const topic=topics[text];if(!topic){const o=await reply("Escolha uma opção de *1 a 7* ou digite *cancelar*.");await done(aid,"extracted",o);return new Response("OK")}await clear(phone);let msg="";if(topic==="lançamentos")msg="💸 *Lançamentos e comprovantes*\n\n• *gastei 101,31 no Bernardão pela InfinitPay*\n• *recebi 250 de vendas em Carteira ontem*\n• hoje é a data padrão; você pode informar outra data\n• conta pode definir Empresa/Pessoal automaticamente\n• o lançamento nasce pendente e só mexe no saldo após confirmação\n• envie foto/PDF enquanto estiver pendente para anexar comprovante";else if(topic==="pendências")msg="🕒 *Pendências e correções*\n\n• *pendências* — mês atual\n• *pendências novembro* / *nov/26* / *11/2026*\n• combine com *despesas*, *receitas*, *empresa* ou *pessoal*\n• corrija valor, descrição, data, conta ou categoria antes de efetivar\n• exemplos: *muda o valor para 35,90*, *foi ontem*, *troca a conta para Nubank*";else if(topic==="transferências")msg="🔄 *Transferências*\n\n• *transfere 50 da Carteira para Inter*\n• o bot mostra origem, destino, valor e saldos projetados\n• avisa se a origem ficar negativa\n• a transferência só é executada depois da confirmação";else if(topic==="quem me deve")msg="👤 *Quem me deve*\n\n• *João me deve 150*\n• *João me deve 150 vence 15/10*\n• *João pagou 50*\n• *João vence 20/10*\n• *quem me deve?*\n• registre parcial ou quitação\n• altere vencimento, nome ou valor total\n• excedente é separado em valor aplicado + crédito do contato";else if(topic==="assinaturas")msg="🔁 *Assinaturas e recorrências*\n\n• *criar assinatura* / *minhas assinaturas*\n• pausar ou retomar\n• alterar valor e vencimento\n• cancelar no Finance\n• consultar próximas dos 7 dias\n• lançamentos comuns também aceitam recorrência semanal, quinzenal, mensal e bimestral";else if(topic==="consultas")msg="📊 *Consultas e relatórios*\n\n• saldo de uma conta e contas negativas\n• total da empresa\n• entradas e gastos por período\n• maiores despesas e categorias\n• valores a receber e vencidos\n• assinaturas dos próximos 7 dias\n• *como está a empresa hoje?*\n• *resumo novembro* / *extrato novembro*\n• combine consultas com *empresa* ou *pessoal*\n• /saldo · /resumo · /relatorio";else msg="🏷️ *Categorias e organização*\n\n• *criar categoria*\n• o bot sugere categoria pelo texto\n• aprende associações usadas anteriormente\n• respeita Receita/Despesa e Empresa/Pessoal\n• você também pode trocar a categoria de uma pendência";const o=await reply(msg+"\n\nDigite *ajuda* para voltar à Central de Ajuda.");await done(aid,"extracted",o,{action:"help.menu_topic",topic});return new Response("OK")}
 if(s?.step==="DEBT_DUE_PICK"){const d=sd.items?.[Number(text)-1];if(!d){const o=await reply("⚠️ Escolha uma cobrança válida.");await done(aid,"extracted",o);return new Response("OK")}await save(phone,"DEBT_DUE_CONFIRM",{debt:d,new_due:sd.new_due,friendly:sd.friendly});const o=await reply(`📅 *Alterar vencimento*\n\n👤 *${d.person_name}*\nDe: *${d.due_date||"sem data"}*\nPara: *${sd.friendly}*\n\n*1* — Confirmar\n*2* — Cancelar`);await done(aid,"extracted",o);return new Response("OK")}
@@ -394,10 +437,10 @@ if(s?.step==="SUB_NAME"){if(!text){return new Response("OK")}await save(phone,"S
 if(s?.step==="SUB_AMOUNT"){const v=amount(text);if(!v){const o=await reply("Informe um valor válido. Ex.: *44,90*");await done(aid,"extracted",o);return new Response("OK")}await save(phone,"SUB_DAY",{...sd,amount:v});const o=await reply("📅 Qual o *dia do vencimento*? Ex.: *10*");await done(aid,"extracted",o);return new Response("OK")}
 if(s?.step==="SUB_DAY"){const d=Number(text);if(!Number.isInteger(d)||d<1||d>31){const o=await reply("Informe um dia entre *1 e 31*.");await done(aid,"extracted",o);return new Response("OK")}await save(phone,"SUB_CTX",{...sd,due_day:d});const o=await reply("🏦 Qual o contexto?\n*1* — 🏢 Empresa\n*2* — 👤 Pessoal");await done(aid,"extracted",o);return new Response("OK")}
 if(s?.step==="SUB_CTX"){const context=conversationalContext(text);if(!context){const o=await reply("Pode responder *Empresa* ou *Pessoal*.");await done(aid,"extracted",o);return new Response("OK")}const aa=await accs(u.user_id,context);await save(phone,"SUB_ACC",{...sd,context,accounts:aa});const o=await reply(list(aa,"🏦 *Conta da assinatura:*",true));await done(aid,"extracted",o);return new Response("OK")}
-if(s?.step==="SUB_ACC"){const acc=pickNamed(sd.accounts||[],text);if(!acc){const o=await reply("⚠️ Não reconheci essa conta. Responda pelo nome ou número.");await done(aid,"extracted",o);return new Response("OK")}const next=new Date();next.setDate(sd.due_day);if(next<new Date())next.setMonth(next.getMonth()+1);const nd=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(next);const row={user_id:u.user_id,context:sd.context,name:sd.name,amount:sd.amount,account_id:acc.id,due_day:sd.due_day,billing_cycle:"monthly",next_due_date:nd,status:"active",icon:"repeat",color:"#14b8a6"};const ins=await db.from("subscriptions").insert(row).select("id").single();if(ins.error)throw ins.error;await clear(phone);const o=await reply(`🔁 *Assinatura criada!*\n\n*${sd.name}*\n💰 ${money(sd.amount)}\n📅 Todo dia *${sd.due_day}*\n🏦 *${acc.name}*\n🏷️ Mensal`);await done(aid,"extracted",o,{action:"subscription.create",subscription_id:ins.data.id});return new Response("OK")}
+if(s?.step==="SUB_ACC"){const acc=pickNamed(sd.accounts||[],text);if(!acc){const o=await reply("⚠️ Não reconheci essa conta. Responda pelo nome ou número.");await done(aid,"extracted",o);return new Response("OK")}const nd=botNextMonthlyDueCivil(sd.due_day);const row={user_id:u.user_id,context:sd.context,name:sd.name,amount:sd.amount,account_id:acc.id,due_day:sd.due_day,billing_cycle:"monthly",next_due_date:nd,status:"active",icon:"repeat",color:"#14b8a6"};const ins=await db.from("subscriptions").insert(row).select("id").single();if(ins.error)throw ins.error;await clear(phone);const o=await reply(`🔁 *Assinatura criada!*\n\n*${sd.name}*\n💰 ${money(sd.amount)}\n📅 Dia *${sd.due_day}* de cada mês\n🗓️ Próximo: *${nd.split("-").reverse().join("/")}*\n🏦 *${acc.name}*\n🏷️ Mensal`);await done(aid,"extracted",o,{action:"subscription.create",subscription_id:ins.data.id});return new Response("OK")}
 if(s?.step==="DEBT_NAME"){await save(phone,"DEBT_AMOUNT",{...sd,person_name:text.slice(0,100)});const o=await reply("💰 Quanto *essa pessoa te deve*?");await done(aid,"extracted",o);return new Response("OK")}
 if(s?.step==="DEBT_AMOUNT"){const v=amount(text);if(!v){const o=await reply("Informe um valor válido.");await done(aid,"extracted",o);return new Response("OK")}await save(phone,"DEBT_DUE",{...sd,total_amount:v});const o=await reply("📅 Qual o vencimento?\nEx.: *15/10/2026* ou *sem data*");await done(aid,"extracted",o);return new Response("OK")}
-if(s?.step==="DEBT_DUE"){let due=null;if(N(text)!=="sem data"){const m=text.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);if(!m){const o=await reply("Use *DD/MM/AAAA* ou escreva *sem data*.");await done(aid,"extracted",o);return new Response("OK")}due=`${m[3]}-${String(m[2]).padStart(2,"0")}-${String(m[1]).padStart(2,"0")}`}await save(phone,"DEBT_CTX",{...sd,due_date:due});const o=await reply("🏦 Contexto:\n*1* — 🏢 Empresa\n*2* — 👤 Pessoal");await done(aid,"extracted",o);return new Response("OK")}
+if(s?.step==="DEBT_DUE"){let due=null;if(N(text)!=="sem data"){const parsed=botParseReceivableDueDate(text);if(!parsed.ok){const o=await reply("⚠️ Data inválida. Use *DD/MM/AAAA*, *DD/MM*, *hoje*, *amanhã* ou *sem data*. Ex.: 29/02/2028.");await done(aid,"extracted",o);return new Response("OK")}due=parsed.due}await save(phone,"DEBT_CTX",{...sd,due_date:due});const o=await reply("🏦 Contexto:\n*1* — 🏢 Empresa\n*2* — 👤 Pessoal");await done(aid,"extracted",o);return new Response("OK")}
 if(s?.step==="DEBT_CTX"){if(!["1","2"].includes(text)){const o=await reply("Escolha *1* Empresa ou *2* Pessoal.");await done(aid,"extracted",o);return new Response("OK")}const context=text==="1"?"dfl":"personal";await save(phone,"DEBT_CONFIRM",{...sd,context});const o=await reply(`👤 *Quem me deve*\n\nPessoa: *${sd.person_name}*\nValor: *${money(sd.total_amount)}*\nVencimento: *${sd.due_date||"Sem data"}*\nContexto: *${context==="dfl"?"Empresa":"Pessoal"}*\n\n*1* — Criar\n*2* — Cancelar`);await done(aid,"extracted",o);return new Response("OK")}
 if(s?.step==="DEBT_CONFIRM"){if(text==="2"){await clear(phone);const o=await reply("🚫 Cadastro cancelado.");await done(aid,"extracted",o);return new Response("OK")}if(text!=="1"){const o=await reply("Responda *1* para criar ou *2* para cancelar.");await done(aid,"extracted",o);return new Response("OK")}let c=await db.from("contacts").select("id").eq("user_id",u.user_id).eq("context",sd.context).ilike("name",sd.person_name).limit(1).maybeSingle();let cid=c.data?.id;if(!cid){const ci=await db.from("contacts").insert({user_id:u.user_id,name:sd.person_name,type:"customer",relationship_type:"customer",entity_type:"individual",context:sd.context,icon:"user",color:"#14b8a6"}).select("id").single();if(ci.error)throw ci.error;cid=ci.data.id}const di=await db.from("debts").insert({user_id:u.user_id,context:sd.context,person_name:sd.person_name,total_amount:sd.total_amount,paid_amount:0,due_date:sd.due_date,description:`Valor a receber de ${sd.person_name}`,status:"pending",contact_id:cid,icon:"user",color:"#14b8a6",sync_status:"synced"}).select("id").single();if(di.error)throw di.error;await clear(phone);const o=await reply(`✅ *Valor a receber criado!*\n\n👤 *${sd.person_name}*\n💰 *${money(sd.total_amount)}*\n📅 ${sd.due_date||"Sem vencimento"}`);await done(aid,"extracted",o,{action:"receivable.create",debt_id:di.data.id,contact_id:cid});return new Response("OK")}
 if(s?.step==="CAT_NAME"){await save(phone,"CAT_TYPE",{...sd,name:text.slice(0,80)});const o=await reply("🏷️ Essa categoria é de:\n*1* — 🔴 Despesa\n*2* — 🟢 Receita");await done(aid,"extracted",o);return new Response("OK")}
@@ -494,6 +537,111 @@ if(s?.step==="SALDO_CTX"){const cs=text==="1"?["dfl"]:text==="2"?["personal"]:te
 if(s?.step==="RESUMO_CTX"){const cs=text==="1"?["dfl"]:text==="2"?["personal"]:text==="3"?["dfl","personal"]:[];if(!cs.length){const o=await reply("Escolha *1*, *2* ou *3*.");await done(aid,"extracted",o);return new Response("OK")}const r=await db.from("transactions").select("description,amount,type").eq("user_id",u.user_id).in("context",cs).eq("status","done").eq("affects_balance",true).is("goal_id",null).in("type",["income","expense","sangria"]).order("date",{ascending:false}).limit(5);await clear(phone);let b="📋 *Últimas movimentações realizadas*\n\n";(r.data||[]).forEach((x:any)=>b+=`${x.type==="income"?"🟢":"🔴"} ${x.description||"Movimentação"}: *${money(x.amount)}*\n`);const o=await reply(b);await done(aid,"extracted",o);return new Response("OK")}
 if(n==="/saldo"){await save(phone,"SALDO_CTX",{});const o=await reply("📊 *Visualizar saldo:*\n*1* - 🏢 Empresa\n*2* - 👤 Pessoal\n*3* - 🌐 Todos");await done(aid,"extracted",o);return new Response("OK")}
 if(n==="/resumo"){await save(phone,"RESUMO_CTX",{});const o=await reply("📋 *Extrato rápido:*\n*1* - 🏢 Empresa\n*2* - 👤 Pessoal\n*3* - 🌐 Todos");await done(aid,"extracted",o);return new Response("OK")}
+/* V172_FINANCE_PACE_BOT_START — consulta econômica; zero mutação de saldo */
+if(/^(?:\/ritmo|ritmo(?: financeiro)?|meu ritmo|como estao os gastos|como andam os gastos|controle de gastos)(?:\s|$)/.test(n)){
+  const pulseToday=day();
+  const [pulseYear,pulseMonth]=pulseToday.slice(0,7).split('-').map(Number);
+  const pulsePrev=new Date(Date.UTC(pulseYear,pulseMonth-2,1,12)).toISOString().slice(0,7)+'-01';
+  const pulseContextRaw=pendingFilters(text).context;
+  const pulseContext:'dfl'|'personal'|null=pulseContextRaw==='dfl'?'dfl':pulseContextRaw==='personal'?'personal':null;
+  let pulseQuery=db.from('transactions')
+    .select('date,context,type,amount,status,affects_balance,credit_card_id,invoice_id,transfer_group_id,goal_id,loan_id,financing_id,debt_id,category_id')
+    .eq('user_id',u.user_id).gte('date',pulsePrev).lte('date',pulseToday)
+    .order('date',{ascending:false}).limit(1800);
+  if(pulseContext)pulseQuery=pulseQuery.eq('context',pulseContext);
+  const [pulseResult,pulsePrefs]=await Promise.all([
+    pulseQuery,
+    db.from('user_settings').select('preferences').eq('user_id',u.user_id).maybeSingle()
+  ]);
+  if(pulseResult.error)throw pulseResult.error;
+  const pulseRows=pulseResult.data||[];
+  const configuredLimits=pulsePrefs.data?.preferences?.spending_limits||{};
+  const scopes:("dfl"|"personal")[]=pulseContext?[pulseContext]:['dfl','personal'];
+  const pulsePhrases=scopes.map(scope=>{
+    const snap=buildFinancePace(pulseRows,scope,pulseToday,Number(configuredLimits[scope]||0));
+    const change=snap.previousPeriodChange===null?'sem base anterior':`${snap.previousPeriodChange>=0?'+':''}${snap.previousPeriodChange.toFixed(1)}%`;
+    const target=snap.monthlyLimit===null?'não configurado':money(snap.monthlyLimit);
+    const rest=snap.remainingLimit===null?'sem limite':money(snap.remainingLimit);
+    return `*${scope==='dfl'?'Empresa':'Pessoal'}*\n🔴 Gasto neste mês: *${money(snap.currentExpense)}*\n📆 Últimos 7 dias: ${money(snap.weekExpense)}\n📊 Vs. mesmos dias do mês anterior: ${change}\n🎯 Limite: ${target}\n📏 Resta no limite: ${rest}${snap.projectedExpense!==null?`\n🔭 Estimativa linear do mês: ${money(snap.projectedExpense)}`:'\n🔭 Poucos dados para extrapolar.'}`;
+  });
+  const note=pulseRows.length>=1800?'\n⚠️ Consulta parcial: limite de 1.800 lançamentos.':'';
+  const message=`📊 *Ritmo Financeiro — ${pulseToday.slice(0,7)}*\n\n${pulsePhrases.join('\n\n')}\n\n_Comparação de gastos econômicos realizados; compras de cartão contam na compra, não na fatura. Isso não é saldo bancário. Nenhum lançamento foi alterado._${note}`;
+  const pulseReply=await reply(message);
+  await done(aid,'extracted',pulseReply,{action:'query.spending_pace.readonly',context:pulseContext||'both',count:pulseRows.length,partial:pulseRows.length>=1800});
+  return new Response('OK');
+}
+/* V172_FINANCE_PACE_BOT_END */
+/* V171_FINANCE_COMPARE_START — consultas determinísticas sem ações financeiras */
+const compareIntent=parseFinanceComparison(n,day());
+if(compareIntent){
+  if(compareIntent.kind==='invalid'){
+    const out=await reply(`📊 *Comparativo Financeiro*\n\n${compareIntent.reason}\n\nExemplos:\n• comparar setembro e outubro empresa\n• comparar 09/2026 e 10/2026 pessoal\n• evolução últimos 6 meses`);
+    await done(aid,'extracted',out,{action:'compare.invalid.readonly'});
+    return new Response('OK');
+  }
+  const selected=compareIntent.months;
+  const start=selected[0]+'-01',last=selected[selected.length-1];
+  const [year,month]=last.split('-').map(Number);
+  const end=new Date(Date.UTC(year,month,0,12)).toISOString().slice(0,10);
+  const actualEnd=end>day()?day():end;
+  let query=db.from("transactions").select("date,context,type,amount,status,affects_balance,credit_card_id,invoice_id,transfer_group_id,goal_id,loan_id,financing_id,debt_id")
+    .eq("user_id",u.user_id).eq("status","done").eq("affects_balance",true)
+    .in("type",["income","expense","sangria"])
+    .gte("date",start).lte("date",actualEnd).order("date",{ascending:false}).limit(1200);
+  if(compareIntent.context)query=query.eq("context",compareIntent.context);
+  const result=await query;
+  if(result.error)throw result.error;
+  const rows=result.data||[];
+  const totals=aggregateFinanceMonths(rows,selected,compareIntent.context);
+  const incomplete=rows.length>=1200;
+  const contextTitle=compareIntent.context==='dfl'?'Empresa':compareIntent.context==='personal'?'Pessoal':'Empresa + Pessoal';
+  const prefix=compareIntent.kind==='compare'?`📊 *Comparativo · ${contextTitle}*`:`📈 *Evolução financeira · ${contextTitle}*`;
+  let content=prefix+'\n\n'+totals.map((m:any)=>`*${monthLabel(m.month)}*\n🟢 Entradas: *${money(m.income)}*\n🔴 Saídas: *${money(m.expense)}*\n💰 Resultado: *${money(m.net)}* · ${m.count} lançamentos`).join('\n\n');
+  if(compareIntent.kind==='compare'){
+    const first=totals[0],second=totals[1];
+    content+=`\n\n*Variação do segundo mês em relação ao primeiro*\n🔴 Saídas: *${financeCompareDelta(second.expense,first.expense)}*\n🟢 Entradas: *${financeCompareDelta(second.income,first.income)}*`;
+  }else{
+    const first=totals[0],lastRow=totals[totals.length-1];
+    content+=`\n\n*Ritmo das saídas*\n${monthLabel(first.month)} → ${monthLabel(lastRow.month)}: *${financeCompareDelta(lastRow.expense,first.expense)}*`;
+  }
+  const partialMonth=selected.includes(day().slice(0,7));
+  content+=`\n\n_Somente caixa realizado, sem cartão, faturas, transferências, metas ou pendências. Isso não é saldo bancário.${partialMonth?' O mês atual está incompleto.':''}${incomplete?' ⚠️ Consulta parcial: limite de 1.200 movimentações.':''} Nenhum dado foi modificado._`;
+  const response=await reply(content);
+  await done(aid,'extracted',response,{action:compareIntent.kind==='compare'?'compare.periods.readonly':'compare.trend.readonly',context:compareIntent.context||'all',months:selected,count:rows.length,incomplete});
+  return new Response('OK');
+}
+/* V171_FINANCE_COMPARE_END */
+/* V169_FINANCIAL_RADAR_START — somente consultas read-only; nenhuma mutacao de saldo */
+if(/^(?:\/radar|radar financeiro|raio x|raio-x|diagnostico financeiro|revisao semanal|onde economizar)(?:\s+(?:empresa|pessoal))?$/.test(n)){
+  const context=/\bpessoal\b/.test(n)?"personal":/\bempresa\b/.test(n)?"dfl":null;
+  const today=day(),begin=botShiftCivil(today,-13),split=botShiftCivil(today,-6);
+  let query=db.from("transactions").select("type,amount,description,date,context").eq("user_id",u.user_id)
+    .eq("status","done").eq("affects_balance",true).is("goal_id",null).is("transfer_group_id",null)
+    .is("invoice_id",null).is("credit_card_id",null).in("type",["income","expense","sangria"])
+    .gte("date",begin).lte("date",today).order("date",{ascending:false}).limit(900);
+  if(context)query=query.eq("context",context);
+  const result=await query;
+  if(result.error)throw result.error;
+  const rows=result.data||[],a={income:0,expense:0},b={income:0,expense:0},expenses:any[]=[];
+  for(const row of rows){
+    const amount=Number(row.amount||0);if(!Number.isFinite(amount)||amount<=0)continue;
+    const bucket=row.date>=split?a:b;
+    if(row.type==="income")bucket.income+=amount;
+    else{bucket.expense+=amount;if(row.date>=split)expenses.push(row)}
+  }
+  expenses.sort((x:any,y:any)=>Number(y.amount||0)-Number(x.amount||0));
+  const diff=a.expense-b.expense;
+  const trend=b.expense>0?`${diff>=0?"+":""}${Math.round(diff/b.expense*100)}%`:(a.expense>0?"sem base anterior":"estável");
+  const title=context==="personal"?"Pessoal":context==="dfl"?"Empresa":"Empresa + Pessoal";
+  const top=expenses.slice(0,3).map((x:any,i:number)=>`${i+1}. ${String(x.description||"Despesa").slice(0,55)}: *${money(x.amount)}*`).join("\n");
+  const incomplete=rows.length>=900;
+  const output=`🔎 *Radar Financeiro · ${title}*\n\n*Últimos 7 dias (${split} a ${today})*\n🟢 Entradas realizadas: *${money(a.income)}*\n🔴 Saídas realizadas: *${money(a.expense)}*\n📊 Resultado: *${money(a.income-a.expense)}*\n\n*7 dias anteriores*\n🔴 Saídas: *${money(b.expense)}*\n📈 Variação de despesas: *${trend}*${top?`\n\n*3 maiores saídas recentes*\n${top}`:""}\n\n_Dados realizados de caixa. Não inclui cartão, faturas, transferências ou pendentes.${incomplete?" Consulta limitada às 900 movimentações recentes.":""} Nenhum lançamento foi alterado._`;
+  const replyText=await reply(output);
+  await done(aid,"extracted",replyText,{action:"radar.readonly",context:context||"all",days:14,incomplete,rows:rows.length});
+  return new Response("OK");
+}
+/* V169_FINANCIAL_RADAR_END */
+
 if(n==="/relatorio"){const start=`${day().slice(0,8)}01`,r=await db.from("transactions").select("amount,type").eq("user_id",u.user_id).eq("status","done").eq("affects_balance",true).is("goal_id",null).in("type",["income","expense","sangria"]).gte("date",start).lte("date",day());let inc=0,exp=0;(r.data||[]).forEach((x:any)=>x.type==="income"?inc+=Number(x.amount):exp+=Number(x.amount));const o=await reply(`📈 *Resumo do mês*\n\n🟢 Receitas: *${money(inc)}*\n🔴 Despesas: *${money(exp)}*\n💰 Resultado: *${money(inc-exp)}*`);await done(aid,"extracted",o);return new Response("OK")}
 if(/quanto tenho (?:na|no|em) /.test(n)){const wanted=n.replace(/^.*quanto tenho (?:na|no|em) /,"").replace(/[?!.]+$/,"").trim(),aa=await allAccs(u.user_id),a=matchNamed(aa,wanted);const o=await reply(a?`🏦 *${a.name}*\nSaldo atual: *${money(a.balance)}*`:`Não encontrei a conta *${wanted}*.`);await done(aid,"extracted",o,{query:"account_balance"});return new Response("OK")}
 if(/contas? (?:estao |esta )?negativ/.test(n)){const aa=(await allAccs(u.user_id)).filter((x:any)=>Number(x.balance)<0);const o=await reply(aa.length?`🔴 *Contas negativas*\n\n${aa.map((x:any)=>`• *${x.name}:* ${money(x.balance)}`).join("\n")}`:"✅ *Nenhuma conta está negativa.*");await done(aid,"extracted",o,{query:"negative_accounts"});return new Response("OK")}
@@ -510,7 +658,65 @@ if(/^(minhas? assinaturas|assinaturas|ver assinaturas)/.test(n)){const q=await d
 const findTx=n.match(/^(?:buscar|procurar|achar) (?:transacao|transação|movimentacao|movimentação)\s+(.+)/);if(findTx){const term=findTx[1].trim(),q=await db.from("transactions").select("description,amount,type,date,status,context").eq("user_id",u.user_id).ilike("description",`%${term}%`).order("date",{ascending:false}).limit(10),rows=q.data||[];const o=await reply(rows.length?`🔎 *Movimentações encontradas*\n\n${rows.map((x:any)=>`${x.type==="income"?"🟢":"🔴"} ${x.description||"Movimentação"} · *${money(x.amount)}* · ${x.date} · ${x.status==="done"?"realizada":"pendente"}`).join("\n")}`:`Não encontrei movimentações com *${term}*.`);await done(aid,"extracted",o,{action:"transaction.search",count:rows.length});return new Response("OK")}
 if(/(?:como|quanto).*(?:mes passado|mês passado).*(?:este mes|esse mes|este mês|esse mês)|(?:este mes|esse mes|este mês|esse mês).*(?:mes passado|mês passado)/.test(n)){const now=new Date(),y=Number(day().slice(0,4)),m=Number(day().slice(5,7)),prevM=m===1?12:m-1,prevY=m===1?y-1:y,curStart=`${y}-${String(m).padStart(2,"0")}-01`,prevStart=`${prevY}-${String(prevM).padStart(2,"0")}-01`,prevEnd=new Date(Date.UTC(y,m-1,0)).toISOString().slice(0,10),q=await db.from("transactions").select("amount,type,date").eq("user_id",u.user_id).eq("status","done").eq("affects_balance",true).in("type",["income","expense","sangria"]).gte("date",prevStart).lte("date",day()),rows=q.data||[];const sum=(from:string,to:string,type:string)=>(rows.filter((x:any)=>x.date>=from&&x.date<=to&&(type==="income"?x.type==="income":x.type!=="income"))).reduce((a:number,x:any)=>a+Number(x.amount||0),0),ci=sum(curStart,day(),"income"),ce=sum(curStart,day(),"expense"),pi=sum(prevStart,prevEnd,"income"),pe=sum(prevStart,prevEnd,"expense"),pct=(a:number,b:number)=>b===0?null:((a-b)/Math.abs(b))*100;const di=pct(ci,pi),de=pct(ce,pe),fmt=(v:number|null)=>v===null?"sem base anterior":`${v>=0?"+":""}${v.toFixed(1)}%`;const o=await reply(`📊 *Este mês × mês passado*\n\n🟢 Receitas: *${money(ci)}* vs ${money(pi)} · ${fmt(di)}\n🔴 Despesas: *${money(ce)}* vs ${money(pe)} · ${fmt(de)}\n💰 Resultado atual: *${money(ci-ce)}*\n💰 Resultado anterior: *${money(pi-pe)}*`);await done(aid,"extracted",o,{action:"query.month_compare"});return new Response("OK")}
 if(/quanto (?:ainda )?tenho (?:para|pra) receber|quanto (?:ainda )?falta receber|total a receber/.test(n)){const q=await db.from("debts").select("total_amount,paid_amount,due_date").eq("user_id",u.user_id).in("status",["pending","partial"]),rows=q.data||[],total=rows.reduce((a:number,d:any)=>a+Math.max(0,Number(d.total_amount||0)-Number(d.paid_amount||0)),0),late=rows.filter((d:any)=>d.due_date&&d.due_date<day()),lateTotal=late.reduce((a:number,d:any)=>a+Math.max(0,Number(d.total_amount||0)-Number(d.paid_amount||0)),0);const out=await reply(`👥 *Valores a receber*\n\n💰 Total em aberto: *${money(total)}*\n🧾 ${rows.length} cobranças abertas\n⚠️ Atrasado: *${money(lateTotal)}* em ${late.length} cobranças`);await done(aid,"extracted",out,{action:"query.receivables_total"});return new Response("OK")}
-if(/^(?:agenda financeira|agenda|o que vence|oque vence|proximos vencimentos|próximos vencimentos)\b/.test(n)){const days=/\b30\s*dias\b/.test(n)?30:/\b15\s*dias\b/.test(n)?15:7,start=day(),base=new Date(`${start}T12:00:00-03:00`);base.setDate(base.getDate()+days);const end=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(base),pf=pendingFilters(text);let tq=db.from("transactions").select("amount,type,description,date,context").eq("user_id",u.user_id).eq("status","pending").eq("affects_balance",false).gte("date",start).lte("date",end);if(pf.context)tq=tq.eq("context",pf.context);const [tr,sr,dr]=await Promise.all([tq.order("date",{ascending:true}).limit(20),db.from("subscriptions").select("name,amount,next_due_date,context").eq("user_id",u.user_id).eq("status","active").gte("next_due_date",start).lte("next_due_date",end).order("next_due_date").limit(15),db.from("debts").select("person_name,total_amount,paid_amount,due_date,context").eq("user_id",u.user_id).in("status",["pending","partial"]).gte("due_date",start).lte("due_date",end).order("due_date").limit(15)]),tx=(tr.data||[]).filter((x:any)=>!pf.context||x.context===pf.context),subs=(sr.data||[]).filter((x:any)=>!pf.context||x.context===pf.context),debts=(dr.data||[]).filter((x:any)=>!pf.context||x.context===pf.context),pay=tx.filter((x:any)=>x.type==="expense"||x.type==="sangria").reduce((a:number,x:any)=>a+Number(x.amount||0),0),inc=tx.filter((x:any)=>x.type==="income").reduce((a:number,x:any)=>a+Number(x.amount||0),0),subTotal=subs.reduce((a:number,x:any)=>a+Number(x.amount||0),0),recv=debts.reduce((a:number,x:any)=>a+Math.max(0,Number(x.total_amount||0)-Number(x.paid_amount||0)),0),ctx=pf.context==="dfl"?" · Empresa":pf.context==="personal"?" · Pessoal":"";const lines=[`📅 *Agenda financeira — próximos ${days} dias${ctx}*`,`_${start} a ${end}_`,"",`🔴 Pendências de saída: *${money(pay)}* (${tx.filter((x:any)=>x.type==="expense"||x.type==="sangria").length})`,`🟢 Pendências de entrada: *${money(inc)}* (${tx.filter((x:any)=>x.type==="income").length})`,`🔁 Assinaturas previstas: *${money(subTotal)}* (${subs.length})`,`👤 A receber com vencimento: *${money(recv)}* (${debts.length})`,"","_Os blocos são exibidos separadamente para evitar somar duas vezes uma assinatura que também já tenha gerado lançamento pendente._"];const out=await reply(lines.join("\n"));await done(aid,"extracted",out,{action:"query.financial_agenda",days,start,end,context:pf.context,pending_out:pay,pending_in:inc,subscriptions:subTotal,receivables:recv});return new Response("OK")}
+/* V170_UNIFIED_AGENDA_BOT_START: somente consultas, sem RPC financeiro */
+if(/^(?:\/?agenda(?: financeira)?|o que vence|oque vence|proximos vencimentos|proximas contas)\b/.test(n)){
+  const period=n.match(/\b(7|15|30|90)\s*dias?\b/);
+  const days=period?Number(period[1]):7;
+  const start=day(),end=botShiftCivil(start,days-1);
+  const pf=pendingFilters(text);
+  let tq=db.from('transactions')
+    .select('id,amount,type,description,date,due_date,context')
+    .eq('user_id',u.user_id).eq('status','pending').eq('affects_balance',false)
+    .in('type',['expense','income','sangria'])
+    .is('transfer_group_id',null).is('credit_card_id',null)
+    .is('invoice_id',null).is('debt_id',null).is('financing_id',null)
+    .is('loan_id',null).is('goal_id',null)
+    .gte('date',start).lte('date',end);
+  let sq=db.from('subscriptions')
+    .select('name,amount,next_due_date,context')
+    .eq('user_id',u.user_id).eq('status','active')
+    .gte('next_due_date',start).lte('next_due_date',end);
+  let dq=db.from('debts')
+    .select('person_name,total_amount,paid_amount,due_date,context')
+    .eq('user_id',u.user_id).in('status',['pending','partial'])
+    .gte('due_date',start).lte('due_date',end);
+  if(pf.context){
+    tq=tq.eq('context',pf.context);
+    sq=sq.eq('context',pf.context);
+    dq=dq.eq('context',pf.context);
+  }
+  const [tqResult,sqResult,dqResult]=await Promise.all([
+    tq.order('date',{ascending:true}).limit(60),
+    sq.order('next_due_date',{ascending:true}).limit(60),
+    dq.order('due_date',{ascending:true}).limit(60)
+  ]);
+  if(tqResult.error||sqResult.error||dqResult.error)throw(tqResult.error||sqResult.error||dqResult.error);
+  const txRows=tqResult.data||[], subRows=sqResult.data||[], debtRows=dqResult.data||[];
+  const pay=txRows.filter((x:any)=>x.type==='expense'||x.type==='sangria');
+  const inc=txRows.filter((x:any)=>x.type==='income');
+  const sum=(xs:any[],key:string)=>xs.reduce((total:number,x:any)=>total+Math.max(0,Number(x[key]||0)),0);
+  const expectedReceivable=debtRows.reduce((total:number,x:any)=>total+Math.max(0,Number(x.total_amount||0)-Number(x.paid_amount||0)),0);
+  const short=(xs:any[],dateField:string,labelField:string,calc:(x:any)=>number)=>xs.slice(0,5)
+    .map((x:any)=>`• ${String(x[labelField]||'Sem descrição').slice(0,60)} · ${money(calc(x))} · ${x[dateField]||'sem data'}`).join('\n');
+  const ctx=pf.context==='personal'?'Pessoal':pf.context==='dfl'?'Empresa':'Empresa + Pessoal';
+  const limited=txRows.length>=60||subRows.length>=60||debtRows.length>=60;
+  const message=`📅 *Agenda · próximos ${days} dias · ${ctx}*\n\n`+
+    `*Compromissos pendentes conhecidos*\n`+
+    `🔴 A pagar: *${money(sum(pay,'amount'))}* (${pay.length})\n`+
+    `🟢 Receitas ainda não recebidas: *${money(sum(inc,'amount'))}* (${inc.length})\n`+
+    `${pay.length?short(pay,'due_date','description',(x:any)=>Number(x.amount)):'• Nenhum pagamento simples no período'}\n\n`+
+    `*Cobranças em aberto*\n`+
+    `💚 A receber: *${money(expectedReceivable)}* (${debtRows.length})\n`+
+    `${debtRows.length?short(debtRows,'due_date','person_name',(x:any)=>Math.max(0,Number(x.total_amount)-Number(x.paid_amount||0))):'• Nenhuma cobrança no período'}\n\n`+
+    `*Assinaturas previstas — separadas*\n`+
+    `🟣 Planejamento: *${money(sum(subRows,'amount'))}* (${subRows.length})\n`+
+    `${subRows.length?short(subRows,'next_due_date','name',(x:any)=>Number(x.amount)):'• Nenhuma assinatura'}\n\n`+
+    `_As assinaturas não foram somadas aos compromissos para evitar duplicidade. Os valores a receber não são saldo. O bot não somou faturas, empréstimos ou financiamentos nesta consulta; confira a Agenda completa no aplicativo.${limited?' O limite de 60 registros por grupo pode deixar esta consulta parcial.':''} Nenhum valor foi movimentado._`;
+  const sent=await reply(message);
+  await done(aid,'extracted',sent,{action:'agenda.unified.readonly',days,context:pf.context||'all',count:txRows.length+subRows.length+debtRows.length,partial:limited});
+  return new Response('OK');
+}
+/* V170_UNIFIED_AGENDA_BOT_END */
 if(/(?:assinaturas|recorrencias|recorrências).*(?:proximos 7 dias|próximos 7 dias|semana)|quanto.*(?:assinaturas|recorrencias|recorrências).*(?:semana|7 dias)/.test(n)){const start=day(),base=new Date(`${start}T12:00:00-03:00`);base.setDate(base.getDate()+7);const end=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(base),q=await db.from("subscriptions").select("name,amount,next_due_date").eq("user_id",u.user_id).eq("status","active").gte("next_due_date",start).lte("next_due_date",end).order("next_due_date"),rows=q.data||[],total=rows.reduce((a:number,x:any)=>a+Number(x.amount||0),0);const out=await reply(rows.length?`📅 *Assinaturas — próximos 7 dias*\n\n💰 Total previsto: *${money(total)}*\n${rows.map((x:any)=>`• *${x.name}* · ${money(x.amount)} · ${x.next_due_date}`).join("\n")}`:"✅ *Nenhuma assinatura ativa vence nos próximos 7 dias.*");await done(aid,"extracted",out,{action:"query.subscriptions_7d",count:rows.length});return new Response("OK")}
 // Financial period intelligence: one parser for month/year + optional Empresa/Pessoal context.
 if(/^(?:resumo(?: financeiro)?|quanto (?:eu )?gastei|quanto (?:eu )?recebi|extrato)\b/.test(n)&&pendingPeriod(text).explicit){
