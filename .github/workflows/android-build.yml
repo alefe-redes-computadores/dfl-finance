@@ -90,6 +90,7 @@ jobs:
           node scripts/check-v188-transactions-search.mjs
           node scripts/check-v189-transaction-groups.mjs
           node scripts/check-v190-pending-performance.mjs
+          node scripts/check-v191-pending-totals.mjs
           node scripts/check-v84-edge-runtime.mjs
 
       - name: Mobile contracts

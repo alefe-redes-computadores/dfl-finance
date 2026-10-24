@@ -1144,37 +1144,40 @@ export default function TransactionsPage() {
         )
       : []
 
-  const pendingPayableTotal = pendingSummaryTxs
-    .filter(
-      (tx: any) =>
-        getPendingDirection(tx) === 'payable'
-    )
-    .reduce(
-      (sum: number, tx: any) =>
-        sum + safeNum(tx.amount),
-      0
-    )
+  // V191: uma passagem pelas transações e outra pelas dívidas.
+  // As regras de classificação e a origem dos valores permanecem iguais.
+  const pendingTotals = useMemo(() => {
+    let payable = 0
+    let receivableTransactions = 0
 
-  const pendingReceivableTxTotal = pendingSummaryTxs
-    .filter((tx: any) =>
-      isStandalonePendingReceivable(tx)
-    )
-    .reduce(
-      (sum: number, tx: any) =>
-        sum + safeNum(tx.amount),
-      0
-    )
+    for (const tx of pendingSummaryTxs) {
+      if (getPendingDirection(tx) === 'payable') {
+        payable += safeNum(tx.amount)
+      }
 
-  const pendingDebtTotal =
-    debtReceivablesForPeriod.reduce(
-      (sum: number, debt: any) =>
-        sum + safeNum(debt.remaining),
-      0
-    )
+      if (isStandalonePendingReceivable(tx)) {
+        receivableTransactions += safeNum(tx.amount)
+      }
+    }
 
+    let receivableDebts = 0
+
+    for (const debt of debtReceivablesForPeriod) {
+      receivableDebts += safeNum(debt.remaining)
+    }
+
+    return {
+      payable,
+      receivableTransactions,
+      receivableDebts,
+    }
+  }, [pendingSummaryTxs, debtReceivablesForPeriod])
+
+  const pendingPayableTotal = pendingTotals.payable
+  const pendingReceivableTxTotal = pendingTotals.receivableTransactions
+  const pendingDebtTotal = pendingTotals.receivableDebts
   const pendingReceivableTotal =
-    pendingReceivableTxTotal +
-    pendingDebtTotal
+    pendingReceivableTxTotal + pendingDebtTotal
 
   const hasVisibleRows =
     displayTxs.length > 0 ||
