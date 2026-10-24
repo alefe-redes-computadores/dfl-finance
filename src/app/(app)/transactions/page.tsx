@@ -1032,7 +1032,11 @@ export default function TransactionsPage() {
       }]
     })
   }, [filtered, accountById])
-  const grouped = groupByDate(displayTxs)
+  // V189: agrupar apenas quando os lancamentos exibidos mudarem.
+  const grouped = useMemo(
+    () => groupByDate(displayTxs),
+    [displayTxs]
+  )
 
   const debtSearchTerm = deferredSearch
     .trim()
@@ -1162,11 +1166,16 @@ export default function TransactionsPage() {
     displayTxs.length > 0 ||
     visibleDebtReceivables.length > 0
 
-  const sortedDates = Object.keys(grouped).sort(
-    (a, b) =>
-      advFilters.sortOrder === 'desc'
-        ? b.localeCompare(a)
-        : a.localeCompare(b)
+  // V189: reutilizar datas ordenadas enquanto lista e ordem
+  // permanecerem iguais.
+  const sortedDates = useMemo(
+    () => Object.keys(grouped).sort(
+      (a, b) =>
+        advFilters.sortOrder === 'desc'
+          ? b.localeCompare(a)
+          : a.localeCompare(b)
+    ),
+    [grouped, advFilters.sortOrder]
   )
 
   // ✅ REMOVIDO useEffect com reload

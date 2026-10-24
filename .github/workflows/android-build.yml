@@ -88,6 +88,7 @@ jobs:
           node scripts/check-v186-dashboard-stability.mjs
           node scripts/check-v187-toast-priority.mjs
           node scripts/check-v188-transactions-search.mjs
+          node scripts/check-v189-transaction-groups.mjs
           node scripts/check-v84-edge-runtime.mjs
 
       - name: Mobile contracts
