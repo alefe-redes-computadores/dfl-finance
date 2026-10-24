@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import SyncSafetyDetails from '@/components/SyncSafetyDetails'
@@ -22,6 +22,11 @@ export default function SyncStatusModal({ isOpen, onClose }: SyncStatusModalProp
   const isOnline = localSync?.isOnline
   const syncStatus = localSync?.syncStatus
 
+  const panelRef = useRef<HTMLDivElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
   const [mounted, setMounted] = useState(false)
   const [isDevMode, setIsDevMode] = useState(false)
 
@@ -31,16 +36,56 @@ export default function SyncStatusModal({ isOpen, onClose }: SyncStatusModalProp
   }, [])
 
   useEffect(() => {
-    if (!mounted) return
+    if (!mounted || !isOpen) return
 
-    if (isOpen) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
+    const previousOverflow = document.body.style.overflow
+    const previousFocus = document.activeElement as HTMLElement | null
+
+    document.body.style.overflow = 'hidden'
+
+    const focusFrame = window.requestAnimationFrame(() => {
+      closeButtonRef.current?.focus()
+    })
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onCloseRef.current()
+        return
+      }
+
+      if (event.key !== 'Tab' || !panelRef.current) return
+
+      const candidates = Array.from(
+        panelRef.current.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])'
+        )
+      )
+
+      if (!candidates.length) return
+
+      const first = candidates[0]
+      const last = candidates[candidates.length - 1]
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
     }
 
+    window.addEventListener('keydown', handleKeyDown)
+
     return () => {
-      document.body.style.overflow = ''
+      window.cancelAnimationFrame(focusFrame)
+      window.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = previousOverflow
+
+      if (previousFocus?.isConnected) {
+        previousFocus.focus()
+      }
     }
   }, [isOpen, mounted])
 
@@ -78,7 +123,11 @@ export default function SyncStatusModal({ isOpen, onClose }: SyncStatusModalProp
         onClick={onClose}
       />
       <div
-        className="app-modal-panel max-h-[88dvh] max-w-md overflow-y-auto p-6 transform transition-all duration-300 animate-in fade-in zoom-in-95 slide-in-from-bottom-4"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="dfl-sync-modal-title"
+        className="app-modal-panel max-h-[88dvh] max-w-md overflow-y-auto overscroll-contain p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] transform transition-all duration-300 animate-in fade-in zoom-in-95 slide-in-from-bottom-4 motion-reduce:animate-none"
         style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}
       >
         <div className="flex items-center justify-between mb-6">
@@ -87,7 +136,7 @@ export default function SyncStatusModal({ isOpen, onClose }: SyncStatusModalProp
               <RefreshCw size={22} className={isSyncing ? 'animate-spin' : ''} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white">Sincronização</h2>
+              <h2 id="dfl-sync-modal-title" className="text-xl font-bold text-gray-800 dark:text-white">Sincronização</h2>
               <div className="flex items-center gap-2 mt-0.5">
                 <StatusIcon size={14} className={statusColor} />
                 <span className={`text-xs font-medium ${statusColor}`}>{statusText}</span>
@@ -98,8 +147,10 @@ export default function SyncStatusModal({ isOpen, onClose }: SyncStatusModalProp
           </div>
 
           <button
+            ref={closeButtonRef}
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors text-gray-400 hover:text-gray-600 dark:text-gray-500"
+            aria-label="Fechar detalhes da sincronização"
+            className="flex h-11 w-11 items-center justify-center rounded-2xl text-gray-500 transition-all active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 hover:bg-gray-100 dark:hover:bg-slate-700 motion-reduce:transition-none"
             type="button"
           >
             <X size={20} />

@@ -47,8 +47,15 @@ export default function SelectField({
     const previousFocus = document.activeElement as HTMLElement | null
     document.body.style.overflow = 'hidden'
     const frame = window.requestAnimationFrame(() => {
-      const first = sheetRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')
-      first?.focus()
+      const selectedOption = sheetRef.current?.querySelector<HTMLButtonElement>(
+        'button[data-selected="true"]:not(:disabled)'
+      )
+      const firstOption = sheetRef.current?.querySelector<HTMLButtonElement>(
+        'button[data-option="true"]:not(:disabled)'
+      )
+      ;(selectedOption || firstOption || sheetRef.current?.querySelector<HTMLButtonElement>(
+        'button:not(:disabled)'
+      ))?.focus()
     })
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -91,7 +98,8 @@ export default function SelectField({
               role="dialog"
               aria-modal="true"
               aria-labelledby={titleId}
-              className="app-sheet-panel relative z-10 max-h-[78dvh] overflow-y-auto overscroll-contain p-5 animate-in slide-in-from-bottom-6 sm:rounded-[30px] sm:border-b"
+              id={titleId}
+              className="app-sheet-panel relative z-10 max-h-[78dvh] overflow-y-auto overscroll-contain p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] animate-in slide-in-from-bottom-6 motion-reduce:animate-none sm:rounded-[30px] sm:border-b"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
@@ -129,6 +137,8 @@ export default function SelectField({
                         key={option.value}
                         type="button"
                         disabled={option.disabled}
+                        data-option="true"
+                        data-selected={active ? 'true' : 'false'}
                         aria-pressed={active}
                         onClick={() => {
                           if (option.disabled) return
@@ -188,6 +198,7 @@ export default function SelectField({
         className={`app-select flex w-full items-center justify-between gap-3 text-left disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-controls={open ? titleId : undefined}
       >
         <span className="flex min-w-0 items-center gap-2.5">
           {selected?.icon && (
