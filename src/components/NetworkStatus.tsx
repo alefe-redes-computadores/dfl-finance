@@ -1,7 +1,17 @@
 'use client'
 
-import { Wifi, WifiOff, Loader2, X } from 'lucide-react'
 import { useState } from 'react'
+import {
+  AlertTriangle,
+  Loader2,
+  WifiOff,
+  X
+} from 'lucide-react'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import {
+  getNetworkNotice,
+  shouldShowNetworkNotice
+} from '@/lib/networkNoticePolicy'
 
 interface NetworkStatusProps {
   isOnline: boolean
@@ -9,49 +19,76 @@ interface NetworkStatusProps {
   isSyncing?: boolean
 }
 
-export default function NetworkStatus({ isOnline, pendingCount, isSyncing = false }: NetworkStatusProps) {
-  const [dismissed, setDismissed] = useState(false)
+const tone = {
+  offline: {
+    bar: 'border-rose-200 bg-rose-50/95 text-rose-800 dark:border-rose-900 dark:bg-rose-950/95 dark:text-rose-200',
+    icon: WifiOff
+  },
+  pending: {
+    bar: 'border-amber-200 bg-amber-50/95 text-amber-800 dark:border-amber-900 dark:bg-amber-950/95 dark:text-amber-200',
+    icon: AlertTriangle
+  },
+  syncing: {
+    bar: 'border-sky-200 bg-sky-50/95 text-sky-800 dark:border-sky-900 dark:bg-sky-950/95 dark:text-sky-200',
+    icon: Loader2
+  }
+}
 
-  if (dismissed) return null
-  if (isOnline && pendingCount === 0 && !isSyncing) return null
+export default function NetworkStatus({
+  isOnline,
+  pendingCount,
+  isSyncing = false
+}: NetworkStatusProps) {
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null)
+  const { light } = useHapticFeedback()
+
+  const notice = getNetworkNotice({
+    isOnline,
+    pendingCount,
+    isSyncing
+  })
+
+  if (!shouldShowNetworkNotice(notice, dismissedKey) || !notice) {
+    return null
+  }
+
+  const visual = tone[notice.kind]
+  const Icon = visual.icon
 
   return (
-    <div role="status" aria-live="polite" className={`fixed top-0 left-0 right-0 z-[300] px-4 pb-2.5 pt-[calc(0.625rem+var(--safe-area-top))] text-center text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-      isOnline && isSyncing
-        ? 'bg-emerald-600 text-white animate-pulse'
-        : isOnline
-        ? 'bg-emerald-600 text-white'
-        : 'bg-red-500 text-white'
-    }`}>
-      {isOnline && isSyncing ? (
-        <>
-          <Loader2 size={14} className="animate-spin" />
-          Sincronizando {pendingCount} transação(ões)...
-        </>
-      ) : isOnline ? (
-        <>
-          <Wifi size={14} />
-          {pendingCount > 0
-            ? `${pendingCount} item(ns) pendente(s) de sincronização`
-            : 'Conectado'}
-        </>
-      ) : (
-        <>
-          <WifiOff size={14} />
-          Modo offline — {pendingCount > 0 ? `${pendingCount} alteração(ões) salva(s) localmente` : 'dados serão salvos localmente'}
-        </>
-      )}
-      
-      {(pendingCount > 0 || isSyncing) && (
+    <div
+      role={notice.kind === 'offline' ? 'alert' : 'status'}
+      aria-live={notice.kind === 'offline' ? 'assertive' : 'polite'}
+      aria-atomic="true"
+      className="pointer-events-none fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[300] mx-auto max-w-lg motion-reduce:transition-none"
+    >
+      <div className={`pointer-events-auto flex min-h-14 items-center gap-3 rounded-[20px] border px-3 py-2 shadow-[0_12px_36px_rgba(15,23,42,0.13)] backdrop-blur-xl ${visual.bar}`}>
+        <span
+          aria-hidden="true"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px] bg-white/70 dark:bg-white/10"
+        >
+          <Icon
+            size={18}
+            className={notice.kind === 'syncing' ? 'animate-spin motion-reduce:animate-none' : ''}
+          />
+        </span>
+
+        <p className="min-w-0 flex-1 text-[11px] font-semibold leading-4">
+          {notice.message}
+        </p>
+
         <button
           type="button"
-          onClick={() => setDismissed(true)}
-          aria-label="Ocultar status de sincronização"
-          className="ml-2 rounded-full p-1 transition-colors hover:bg-white/20"
+          aria-label="Dispensar aviso de conexão"
+          onClick={() => {
+            light()
+            setDismissedKey(notice.key)
+          }}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] transition-colors hover:bg-black/5 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current motion-reduce:transition-none dark:hover:bg-white/10"
         >
-          <X size={12} />
+          <X size={17} aria-hidden="true"/>
         </button>
-      )}
+      </div>
     </div>
   )
 }
