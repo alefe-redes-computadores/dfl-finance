@@ -4,6 +4,8 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
+  useRef,
   useState,
 } from 'react'
 import {
@@ -82,10 +84,33 @@ export function useDashboardMetrics(
     useState<DashboardMetrics | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // A identidade do mes, e nao do objeto Date, controla a consulta.
+  const monthKey =
+    `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
+
+  const referenceDate = useMemo(
+    () => new Date(
+      Number(monthKey.slice(0, 4)),
+      Number(monthKey.slice(5, 7)) - 1,
+      1
+    ),
+    [monthKey]
+  )
+
+  // Cada consulta tem uma versao. Somente a mais recente
+  // pode publicar metricas, erros ou estado de loading.
+  const requestVersionRef = useRef(0)
+
   const calculateMetrics = useCallback(async () => {
+    const requestVersion = ++requestVersionRef.current
+
+    const isCurrentRequest = () =>
+      requestVersion === requestVersionRef.current
     if (!user?.id) {
-      setMetrics(null)
-      setLoading(false)
+      if (isCurrentRequest()) {
+        setMetrics(null)
+        setLoading(false)
+      }
       return
     }
 
@@ -106,13 +131,13 @@ export function useDashboardMetrics(
        */
       const historyStart = format(
         startOfMonth(
-          subMonths(currentDate, 6)
+          subMonths(referenceDate, 6)
         ),
         'yyyy-MM-dd'
       )
 
       const historyEnd = format(
-        endOfMonth(currentDate),
+        endOfMonth(referenceDate),
         'yyyy-MM-dd'
       )
 
@@ -146,6 +171,8 @@ export function useDashboardMetrics(
           .toArray(),
       ])
 
+      if (!isCurrentRequest()) return
+
       const pfBalance = getContextBalance(
         allAccounts,
         'personal'
@@ -162,13 +189,13 @@ export function useDashboardMetrics(
 
       const currentFlow = getMonthlyFlow(
         allTransactions,
-        currentDate,
+        referenceDate,
         context
       )
 
       const previousDate = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth() - 1,
+        referenceDate.getFullYear(),
+        referenceDate.getMonth() - 1,
         1
       )
 
@@ -192,7 +219,7 @@ export function useDashboardMetrics(
       const history =
         getHistoricalMonthlyAverages(
           allTransactions,
-          currentDate,
+          referenceDate,
           6,
           context
         )
@@ -219,14 +246,14 @@ export function useDashboardMetrics(
       const currentMonthTransactions =
         filterTransactionsByMonth(
           allTransactions,
-          currentDate,
+          referenceDate,
           context
         )
 
       const isCurrentMonth =
-        currentDate.getFullYear() ===
+        referenceDate.getFullYear() ===
           new Date().getFullYear() &&
-        currentDate.getMonth() ===
+        referenceDate.getMonth() ===
           new Date().getMonth()
 
       const daysElapsed = isCurrentMonth
@@ -235,13 +262,13 @@ export function useDashboardMetrics(
             1,
             differenceInCalendarDays(
               new Date(
-                currentDate.getFullYear(),
-                currentDate.getMonth() + 1,
+                referenceDate.getFullYear(),
+                referenceDate.getMonth() + 1,
                 0
               ),
               new Date(
-                currentDate.getFullYear(),
-                currentDate.getMonth(),
+                referenceDate.getFullYear(),
+                referenceDate.getMonth(),
                 1
               )
             ) + 1
@@ -253,14 +280,14 @@ export function useDashboardMetrics(
       const pfTransactions =
         filterTransactionsByMonth(
           allTransactions,
-          currentDate,
+          referenceDate,
           'personal'
         )
 
       const pjTransactions =
         filterTransactionsByMonth(
           allTransactions,
-          currentDate,
+          referenceDate,
           'dfl'
         )
 
@@ -278,13 +305,13 @@ export function useDashboardMetrics(
         pf: buildCategoryDistribution(
           allTransactions,
           allCategories,
-          currentDate,
+          referenceDate,
           'personal'
         ),
         pj: buildCategoryDistribution(
           allTransactions,
           allCategories,
-          currentDate,
+          referenceDate,
           'dfl'
         ),
       }
@@ -293,7 +320,7 @@ export function useDashboardMetrics(
         currentBalance: totalBalance,
         averageIncome: history.averageIncome,
         averageExpense: history.averageExpense,
-        referenceDate: currentDate,
+        referenceDate: referenceDate,
         months: 12,
       })
 
@@ -305,6 +332,8 @@ export function useDashboardMetrics(
           referenceDate: new Date(),
           days: 30,
         })
+
+      if (!isCurrentRequest()) return
 
       setMetrics({
         kpis: {
@@ -330,14 +359,22 @@ export function useDashboardMetrics(
         'Erro ao processar métricas financeiras:',
         error
       )
-      setMetrics(null)
+      if (isCurrentRequest()) {
+        setMetrics(null)
+      }
     } finally {
-      setLoading(false)
+      if (isCurrentRequest()) {
+        setLoading(false)
+      }
     }
-  }, [context, currentDate, user?.id])
+  }, [context, referenceDate, user?.id])
 
   useEffect(() => {
-    calculateMetrics()
+    void calculateMetrics()
+
+    return () => {
+      requestVersionRef.current += 1
+    }
   }, [calculateMetrics])
 
   return {
