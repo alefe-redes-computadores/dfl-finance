@@ -1022,8 +1022,11 @@ export default function TransactionsPage() {
       deferredSearch,
     ]
   )
-  const pendingTxs = filtered.filter(
-    (tx: any) => tx.status === 'pending'
+  const pendingTxs = useMemo(
+    () => filtered.filter(
+      (tx: any) => tx.status === 'pending'
+    ),
+    [filtered]
   )
   // V80 — o ledger preserva duas pernas; o extrato apresenta uma transferência.
   const displayTxs = useMemo(() => {
@@ -1130,8 +1133,8 @@ export default function TransactionsPage() {
     debtSearchTerm,
   ])
 
-  const pendingCardDebts =
-    quickFilter === 'all' ||
+  const pendingCardDebts = useMemo(
+    () => (quickFilter === 'all' ||
     quickFilter === 'income'
       ? debtReceivablesForPeriod.filter(
           (debt: any) => {
@@ -1147,8 +1150,9 @@ export default function TransactionsPage() {
             )
           }
         )
-      : []
-
+      : []),
+    [quickFilter, debtReceivablesForPeriod, debtSearchTerm]
+  )
   // V191: uma passagem pelas transações e outra pelas dívidas.
   // As regras de classificação e a origem dos valores permanecem iguais.
   const pendingTotals = useMemo(() => {
