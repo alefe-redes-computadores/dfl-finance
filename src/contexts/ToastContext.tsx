@@ -3,6 +3,10 @@
 
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import Toast from '@/components/Toast'
+import {
+  enqueueFinanceToast,
+  normalizeToastMessage
+} from '@/lib/toastQueuePolicy'
 
 type ToastType = 'success' | 'error' | 'info' | 'warning'
 
@@ -22,19 +26,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([])
 
   const showToast = useCallback((message: string, type: ToastType = 'success') => {
-    const cleanMessage = message.trim()
+    const cleanMessage = normalizeToastMessage(message)
     if (!cleanMessage) return
 
-    setToasts((current) => {
-      const withoutDuplicate = current.filter(
-        (toast) => !(toast.message === cleanMessage && toast.type === type)
-      )
-
-      return [
-        ...withoutDuplicate.slice(-2),
-        { id: crypto.randomUUID(), message: cleanMessage, type },
-      ]
-    })
+    setToasts(current => enqueueFinanceToast(current, {
+      id: crypto.randomUUID(),
+      message: cleanMessage,
+      type
+    }))
   }, [])
 
   const removeToast = useCallback((id: string) => {

@@ -108,7 +108,7 @@ export default function Toast({ message, type, onClose }: ToastProps) {
 
   return (
     <div
-      className={`pointer-events-auto flex w-full items-start gap-3 rounded-[22px] border bg-white/95 px-4 py-3.5 shadow-[0_14px_40px_rgba(15,23,42,0.18)] backdrop-blur-xl transition-all duration-200 motion-reduce:transition-none dark:bg-slate-800/95 ${styles.border} ${
+      className={`pointer-events-auto flex w-full items-start gap-3 rounded-[22px] border bg-white/95 px-4 py-3.5 shadow-[0_14px_40px_rgba(15,23,42,0.18)] backdrop-blur-xl transition-all duration-200 motion-reduce:transition-none motion-reduce:transform-none dark:bg-slate-800/95 ${styles.border} ${
         isVisible ? 'translate-y-0 scale-100 opacity-100' : '-translate-y-2 scale-[0.98] opacity-0'
       }`}
       role={urgent ? 'alert' : 'status'}
@@ -133,7 +133,7 @@ export default function Toast({ message, type, onClose }: ToastProps) {
         type="button"
         onClick={startClose}
         aria-label="Fechar aviso"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-400 transition-colors active:scale-[0.95] dark:bg-slate-700 dark:text-gray-400"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gray-100/80 text-gray-600 transition-all active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 motion-reduce:transition-none dark:bg-slate-700 dark:text-gray-200"
       >
         <X size={14} />
       </button>

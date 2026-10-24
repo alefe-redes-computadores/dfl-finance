@@ -37,7 +37,11 @@ export default function Skeleton({
     style.height = height || '48px'
   }
 
-  const elements = Array.from({ length: count }, (_, i) => (
+  const safeCount = Number.isFinite(count)
+    ? Math.max(0, Math.min(24, Math.floor(count)))
+    : 1
+
+  const elements = Array.from({ length: safeCount }, (_, i) => (
     <div
       key={i}
       className={`${baseClass} ${variantClass[variant]} ${className}`}
