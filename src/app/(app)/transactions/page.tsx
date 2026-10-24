@@ -925,7 +925,8 @@ export default function TransactionsPage() {
     ]
   );
 
-  const pendingSummaryTxs = transactionsWithJoin.filter(
+  const pendingSummaryTxs = useMemo(
+    () => transactionsWithJoin.filter(
     (tx: any) => {
       if (
         tx.date < startMonth ||
@@ -1001,8 +1002,21 @@ export default function TransactionsPage() {
 
       return true
     }
+  ),
+    [
+      transactionsWithJoin,
+      startMonth,
+      endMonth,
+      todayIso,
+      advFilters.status,
+      advFilters.accountId,
+      advFilters.minAmount,
+      advFilters.maxAmount,
+      advFilters.searchNotes,
+      effectiveCategoryFilter,
+      deferredSearch,
+    ]
   )
-
   const pendingTxs = filtered.filter(
     (tx: any) => tx.status === 'pending'
   )
