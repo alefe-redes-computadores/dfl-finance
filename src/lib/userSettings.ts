@@ -1,5 +1,6 @@
 // src/lib/userSettings.ts
 import { supabase } from '@/lib/supabase'
+import { normalizePlanningGroups, normalizePlanningReserves, normalizePlanningFlexLimits, type PlanningGroupMap, type PlanningReserve } from '@/lib/financePlanning'
 
 export type ThemePreference = 'light' | 'dark'
 export type AppMode = 'full' | 'personal_only'
@@ -10,6 +11,9 @@ export type SpendingLimitMap = { dfl: number; personal: number }
 export interface UserPreferences {
   default_accounts: DefaultAccountMap
   spending_limits: SpendingLimitMap
+  planning_groups: PlanningGroupMap
+  planning_reserves: PlanningReserve[]
+  planning_flex_limits: SpendingLimitMap
   ai_enabled: boolean
   auto_categorize: boolean
   weekly_report: boolean
@@ -58,6 +62,9 @@ export interface UserSettingsSaveResult {
 export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   default_accounts: { dfl: '', personal: '' },
   spending_limits: { dfl: 0, personal: 0 },
+  planning_groups: { dfl: {}, personal: {} },
+  planning_reserves: [],
+  planning_flex_limits: { dfl: 0, personal: 0 },
   ai_enabled: true,
   auto_categorize: true,
   weekly_report: true,
@@ -146,6 +153,9 @@ function normalizePreferences(value: unknown): UserPreferences {
       dfl: normalizeSpendingLimit((raw.spending_limits as Record<string, unknown> | undefined)?.dfl),
       personal: normalizeSpendingLimit((raw.spending_limits as Record<string, unknown> | undefined)?.personal),
     },
+    planning_groups: normalizePlanningGroups(raw.planning_groups),
+    planning_reserves: normalizePlanningReserves(raw.planning_reserves),
+    planning_flex_limits: normalizePlanningFlexLimits(raw.planning_flex_limits),
     ai_enabled:
       typeof raw.ai_enabled === 'boolean'
         ? raw.ai_enabled

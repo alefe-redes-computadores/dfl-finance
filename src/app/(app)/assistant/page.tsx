@@ -677,6 +677,7 @@ function AssistantContent() {
               <ChevronRight size={16} className="text-teal-700 dark:text-teal-400" />
             </button>
 
+            <button type="button" onClick={() => router.push('/planning')} className="mb-3 flex min-h-16 w-full items-center justify-between gap-3 rounded-[22px] border border-violet-200/70 bg-violet-50/70 px-4 py-3 text-left transition active:scale-[0.98] dark:border-violet-800/50 dark:bg-violet-900/20"><span className="min-w-0"><span className="block text-[13px] font-bold text-violet-900 dark:text-violet-200">Meu plano financeiro</span><span className="mt-1 block text-[11px] text-violet-700 dark:text-violet-300">Fixos, flexíveis, reservas e orçamento não mensal</span></span><ChevronRight size={18} className="text-violet-700"/></button>
             <button type="button" onClick={() => router.push('/spending-pulse')} className="mb-3 flex min-h-16 w-full items-center justify-between gap-3 rounded-[22px] border border-teal-200/60 bg-teal-50/70 px-4 py-3 text-left transition active:scale-[0.98] dark:border-teal-800/50 dark:bg-teal-900/20">
               <span className="min-w-0"><span className="block text-[13px] font-bold text-teal-800 dark:text-teal-200">Ritmo Financeiro</span><span className="mt-1 block text-[11px] text-teal-700/80 dark:text-teal-300/80">Comparar meses, configurar limite e identificar gastos</span></span>
               <ChevronRight size={19} className="shrink-0 text-teal-600"/>

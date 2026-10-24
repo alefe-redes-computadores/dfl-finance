@@ -157,6 +157,7 @@ function BudgetsContent() {
           </button>
         </div>
 
+        <button type="button" onClick={() => router.push('/planning')} className="mb-3 flex min-h-11 w-full items-center justify-between gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-3 text-[12px] font-bold text-violet-700 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-violet-300"><span>Planejamento: fixos, flexíveis e reservas</span><span>Ver plano →</span></button>
         <div className="mb-2.5">
           <ContextToggle />
         </div>

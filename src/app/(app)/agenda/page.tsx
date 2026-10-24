@@ -65,6 +65,7 @@ export default function AgendaPage(){
       <div className="min-w-0 flex-1"><p className="text-[11px] text-gray-400">Compromissos em um só lugar</p><h1 className="text-[18px] font-bold text-gray-900 dark:text-white">Agenda Financeira</h1></div>
       <CalendarDays size={20} className="text-teal-600"/>
     </header>
+    <button type="button" onClick={()=>router.push('/planning')} className="flex min-h-12 w-full items-center justify-between rounded-xl border border-violet-200 bg-violet-50 px-4 text-left text-[12px] font-bold text-violet-800 dark:border-violet-900/60 dark:bg-violet-950/20 dark:text-violet-300"><span>Planejar despesas não mensais e reservas</span><span>→</span></button>
     <ContextToggle />
     <section className={card}>
       <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-[14px] font-bold text-gray-900 dark:text-white">Janela de compromissos</h2><p className="mt-1 text-[11px] text-gray-500">Valores previstos, separados do saldo das contas</p></div><ShieldCheck size={19} className="text-teal-600"/></div>

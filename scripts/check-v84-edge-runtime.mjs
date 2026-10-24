@@ -20,6 +20,8 @@ const financePace=evaluate('supabase/functions/_shared/financePace.ts',name=>{th
 assert.equal(typeof financeComparisons.parseFinanceComparison,'function')
 assert.equal(typeof financeComparisons.aggregateFinanceMonths,'function')
 assert.equal(typeof financePace.buildFinancePace,'function')
+const financePlanning=evaluate('supabase/functions/_shared/financePlanning.ts',name=>{if(name==='./financePace.ts')return financePace;throw Error('Unexpected financePlanning import '+name)})
+assert.equal(typeof financePlanning.buildFinancePlanning,'function')
 const env={SUPABASE_URL:'https://example.test',SUPABASE_SERVICE_ROLE_KEY:'internal-test-secret',
  EVOLUTION_API_KEY:'evolution-test-secret',EVOLUTION_API_URL:'https://evolution.test',EVOLUTION_INSTANCE:'test'}
 const deno={env:{get:key=>env[key]}}
@@ -32,6 +34,7 @@ function handler(file, client, webPush={setVapidDetails(){},async sendNotificati
   if(name.includes('requestSecurity'))return security
   if(name==='../_shared/financeComparisons.ts')return financeComparisons
   if(name==='../_shared/financePace.ts')return financePace
+  if(name==='../_shared/financePlanning.ts')return financePlanning
   if(name.includes('/http/server'))return{serve:fn=>{serveHandler=fn}}
   if(name.includes('supabase-js'))return{createClient:()=>client}
   if(name==='npm:web-push')return webPush
