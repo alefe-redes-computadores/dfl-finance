@@ -5,7 +5,7 @@ import SelectField from '@/components/SelectField'
 import TransferModal from '@/components/TransferModal'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useDeferredValue, useEffect, useState, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
@@ -539,6 +539,9 @@ export default function TransactionsPage() {
   const exportMenuRef = useRef<HTMLDivElement>(null)
 
   const [search, setSearch] = useState('')
+  // A digitação mantém prioridade sobre o filtro da lista.
+  const deferredSearch = useDeferredValue(search)
+  const searchUpdating = search !== deferredSearch
   const [currentDate, setCurrentDate] = useState(new Date())
 
   useEffect(() => {
@@ -873,8 +876,8 @@ export default function TransactionsPage() {
     if (advFilters.minAmount && safeNum(t.amount) < safeNum(advFilters.minAmount)) return false
     if (advFilters.maxAmount && safeNum(t.amount) > safeNum(advFilters.maxAmount)) return false
 
-    if (search) {
-      const term = search.toLowerCase()
+    if (deferredSearch) {
+      const term = deferredSearch.toLowerCase()
       const desc = String(t.description || '').toLowerCase()
       const cat = String(t.categories?.name || '').toLowerCase()
       const notes = String(t.notes || '').toLowerCase()
@@ -915,7 +918,7 @@ export default function TransactionsPage() {
       endMonth,
       quickFilter,
       pendingKind,
-      search,
+      deferredSearch,
       todayIso,
       effectiveCategoryFilter,
       advFilters,
@@ -970,8 +973,8 @@ export default function TransactionsPage() {
         return false
       }
 
-      if (search) {
-        const term = search.toLowerCase()
+      if (deferredSearch) {
+        const term = deferredSearch.toLowerCase()
         const description = String(
           tx.description || ''
         ).toLowerCase()
@@ -1031,7 +1034,7 @@ export default function TransactionsPage() {
   }, [filtered, accountById])
   const grouped = groupByDate(displayTxs)
 
-  const debtSearchTerm = search
+  const debtSearchTerm = deferredSearch
     .trim()
     .toLowerCase()
 
