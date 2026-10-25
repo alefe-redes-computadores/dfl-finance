@@ -35,6 +35,7 @@ import {
 } from '@/lib/conciliationOperations'
 import Skeleton from '@/components/Skeleton'
 import { belongsInFinancialInbox, inboxState, pendingDueDate, needsFinancialReview } from '@/lib/inboxPolicy'
+import { filterConciliationView, type InboxDirection } from '@/lib/conciliationViewPolicy'
 
 function safeNum(value: unknown) {
   const parsed = Number(value)
@@ -93,6 +94,8 @@ export default function ConciliationPage() {
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [review, setReview] = useState<ReviewDraft | null>(null)
   const [filter, setFilter] = useState<'all' | 'overdue' | 'today' | 'review'>('all')
+  const [search, setSearch] = useState('')
+  const [direction, setDirection] = useState<InboxDirection>('all')
 
   const data = useLiveQuery(async () => {
     if (!user?.id) return { transactions: [], accounts: [], categories: [] }
@@ -151,6 +154,11 @@ export default function ConciliationPage() {
       return true
     })
   }, [transactions, filter, today])
+
+  const displayed = useMemo(
+    () => filterConciliationView(visible, direction, search),
+    [visible, direction, search]
+  )
 
   const accountMap = useMemo(
     () => new Map(accounts.map((item: any) => [item.id, item])),
@@ -257,6 +265,40 @@ export default function ConciliationPage() {
       </header>
 
       <main className="space-y-4 px-4 pt-4">
+        <section aria-label="Encontrar pendências" className="rounded-2xl border border-gray-100 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+          <label htmlFor="conciliation-search" className="text-[11px] font-bold text-gray-600 dark:text-slate-300">
+            Buscar nesta Inbox
+          </label>
+          <input
+            id="conciliation-search"
+            type="search"
+            value={search}
+            onChange={e=>setSearch(e.target.value)}
+            placeholder="Descrição ou origem..."
+            className="mt-2 min-h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+          />
+          <div className="mt-3 grid grid-cols-3 gap-2" role="group" aria-label="Tipo de movimentação">
+            {([
+              ['all','Todas'],
+              ['expense','Saídas'],
+              ['income','Entradas']
+            ] as const).map(([value,label])=>(
+              <button key={value} type="button"
+                onClick={()=>setDirection(value)}
+                aria-pressed={direction===value}
+                className={`min-h-11 rounded-xl border px-2 text-xs font-semibold ${
+                  direction===value
+                    ? 'border-sky-600 bg-sky-50 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200'
+                    : 'border-gray-200 text-gray-500 dark:border-slate-700 dark:text-slate-300'
+                }`}
+              >{label}</button>
+            ))}
+          </div>
+          <p role="status" className="mt-2 text-[11px] text-gray-500 dark:text-slate-400">
+            {displayed.length} de {transactions.length} itens encontrados.
+            Valores da Inbox não equivalem a saldo bancário confirmado.
+          </p>
+        </section>
         <section className="overflow-hidden rounded-[26px] border border-black/5 bg-white shadow-sm dark:border-white/5 dark:bg-slate-900">
           <div className="p-4">
             <div className="flex items-start gap-3">
@@ -341,7 +383,7 @@ export default function ConciliationPage() {
           </section>
         ) : (
           <section className="space-y-2.5">
-            {visible.map((tx: any) => {
+            {displayed.map((tx: any) => {
               const account = tx.account_id ? accountMap.get(tx.account_id) : null
               const category = tx.category_id ? categoryMap.get(tx.category_id) : null
               const meta = sourceMeta(tx.source)
