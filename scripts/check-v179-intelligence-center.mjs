@@ -7,6 +7,7 @@ const page = 'src/app/(app)/intelligence-center/page.tsx'
 const more = 'src/app/(app)/more/page.tsx'
 const navSource = fs.readFileSync(nav, 'utf8')
 const pageSource = fs.readFileSync(page, 'utf8')
+const searchSource = fs.readFileSync('src/lib/intelligenceSearchPolicy.ts', 'utf8')
 const moreSource = fs.readFileSync(more, 'utf8')
 
 let count = 0
@@ -123,13 +124,14 @@ check('Atalhos V175–V178 permanecem acessíveis', () => {
 check('Busca funcional conectada ao estado', () => {
   assert.ok(pageSource.includes('setQuery('))
   assert.ok(pageSource.includes('useMemo('))
-  assert.ok(pageSource.includes('haystack.includes(search)'))
+  assert.ok(pageSource.includes('searchIntelligenceGroups(intelligenceGroups, filter, query)'))
+  assert.ok(searchSource.includes('tokens.every(token => content.includes(token))'))
 })
 
 check('Filtros conectados ao estado', () => {
   assert.ok(pageSource.includes('setFilter('))
   assert.ok(
-    pageSource.includes("filter === 'all' || group.id === filter")
+    searchSource.includes("filter === 'all' || group.id === filter")
   )
 })
 
