@@ -36,6 +36,7 @@ import {
 import Skeleton from '@/components/Skeleton'
 import { belongsInFinancialInbox, inboxState, pendingDueDate, needsFinancialReview } from '@/lib/inboxPolicy'
 import { filterConciliationView, type InboxDirection } from '@/lib/conciliationViewPolicy'
+import { sortConciliationView, type InboxSort } from '@/lib/conciliationViewSort'
 
 function safeNum(value: unknown) {
   const parsed = Number(value)
@@ -96,6 +97,7 @@ export default function ConciliationPage() {
   const [filter, setFilter] = useState<'all' | 'overdue' | 'today' | 'review'>('all')
   const [search, setSearch] = useState('')
   const [direction, setDirection] = useState<InboxDirection>('all')
+  const [sortMode, setSortMode] = useState<InboxSort>('priority')
 
   const data = useLiveQuery(async () => {
     if (!user?.id) return { transactions: [], accounts: [], categories: [] }
@@ -156,8 +158,14 @@ export default function ConciliationPage() {
   }, [transactions, filter, today])
 
   const displayed = useMemo(
-    () => filterConciliationView(visible, direction, search),
-    [visible, direction, search]
+    () => sortConciliationView(
+      filterConciliationView(visible, direction, search),
+      sortMode,
+      pendingDueDate,
+      tx => inboxState(tx, today).review,
+      today
+    ),
+    [visible, direction, search, sortMode, today]
   )
 
   const accountMap = useMemo(
@@ -294,6 +302,28 @@ export default function ConciliationPage() {
               >{label}</button>
             ))}
           </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <label htmlFor="conciliation-sort" className="text-[11px] font-semibold text-gray-600 dark:text-slate-300">
+              Ordenar
+            </label>
+            <select id="conciliation-sort" value={sortMode}
+              onChange={e=>setSortMode(e.target.value as InboxSort)}
+              className="min-h-11 min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-2 text-xs text-gray-800 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+              <option value="priority">Prioridade</option>
+              <option value="date">Vencimento</option>
+              <option value="amount">Maior valor</option>
+            </select>
+            <button type="button"
+              onClick={()=>{
+                setSearch('')
+                setDirection('all')
+                setFilter('all')
+                setSortMode('priority')
+              }}
+              className="min-h-11 rounded-xl border border-gray-200 px-3 text-xs font-semibold text-gray-600 dark:border-slate-700 dark:text-slate-200">
+              Limpar filtros
+            </button>
+          </div>
           <p role="status" className="mt-2 text-[11px] text-gray-500 dark:text-slate-400">
             {displayed.length} de {transactions.length} itens encontrados.
             Valores da Inbox não equivalem a saldo bancário confirmado.
@@ -367,13 +397,13 @@ export default function ConciliationPage() {
           </div>
         </section>
 
-        {visible.length === 0 ? (
+        {displayed.length === 0 ? (
           <section className="flex flex-col items-center justify-center rounded-[26px] border border-black/5 bg-white px-6 py-14 text-center shadow-sm dark:border-white/5 dark:bg-slate-900">
             <div className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
               <Check size={24} />
             </div>
             <h2 className="mt-4 text-[16px] font-black text-gray-900 dark:text-white">
-              {transactions.length === 0 ? 'Inbox em dia' : 'Nada neste filtro'}
+              {transactions.length === 0 ? 'Inbox em dia' : 'Nenhum resultado para os filtros'}
             </h2>
             <p className="mt-1 max-w-[250px] text-[11px] leading-5 text-gray-400">
               {transactions.length === 0
