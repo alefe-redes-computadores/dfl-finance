@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 import { belongsInFinancialInbox, pendingDueDate, needsFinancialReview } from '@/lib/inboxPolicy'
 import { homeInboxSummary } from '@/lib/homeInboxSummary'
 import { homeOperationalInsight } from '@/lib/homeOperationalInsight'
+import { homeOperationalAction } from '@/lib/homeOperationalAction'
 import { resolveKnownCommitments } from '@/lib/financialCommitments'
 import { useEffect, useState, useCallback, useRef, lazy, Suspense, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
@@ -1065,6 +1066,15 @@ function HomeContent() {
   )
 
 
+  const operationalAction = useMemo(
+    () => homeOperationalAction({
+      available: operationalAvailable,
+      reviewCount: inboxSummary.review,
+      hidden: hideBalance
+    }),
+    [operationalAvailable, inboxSummary.review, hideBalance]
+  )
+
   const openCards = useMemo(
     () =>
       cards.filter(
@@ -1663,6 +1673,15 @@ function HomeContent() {
                         ? 'Análise financeira oculta enquanto os saldos estiverem protegidos.'
                         : operationalInsight}
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => router.push(operationalAction.href)}
+                      className="flex min-h-11 w-full items-center justify-between rounded-xl bg-teal-50 px-3 text-left text-xs font-semibold text-teal-800 transition active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 dark:bg-teal-500/10 dark:text-teal-300"
+                      aria-label={operationalAction.label}
+                    >
+                      <span>{operationalAction.label}</span>
+                      <ChevronRight size={16} aria-hidden="true" />
+                    </button>
                   </div>
                 )}
               </div>
