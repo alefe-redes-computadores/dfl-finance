@@ -36,6 +36,7 @@ export default function CashPressurePage() {
   const parsedExtra=parsePressureMoney(extra)
   const parsedCushion=parsePressureMoney(cushion)
   const invalidScenario=parsedExtra===null||parsedCushion===null
+  const scenarioReady=!invalidScenario
   const accounts=useLocalData({table:'accounts',filters:{context}})
   const tx=useLocalData({table:'transactions',filters:{context}})
   const categories=useLocalData({table:'categories',filters:{context}})
@@ -102,15 +103,25 @@ export default function CashPressurePage() {
       {invalidScenario && (
         <p role="alert" className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs leading-5 text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
           Valor de simulação inválido. Confira os campos. Enquanto isso,
-          os valores hipotéticos inválidos são tratados como zero
-          e não devem ser considerados uma simulação confirmada.
+          a conclusão de risco e o resultado simulado ficam indisponíveis
+          até a correção dos campos.
         </p>
       )}
       <div className="mt-3 grid grid-cols-2 gap-2">
-        {metric('Final com gasto simulado',cash(pressure.endSimulated),'Sem receitas previstas e sem reservas debitadas')}
+        {metric(
+          'Final com gasto simulado',
+          loading || !scenarioReady ? 'Aguardando validação' : cash(pressure.endSimulated),
+          'Sem receitas previstas e sem reservas debitadas'
+        )}
         {metric('Menor valor no período',cash(pressure.worstConservative),'Compromissos conhecidos, antes do gasto hipotético')}
       </div>
-      {(pressure.firstNegativeDate||pressure.firstBelowCushionDate)?<div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-[11px] leading-5 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-200"><AlertCircle size={16} className="mr-2 inline"/>{pressure.firstNegativeDate?`Atenção: o cenário simulado fica negativo a partir de ${displayDate(pressure.firstNegativeDate)}.`:`Sua proteção mínima escolhida é ultrapassada em ${displayDate(pressure.firstBelowCushionDate||'')}.`}</div>:<div className="mt-3 rounded-2xl bg-teal-50 p-3 text-[11px] leading-5 text-teal-700 dark:bg-teal-900/20 dark:text-teal-200"><ShieldCheck size={16} className="mr-2 inline"/>{pressure.openingBalance===null?'Cadastre ou revise o saldo das contas para calcular risco.':'Os compromissos identificados não causaram aperto nesse cenário. Gastos e obrigações ausentes ainda podem mudar o resultado.'}</div>}
+      {(loading || !scenarioReady) ? (
+        <div role="status" className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-5 text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
+          {loading
+            ? 'Ainda carregando os dados locais. Aguarde para interpretar este cenário.'
+            : 'Corrija os campos inválidos antes de interpretar o risco da simulação.'}
+        </div>
+      ) : (pressure.firstNegativeDate||pressure.firstBelowCushionDate)?<div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-[11px] leading-5 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-200"><AlertCircle size={16} className="mr-2 inline"/>{pressure.firstNegativeDate?`Atenção: o cenário simulado fica negativo a partir de ${displayDate(pressure.firstNegativeDate)}.`:`Sua proteção mínima escolhida é ultrapassada em ${displayDate(pressure.firstBelowCushionDate||'')}.`}</div>:<div className="mt-3 rounded-2xl bg-teal-50 p-3 text-[11px] leading-5 text-teal-700 dark:bg-teal-900/20 dark:text-teal-200"><ShieldCheck size={16} className="mr-2 inline"/>{pressure.openingBalance===null?'Cadastre ou revise o saldo das contas para calcular risco.':'Os compromissos identificados não causaram aperto nesse cenário. Gastos e obrigações ausentes ainda podem mudar o resultado.'}</div>}
     </section>
     <section className={card}>
       <div className="mb-3 flex gap-2"><PiggyBank size={20} className="shrink-0 text-amber-600"/><div><h2 className="text-[15px] font-bold text-slate-900 dark:text-white">Camada de planejamento — fora do caixa</h2><p className="mt-1 text-[11px] leading-5 text-slate-500">Valores informativos, sem dedução do saldo ou de obrigações confirmadas.</p></div></div>
