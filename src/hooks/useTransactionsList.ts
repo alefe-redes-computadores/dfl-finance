@@ -9,6 +9,10 @@ import {
   localFilterSignature,
   stableLocalRows
 } from '@/lib/localQueryPolicy'
+import {
+  invalidTransactionDateRange,
+  transactionStableIdCompare
+} from '@/lib/transactionListPolicy'
 
 export function useTransactionsList(
   context?: 'dfl' | 'personal',
@@ -21,6 +25,9 @@ export function useTransactionsList(
 
   const data = useLiveQuery(async () => {
     if (!user?.id) return []
+
+    // Intervalo invertido nao consulta o IndexedDB.
+    if (invalidTransactionDateRange(startDate, endDate)) return []
 
     let items
 
@@ -87,9 +94,14 @@ export function useTransactionsList(
 
       if (dateCompare !== 0) return dateCompare
 
-      return String(b.created_at || '').localeCompare(
+      const createdCompare = String(b.created_at || '').localeCompare(
         String(a.created_at || '')
       )
+
+      if (createdCompare !== 0) return createdCompare
+
+      // Desempate deterministico para datas e horarios identicos.
+      return transactionStableIdCompare(a, b)
     })
   }, [
     user?.id,
