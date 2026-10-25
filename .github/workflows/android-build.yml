@@ -120,6 +120,7 @@ jobs:
           node scripts/check-v218-pressure-input.mjs
           node scripts/check-v219-pressure-confidence.mjs
           node scripts/check-v220-scenario-comparison.mjs
+          node scripts/check-v224-premium-fields.mjs
           node scripts/check-v84-edge-runtime.mjs
 
       - name: Mobile contracts

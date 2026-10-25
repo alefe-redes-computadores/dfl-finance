@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { validPremiumMoneyDigits } from '@/lib/premiumFieldPolicy'
 
 interface MoneyInputProps {
   value?: number
@@ -67,6 +68,8 @@ export default function MoneyInput({
       if (raw.length === 1) raw = `00${raw}`
       if (raw.length === 2) raw = `0${raw}`
 
+      // Limita a entrada a 15 digitos em centavos, dentro da precisao segura.
+      if (!validPremiumMoneyDigits(raw)) return
       const absoluteValue = Number(raw) / 100
       const numValue =
         negative ? -absoluteValue : absoluteValue

@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, ChevronDown, X } from 'lucide-react'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import { searchPremiumOptions } from '@/lib/premiumFieldPolicy'
 
 export type SelectFieldOption = {
   value: string
@@ -33,12 +34,18 @@ export default function SelectField({
   className = '',
 }: SelectFieldProps) {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const { vibrate } = useHapticFeedback()
   const titleId = useId()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
   // DFL_V160_R3_SELECT_FOCUS
   const selected = options.find((option) => option.value === value)
+  const searchable = options.length >= 10
+  const visibleOptions = useMemo(
+    () => searchable ? searchPremiumOptions(options, query) : options,
+    [options, query, searchable]
+  )
 
   useEffect(() => {
     if (!open) return
@@ -53,7 +60,8 @@ export default function SelectField({
       const firstOption = sheetRef.current?.querySelector<HTMLButtonElement>(
         'button[data-option="true"]:not(:disabled)'
       )
-      ;(selectedOption || firstOption || sheetRef.current?.querySelector<HTMLButtonElement>(
+      const searchInput = sheetRef.current?.querySelector<HTMLInputElement>('input[type="search"]')
+      ;(searchInput || selectedOption || firstOption || sheetRef.current?.querySelector<HTMLButtonElement>(
         'button:not(:disabled)'
       ))?.focus()
     })
@@ -118,10 +126,30 @@ export default function SelectField({
                 </button>
               </div>
 
-              {options.length === 0 ? (
+              {searchable && (
+                <div className="mb-3">
+                  <label htmlFor={`${titleId}-search`}
+                    className="mb-1 block text-xs font-semibold text-gray-700 dark:text-slate-200">
+                    Buscar opção
+                  </label>
+                  <input
+                    id={`${titleId}-search`}
+                    type="search"
+                    value={query}
+                    onChange={event => setQuery(event.target.value)}
+                    placeholder="Pesquisar pelo nome..."
+                    className="app-input min-h-11 w-full rounded-xl px-3 text-sm"
+                    autoComplete="off"
+                  />
+                  <p role="status" className="mt-1 text-[11px] text-gray-500 dark:text-slate-400">
+                    {visibleOptions.length} de {options.length} opções
+                  </p>
+                </div>
+              )}
+              {visibleOptions.length === 0 ? (
                 <div className="app-empty-region py-10">
                   <p className="text-[14px] font-semibold text-gray-700 dark:text-gray-200">
-                    Nenhuma opção disponível
+                    {options.length === 0 ? 'Nenhuma opção disponível' : 'Nenhum resultado encontrado'}
                   </p>
                   <p className="mt-1 max-w-[260px] text-[12px] text-gray-400 dark:text-gray-500">
                     Cadastre ou habilite uma opção antes de continuar.
@@ -129,7 +157,7 @@ export default function SelectField({
                 </div>
               ) : (
                 <div className="space-y-2 pb-[max(0px,env(safe-area-inset-bottom))]">
-                  {options.map((option) => {
+                  {visibleOptions.map((option) => {
                     const active = option.value === value
 
                     return (
@@ -193,6 +221,7 @@ export default function SelectField({
         disabled={disabled}
         onClick={() => {
           vibrate([5])
+          setQuery('')
           setOpen(true)
         }}
         className={`app-select flex w-full items-center justify-between gap-3 text-left disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
