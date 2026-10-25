@@ -9,16 +9,12 @@ import { useUserSettings } from '@/hooks/useUserSettings'
 import { buildFinanceAgenda } from '@/lib/financeAgenda'
 import { buildFinancePlanning } from '@/lib/financePlanning'
 import { buildFinancePressure, type PressureContext } from '@/lib/financePressure'
+import { parsePressureMoney } from '@/lib/pressureCurrencyInput'
 
 const cash = (value: number | null) => value === null ? 'Não calculável' : value.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})
 const card = 'rounded-[22px] border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900'
 const civilToday = () => {const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 const displayDate = (s:string) => s.split('-').reverse().join('/')
-const readCurrency = (s:string) => {
-  const cleaned=s.replace(/\s|R\$/gi,'').trim()
-  const value=Number(cleaned.includes(',') ? cleaned.replace(/\./g,'').replace(',','.') : cleaned)
-  return Number.isFinite(value) && value >= 0 && value <= 100000000 ? Math.round(value*100)/100 : 0
-}
 const metric = (label:string,value:string,caption:string) => (
   <div className="min-w-0 rounded-2xl bg-slate-50 p-3 dark:bg-slate-800/70">
     <p className="text-[11px] text-slate-500 dark:text-slate-400">{label}</p>
@@ -37,6 +33,9 @@ export default function CashPressurePage() {
   const [extra,setExtra]=useState('')
   const [showAll,setShowAll]=useState(false)
   const [view,setView]=useState<'conservative'|'withReceipts'>('conservative')
+  const parsedExtra=parsePressureMoney(extra)
+  const parsedCushion=parsePressureMoney(cushion)
+  const invalidScenario=parsedExtra===null||parsedCushion===null
   const accounts=useLocalData({table:'accounts',filters:{context}})
   const tx=useLocalData({table:'transactions',filters:{context}})
   const categories=useLocalData({table:'categories',filters:{context}})
@@ -61,8 +60,8 @@ export default function CashPressurePage() {
   const pressure=useMemo(()=>buildFinancePressure({
     context,today,days,accounts:accounts.data||[],agenda:agenda.items,
     reserves:plan.reserves,reserveMonthly:plan.reserveMonthlySuggested,
-    flexibleRemaining:plan.flexibleRemaining,cushion:readCurrency(cushion),extraExpense:readCurrency(extra)
-  }),[context,today,days,accounts.data,agenda.items,plan.reserves,plan.reserveMonthlySuggested,plan.flexibleRemaining,cushion,extra])
+    flexibleRemaining:plan.flexibleRemaining,cushion:parsedCushion??0,extraExpense:parsedExtra??0
+  }),[context,today,days,accounts.data,agenda.items,plan.reserves,plan.reserveMonthlySuggested,plan.flexibleRemaining,parsedCushion,parsedExtra])
   const selected=pressure.timeline.filter(d=>showAll || d.eventCount>0 || d.subscriptionPlanning>0 || d.date===pressure.firstNegativeDate || d.date===pressure.firstBelowCushionDate || d.date===today)
   return <main className="mx-auto min-h-[100dvh] max-w-2xl space-y-4 bg-[#f7f8fa] px-4 pb-32 pt-3 dark:bg-slate-950">
     <header className="flex items-center gap-3">
@@ -97,9 +96,16 @@ export default function CashPressurePage() {
         )}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <div><label htmlFor="stress-extra" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Gasto extra (R$)</label><input id="stress-extra" type="text" inputMode="decimal" placeholder="Ex.: 350,00" value={extra} onChange={e=>setExtra(e.target.value)} className="mt-1 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"/></div>
-        <div><label htmlFor="stress-buffer" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Proteção mínima (R$)</label><input id="stress-buffer" type="text" inputMode="decimal" placeholder="Ex.: 500,00" value={cushion} onChange={e=>setCushion(e.target.value)} className="mt-1 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"/></div>
+        <div><label htmlFor="stress-extra" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Gasto extra (R$)</label><input id="stress-extra" type="text" inputMode="decimal" aria-invalid={parsedExtra===null} placeholder="Ex.: 350,00" value={extra} onChange={e=>setExtra(e.target.value)} className="mt-1 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"/></div>
+        <div><label htmlFor="stress-buffer" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Proteção mínima (R$)</label><input id="stress-buffer" type="text" inputMode="decimal" aria-invalid={parsedCushion===null} placeholder="Ex.: 500,00" value={cushion} onChange={e=>setCushion(e.target.value)} className="mt-1 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"/></div>
       </div>
+      {invalidScenario && (
+        <p role="alert" className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs leading-5 text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+          Valor de simulação inválido. Confira os campos. Enquanto isso,
+          os valores hipotéticos inválidos são tratados como zero
+          e não devem ser considerados uma simulação confirmada.
+        </p>
+      )}
       <div className="mt-3 grid grid-cols-2 gap-2">
         {metric('Final com gasto simulado',cash(pressure.endSimulated),'Sem receitas previstas e sem reservas debitadas')}
         {metric('Menor valor no período',cash(pressure.worstConservative),'Compromissos conhecidos, antes do gasto hipotético')}
