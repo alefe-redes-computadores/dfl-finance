@@ -39,6 +39,7 @@ export default function FinancialPlanningPage() {
   const [draft,setDraft]=useState(blank)
   const [editingId,setEditingId]=useState<string|null>(null)
   const [showAll,setShowAll]=useState(false)
+  const [reserveView,setReserveView]=useState<'urgent'|'all'|'complete'>('urgent')
   const groups=useMemo(()=>normalizePlanningGroups(settings?.preferences.planning_groups),[settings?.preferences.planning_groups])
   const reserves=useMemo(()=>normalizePlanningReserves(settings?.preferences.planning_reserves),[settings?.preferences.planning_reserves])
   const limits=useMemo(()=>normalizePlanningFlexLimits(settings?.preferences.planning_flex_limits),[settings?.preferences.planning_flex_limits])
@@ -58,6 +59,18 @@ export default function FinancialPlanningPage() {
     ()=>planningReservePriorities(data.reserves,now),
     [data.reserves,now]
   )
+
+  const reserveVisible=useMemo(()=>{
+    if(reserveView==='complete')
+      return reservePriority.entries.filter(r=>r.status==='complete')
+    if(reserveView==='urgent')
+      return reservePriority.entries.filter(r=>r.status==='overdue'||r.status==='upcoming')
+    return reservePriority.entries
+  },[reservePriority,reserveView])
+
+  const reservePendingCount=reservePriority.entries.filter(
+    r=>r.status!=='complete'
+  ).length
 
   const categoryRows=useMemo(()=>[...(categories.data||[])].filter(c=>String(c.type)==='expense').sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'pt-BR')),[categories.data])
   const liveIds=useMemo(()=>new Set(data.categoryBreakdown.map(c=>c.id)),[data.categoryBreakdown])
@@ -211,13 +224,38 @@ export default function FinancialPlanningPage() {
           </div>
         ))}
       </div>
+      <div className="mt-3 grid grid-cols-3 gap-2" role="group" aria-label="Filtrar agenda de metas">
+        {([
+          ['urgent','Até 30 dias'],
+          ['all','Todas'],
+          ['complete','Concluídas']
+        ] as const).map(([view,label])=>(
+          <button
+            key={view}
+            type="button"
+            aria-pressed={reserveView===view}
+            onClick={()=>setReserveView(view)}
+            className={`min-h-11 rounded-xl border px-2 py-2 text-[11px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 ${
+              reserveView===view
+                ? 'border-teal-600 bg-teal-50 text-teal-800 dark:bg-teal-900/30 dark:text-teal-200'
+                : 'border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] text-slate-500" role="status">
+        {reserveVisible.length} de {reservePriority.entries.length} metas exibidas
+        {' · '}{reservePendingCount} com valor a declarar
+      </p>
       <div className="mt-3 space-y-2">
-        {reservePriority.entries.filter(r=>r.status!=='complete').slice(0,5).map(r=>(
+        {reserveVisible.map(r=>(
           <div key={r.id} className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-bold dark:text-white">{r.name}</p>
               <p className="text-[11px] text-slate-500">
-                {r.status==='overdue'?'Vencida':r.status==='upcoming'?'Próxima':'Futura'}
+                {r.status==='overdue'?'Vencida':r.status==='upcoming'?'Próxima':r.status==='complete'?'Concluída':'Futura'}
                 {' · '}{fmtDate(r.target_date)}
               </p>
               <p className="text-[11px] text-slate-500">
@@ -235,8 +273,14 @@ export default function FinancialPlanningPage() {
             </button>
           </div>
         ))}
-        {!reservePriority.entries.some(r=>r.status!=='complete')&&(
-          <p className="text-xs text-slate-500">Nenhuma meta pendente.</p>
+        {reserveVisible.length===0&&(
+          <p className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-xs text-slate-500 dark:border-slate-700">
+            {reserveView==='urgent'
+              ? 'Nenhuma meta vencida ou nos próximos 30 dias. Veja Todas para consultar metas futuras.'
+              : reserveView==='complete'
+                ? 'Ainda não há metas concluídas.'
+                : 'Nenhuma reserva cadastrada neste contexto.'}
+          </p>
         )}
       </div>
     </section>
