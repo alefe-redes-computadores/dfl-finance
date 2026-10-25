@@ -10,6 +10,7 @@ import { buildFinanceAgenda } from '@/lib/financeAgenda'
 import { buildFinancePlanning } from '@/lib/financePlanning'
 import { buildFinancePressure, type PressureContext } from '@/lib/financePressure'
 import { parsePressureMoney } from '@/lib/pressureCurrencyInput'
+import { pressureScenarioComparison } from '@/lib/pressureScenarioComparison'
 
 const cash = (value: number | null) => value === null ? 'Não calculável' : value.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})
 const card = 'rounded-[22px] border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900'
@@ -63,6 +64,15 @@ export default function CashPressurePage() {
     reserves:plan.reserves,reserveMonthly:plan.reserveMonthlySuggested,
     flexibleRemaining:plan.flexibleRemaining,cushion:parsedCushion??0,extraExpense:parsedExtra??0
   }),[context,today,days,accounts.data,agenda.items,plan.reserves,plan.reserveMonthlySuggested,plan.flexibleRemaining,parsedCushion,parsedExtra])
+  const comparison=useMemo(
+    ()=>pressureScenarioComparison({
+      baseline:pressure.endConservative,
+      simulated:pressure.endSimulated,
+      extraExpense:parsedExtra,
+      loading:loading||invalidScenario
+    }),
+    [pressure.endConservative,pressure.endSimulated,parsedExtra,loading,invalidScenario]
+  )
   const selected=pressure.timeline.filter(d=>showAll || d.eventCount>0 || d.subscriptionPlanning>0 || d.date===pressure.firstNegativeDate || d.date===pressure.firstBelowCushionDate || d.date===today)
   return <main className="mx-auto min-h-[100dvh] max-w-2xl space-y-4 bg-[#f7f8fa] px-4 pb-32 pt-3 dark:bg-slate-950">
     <header className="flex items-center gap-3">
@@ -84,6 +94,21 @@ export default function CashPressurePage() {
     </section>
     <section className={card}>
       <div className="flex gap-2"><SlidersHorizontal size={19} className="mt-0.5 shrink-0 text-violet-600"/><div><h2 className="text-[15px] font-bold text-slate-900 dark:text-white">E se...? Simule sem mexer no dinheiro</h2><p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">O gasto extra hipotético é lançado apenas no primeiro dia desta simulação. A proteção mínima é um alerta, não uma reserva real.</p></div></div>
+      <div className="mt-3">
+        <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+          Testar gasto adicional
+        </p>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          {([100,500,1000] as const).map(value=>(
+            <button key={value} type="button"
+              onClick={()=>setExtra(String(value))}
+              aria-label={`Simular gasto adicional de ${cash(value)}`}
+              className="min-h-11 rounded-xl border border-violet-200 bg-violet-50 px-2 text-xs font-semibold text-violet-700 dark:border-violet-800 dark:bg-violet-950/20 dark:text-violet-200">
+              {cash(value)}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="mt-3 flex items-center justify-between gap-2">
         <p className="text-[11px] text-slate-500 dark:text-slate-400">
           Valores hipotéticos · nenhuma transação será criada
@@ -114,6 +139,22 @@ export default function CashPressurePage() {
           'Sem receitas previstas e sem reservas debitadas'
         )}
         {metric('Menor valor no período',cash(pressure.worstConservative),'Compromissos conhecidos, antes do gasto hipotético')}
+      </div>
+      <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/70">
+        <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
+          Comparação com o cenário conservador
+        </p>
+        <p className="mt-2 text-lg font-bold tabular-nums text-slate-900 dark:text-white">
+          {comparison.ready && comparison.impact !== null
+            ? `${comparison.impact > 0 ? '+' : ''}${cash(comparison.impact)}`
+            : 'Não calculável'}
+        </p>
+        <p className="mt-1 text-xs font-semibold text-slate-700 dark:text-slate-200">
+          {comparison.label}
+        </p>
+        <p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">
+          {comparison.explanation}
+        </p>
       </div>
       {(loading || !scenarioReady) ? (
         <div role="status" className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-5 text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
