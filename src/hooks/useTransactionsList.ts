@@ -10,7 +10,9 @@ import {
   stableLocalRows
 } from '@/lib/localQueryPolicy'
 import {
+  activeTransactionFilters,
   invalidTransactionDateRange,
+  transactionMatchesFilters,
   transactionStableIdCompare
 } from '@/lib/transactionListPolicy'
 
@@ -71,19 +73,10 @@ export function useTransactionsList(
         .toArray()
     }
 
-    const activeFilters = Object.entries(filters || {}).filter(
-      ([key, value]) =>
-        key !== 'user_id' &&
-        value !== undefined &&
-        value !== null &&
-        value !== ''
-    )
-
+    const activeFilters = activeTransactionFilters(filters)
     if (activeFilters.length) {
       items = items.filter((item: any) =>
-        activeFilters.every(
-          ([key, value]) => item[key] === value
-        )
+        transactionMatchesFilters(item, activeFilters)
       )
     }
 

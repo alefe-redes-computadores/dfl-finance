@@ -46,7 +46,7 @@ check('Movimento reduzido preservado',
 check('Sem leituras de rede adicionadas',
   !/fetch\(|supabase|useLocalSync/.test(s))
 check('Contrato V197 ainda executado',
-  old.includes('activeFilters.every('))
+  old.includes('transactionMatchesFilters('))
 check('Workflow exige V198',
   flow.includes('node scripts/check-v198-network-lifecycle.mjs'))
 

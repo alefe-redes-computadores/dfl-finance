@@ -134,9 +134,11 @@ test('Dispensa nao confirma sincronizacao', () => {
 })
 
 test('Consultas seguem isoladas por usuario', () => {
-  assert.ok(hook.includes("key !== 'user_id'"))
+  const policy = read('src/lib/transactionListPolicy.ts')
+  assert.ok(policy.includes("key !== 'user_id'"))
   assert.ok(hook.includes('.equals(user.id)'))
-  assert.ok(hook.includes('activeFilters.every('))
+  assert.ok(hook.includes('activeTransactionFilters(filters)'))
+  assert.ok(hook.includes('transactionMatchesFilters('))
 })
 
 test('Indices e ordenacao financeira preservados', () => {

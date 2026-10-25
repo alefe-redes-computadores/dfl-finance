@@ -93,11 +93,11 @@ check('Indice de contexto preservado',()=>{
   assert.ok(hookSource.includes('[user_id+context]'))
 })
 check('Usuario isolado',()=>{
-  assert.ok(hookSource.includes("key !== 'user_id'"))
+  assert.ok(read(policy).includes("key !== 'user_id'"))
   assert.ok(hookSource.includes('.equals(user.id)'))
 })
 check('Filtro unico V197 preservado',()=>{
-  assert.ok(hookSource.includes('activeFilters.every('))
+  assert.ok(hookSource.includes('transactionMatchesFilters('))
 })
 check('Dados reativos preservados',()=>{
   assert.ok(hookSource.includes('useLiveQuery'))
