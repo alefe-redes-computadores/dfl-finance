@@ -99,6 +99,7 @@ jobs:
           node scripts/check-v197-offline-query.mjs
           node scripts/check-v198-network-lifecycle.mjs
           node scripts/check-v199-query-integrity.mjs
+          node scripts/check-v200-stability-milestone.mjs
           node scripts/check-v84-edge-runtime.mjs
 
       - name: Mobile contracts
