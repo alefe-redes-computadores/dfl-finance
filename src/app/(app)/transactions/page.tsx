@@ -1397,6 +1397,9 @@ export default function TransactionsPage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar por nome ou categoria"
+              aria-label="Buscar transações por nome ou categoria"
+              aria-describedby="transaction-search-status"
+              autoComplete="off"
               className="min-w-0 flex-1 bg-transparent text-[13.5px] font-medium text-gray-800 outline-none placeholder:text-gray-400 dark:text-gray-100"
             />
 
@@ -1409,6 +1412,30 @@ export default function TransactionsPage() {
               >
                 <X size={14} />
               </button>
+            )}
+          </div>
+
+          <div
+            id="transaction-search-status"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="min-h-5 px-1 text-[11px] font-medium text-gray-500 dark:text-gray-400"
+          >
+            {search.trim() && (
+              searchUpdating ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Loader2 size={12} aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
+                  Atualizando resultados…
+                </span>
+              ) : (
+                <span>
+                  {displayTxs.length} lançamento(s) encontrado(s)
+                  {visibleDebtReceivables.length > 0
+                    ? ` · ${visibleDebtReceivables.length} valor(es) a receber`
+                    : ''}
+                </span>
+              )
             )}
           </div>
 

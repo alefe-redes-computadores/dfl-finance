@@ -101,6 +101,7 @@ jobs:
           node scripts/check-v199-query-integrity.mjs
           node scripts/check-v200-stability-milestone.mjs
           node scripts/check-v201-query-contracts.mjs
+          node scripts/check-v202-search-experience.mjs
           node scripts/check-v84-edge-runtime.mjs
 
       - name: Mobile contracts
