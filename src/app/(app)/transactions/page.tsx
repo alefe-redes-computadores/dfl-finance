@@ -1204,6 +1204,18 @@ export default function TransactionsPage() {
     [grouped, advFilters.sortOrder]
   )
 
+  // V194: datas agrupadas so precisam ser formatadas quando
+  // os grupos ou o dia de referencia mudarem.
+  const dateLabels = useMemo(
+    () => new Map(
+      sortedDates.map(date => [
+        date,
+        date === todayIso ? 'HOJE' : dateLabel(date)
+      ])
+    ),
+    [sortedDates, todayIso]
+  )
+
   // ✅ REMOVIDO useEffect com reload
 
   useEffect(() => {
@@ -1633,7 +1645,7 @@ export default function TransactionsPage() {
                 <div key={date} className="relative">
                   <div className="mb-2 flex items-center gap-2 px-1">
                     <p className="text-[10px] font-bold uppercase tracking-[0.11em] text-gray-400 dark:text-gray-500">
-                      {dateLabel(date)}
+                      {dateLabels.get(date) ?? date}
                     </p>
                     <div className="h-px flex-1 bg-gray-200/80 dark:bg-slate-800" />
                   </div>

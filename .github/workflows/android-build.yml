@@ -93,6 +93,7 @@ jobs:
           node scripts/check-v191-pending-totals.mjs
           node scripts/check-v192-transaction-cards.mjs
           node scripts/check-v193-list-memo.mjs
+          node scripts/check-v194-date-labels.mjs
           node scripts/check-v84-edge-runtime.mjs
 
       - name: Mobile contracts
