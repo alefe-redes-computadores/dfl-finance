@@ -8,6 +8,7 @@ import { useLocalData } from '@/hooks/useLocalData'
 import { useUserSettings } from '@/hooks/useUserSettings'
 import { useToast } from '@/contexts/ToastContext'
 import { buildFinancePlanning, normalizePlanningGroups, normalizePlanningReserves, normalizePlanningFlexLimits, type PlanningBucket, type PlanningReserve } from '@/lib/financePlanning'
+import { planningDecision } from '@/lib/planningDecisionPolicy'
 
 const money = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const panel = 'rounded-[22px] border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900'
@@ -43,6 +44,15 @@ export default function FinancialPlanningPage() {
   useEffect(()=>{if(!editingCap)setCap(limits[context]>0?String(limits[context]).replace('.',','):'')},[limits,context,editingCap])
   useEffect(()=>{const listener=()=>setNow(localISO());window.addEventListener('focus',listener);return()=>window.removeEventListener('focus',listener)},[])
   const data=useMemo(()=>buildFinancePlanning(tx.data||[],categories.data||[],context,now,groups,reserves,limits),[tx.data,categories.data,context,now,groups,reserves,limits])
+  const decision=useMemo(()=>planningDecision({
+    flexibleLimit:data.flexibleLimit,
+    flexibleRemaining:data.flexibleRemaining,
+    flexiblePaceDelta:data.flexiblePaceDelta,
+    reserveOutstanding:data.reserveOutstanding,
+    reserveMonthlySuggested:data.reserveMonthlySuggested,
+    reserveCount:data.reserves.length
+  }),[data])
+
   const categoryRows=useMemo(()=>[...(categories.data||[])].filter(c=>String(c.type)==='expense').sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'pt-BR')),[categories.data])
   const liveIds=useMemo(()=>new Set(data.categoryBreakdown.map(c=>c.id)),[data.categoryBreakdown])
   const displayCategories=showAll?categoryRows:categoryRows.filter(c=>liveIds.has(String(c.id)))
@@ -131,6 +141,45 @@ export default function FinancialPlanningPage() {
         Dados locais carregados · {context === 'dfl' ? 'DFL' : 'Pessoal'}
       </p>
     )}
+    <section className={panel} aria-label="Resumo para decidir">
+      <div className="flex items-center gap-2">
+        <ShieldCheck size={19} className="text-teal-600" aria-hidden="true"/>
+        <h2 className="text-[15px] font-bold text-slate-900 dark:text-white">
+          Prioridades do planejamento
+        </h2>
+      </div>
+      <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+        {decision.title}
+      </p>
+      <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+        {decision.explanation}
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70">
+          <p className="text-[11px] text-slate-500">Metas cadastradas</p>
+          <p className="mt-1 text-lg font-bold tabular-nums text-slate-900 dark:text-white">
+            {decision.reserveCount}
+          </p>
+        </div>
+        <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70">
+          <p className="text-[11px] text-slate-500">Falta declarar nas metas</p>
+          <p className="mt-1 text-lg font-bold tabular-nums text-slate-900 dark:text-white">
+            {money(decision.reserveOutstanding)}
+          </p>
+        </div>
+      </div>
+      {decision.reservePending && (
+        <p className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-300">
+          Referência mensal para metas: {money(decision.reserveMonthlySuggested)}.
+          É uma sugestão, não uma despesa lançada.
+        </p>
+      )}
+      <p className="mt-3 text-[11px] leading-5 text-slate-500 dark:text-slate-400">
+        Gastos observados, limites e reservas são indicadores diferentes.
+        Nenhum deles confirma dinheiro disponível em conta.
+      </p>
+    </section>
+
     <section className={panel}><div className="flex items-center gap-2"><Layers3 size={20} className="text-teal-600"/><h2 className="text-[15px] font-bold text-slate-900 dark:text-white">Três tipos de gastos</h2></div><p className="mt-1 text-[11px] leading-5 text-slate-500">Gastos econômicos observados em {data.month}. A classificação inicial é Flexível até você escolher outra; isso não muda lançamentos.</p><div className="mt-3 grid grid-cols-2 gap-2">{(['fixed','flex','irregular'] as const).map(bucket=><div key={bucket} className="rounded-2xl border border-slate-100 px-3 py-3 dark:border-slate-700"><p className="text-[11px] text-slate-500">{names[bucket]}</p><p className="mt-1 text-[19px] font-bold tabular-nums text-slate-900 dark:text-white">{money(data.spent[bucket])}</p><p className="mt-1 text-[10px] text-slate-500">Mês passado: {money(data.previousSpent[bucket])}</p></div>)}{metric('Total observado',money(data.totalSpent),'Não é saldo nem compromisso futuro','text-teal-700 dark:text-teal-300')}</div><p className="mt-3 text-[11px] text-slate-500">{data.classifiedCategoryCount} de {data.activeCategoryCount} categorias movimentadas classificadas manualmente.</p></section>
     <section className={panel}><div className="flex items-center gap-2"><Wallet size={19} className="text-teal-600"/><h2 className="text-[15px] font-bold text-slate-900 dark:text-white">Limite só para despesas flexíveis</h2></div><p className="mt-1 text-[11px] leading-5 text-slate-500">Independente do limite mensal geral do Ritmo Financeiro. Não é dinheiro livre na conta.</p><div className="mt-3 flex gap-2"><input type="text" inputMode="decimal" value={cap} onFocus={()=>setEditingCap(true)} onChange={e=>setCap(e.target.value)} aria-label="Limite de gastos flexíveis" placeholder="Ex.: 1.500,00" className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-[14px] font-semibold text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"/><button type="button" disabled={working||!settings} onClick={saveCap} className="flex items-center gap-1.5 rounded-2xl bg-teal-700 px-4 text-[12px] font-bold text-white disabled:opacity-50"><Save size={16}/> Salvar</button></div><div className="mt-3 grid grid-cols-2 gap-2">{metric('Gasto flexível',money(data.spent.flex),'Compra no cartão é reconhecida na data da compra')}{metric('Resta dentro do limite',data.flexibleRemaining===null?'Sem limite':money(data.flexibleRemaining),'Não é saldo do banco')}</div>{data.flexibleLimit!==null&&<><div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700"><div className={`h-full rounded-full ${data.spent.flex>data.flexibleLimit?'bg-rose-500':'bg-teal-500'}`} style={{width:`${Math.min(100,data.spent.flex/data.flexibleLimit*100)}%`}}/></div><p className="mt-2 text-[11px] text-slate-500">Distribuição linear do restante: {money(data.flexibleDailyAllowance||0)}/dia nos {data.remainingDays} dias restantes. Isso não é previsão de caixa.</p></>}</section>
     <section className={panel}><div className="flex items-start justify-between gap-2"><div><div className="flex items-center gap-2"><CheckCircle2 size={18} className="text-violet-500"/><h2 className="text-[15px] font-bold text-slate-900 dark:text-white">Classificar categorias</h2></div><p className="mt-1 text-[11px] leading-5 text-slate-500">Escolha um grupo para cada categoria. Sua escolha é reversível.</p></div><button type="button" onClick={()=>setShowAll(v=>!v)} className="rounded-xl border border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">{showAll?'Usadas':'Todas'}</button></div><div className="mt-3 space-y-2">{displayCategories.slice(0,showAll?250:75).map(cat=>{const id=String(cat.id),bucket=groups[context][id]||'flex',spent=data.categoryBreakdown.find(x=>x.id===id)?.amount||0;return <div key={id} className="flex items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2.5 dark:bg-slate-800/70"><div className="min-w-0 flex-1"><p className="truncate text-[12px] font-semibold text-slate-800 dark:text-slate-100">{cat.name||'Sem nome'}</p><p className="text-[10px] text-slate-500">{money(spent)} neste mês · {groups[context][id]?'Classificação definida':'Padrão: Flexível'}</p></div><select aria-label={`Grupo de ${cat.name||'categoria'}`} value={bucket} disabled={working||!settings} onChange={e=>void saveBucket(id,e.target.value as PlanningBucket)} className="max-w-[129px] rounded-xl border border-slate-200 bg-white px-2 py-2 text-[11px] font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-white">{(['flex','fixed','irregular'] as const).map(v=><option value={v} key={v}>{names[v]}</option>)}</select></div>})}{displayCategories.length===0&&<p className="py-4 text-center text-[12px] text-slate-500">Ainda não há categorias movimentadas neste mês. Toque em Todas para classificar antecipadamente.</p>}</div><p className="mt-3 text-[10px] text-slate-500">Fixos: {descriptions.fixed}. Flexíveis: {descriptions.flex}. Não mensais: {descriptions.irregular}.</p></section>
