@@ -10,6 +10,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { buildFinancePlanning, normalizePlanningGroups, normalizePlanningReserves, normalizePlanningFlexLimits, type PlanningBucket, type PlanningReserve } from '@/lib/financePlanning'
 import { planningDecision } from '@/lib/planningDecisionPolicy'
 import { planningReservePriorities } from '@/lib/planningReservePriority'
+import { filterPlanningReserves, reserveVisibleSummary, type ReserveView } from '@/lib/planningReserveSearch'
 
 const money = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const panel = 'rounded-[22px] border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900'
@@ -39,7 +40,8 @@ export default function FinancialPlanningPage() {
   const [draft,setDraft]=useState(blank)
   const [editingId,setEditingId]=useState<string|null>(null)
   const [showAll,setShowAll]=useState(false)
-  const [reserveView,setReserveView]=useState<'urgent'|'all'|'complete'>('urgent')
+  const [reserveView,setReserveView]=useState<ReserveView>('urgent')
+  const [reserveSearch,setReserveSearch]=useState('')
   const groups=useMemo(()=>normalizePlanningGroups(settings?.preferences.planning_groups),[settings?.preferences.planning_groups])
   const reserves=useMemo(()=>normalizePlanningReserves(settings?.preferences.planning_reserves),[settings?.preferences.planning_reserves])
   const limits=useMemo(()=>normalizePlanningFlexLimits(settings?.preferences.planning_flex_limits),[settings?.preferences.planning_flex_limits])
@@ -60,13 +62,14 @@ export default function FinancialPlanningPage() {
     [data.reserves,now]
   )
 
-  const reserveVisible=useMemo(()=>{
-    if(reserveView==='complete')
-      return reservePriority.entries.filter(r=>r.status==='complete')
-    if(reserveView==='urgent')
-      return reservePriority.entries.filter(r=>r.status==='overdue'||r.status==='upcoming')
-    return reservePriority.entries
-  },[reservePriority,reserveView])
+  const reserveVisible=useMemo(
+    ()=>filterPlanningReserves(reservePriority.entries,reserveView,reserveSearch),
+    [reservePriority,reserveView,reserveSearch]
+  )
+  const reserveVisibleTotals=useMemo(
+    ()=>reserveVisibleSummary(reserveVisible),
+    [reserveVisible]
+  )
 
   const reservePendingCount=reservePriority.entries.filter(
     r=>r.status!=='complete'
@@ -224,9 +227,23 @@ export default function FinancialPlanningPage() {
           </div>
         ))}
       </div>
-      <div className="mt-3 grid grid-cols-3 gap-2" role="group" aria-label="Filtrar agenda de metas">
+      <div className="mt-3">
+        <label htmlFor="planning-reserve-search" className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+          Buscar reserva
+        </label>
+        <input
+          id="planning-reserve-search"
+          type="search"
+          value={reserveSearch}
+          onChange={e=>setReserveSearch(e.target.value)}
+          placeholder="Nome da meta..."
+          className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+        />
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Filtrar agenda de metas">
         {([
           ['urgent','Até 30 dias'],
+          ['overdue','Vencidas'],
           ['all','Todas'],
           ['complete','Concluídas']
         ] as const).map(([view,label])=>(
@@ -248,6 +265,7 @@ export default function FinancialPlanningPage() {
       <p className="mt-2 text-[11px] text-slate-500" role="status">
         {reserveVisible.length} de {reservePriority.entries.length} metas exibidas
         {' · '}{reservePendingCount} com valor a declarar
+        {' · '}Falta declarar nas metas exibidas: {money(reserveVisibleTotals.outstanding)}
       </p>
       <div className="mt-3 space-y-2">
         {reserveVisible.map(r=>(
@@ -276,10 +294,12 @@ export default function FinancialPlanningPage() {
         {reserveVisible.length===0&&(
           <p className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-xs text-slate-500 dark:border-slate-700">
             {reserveView==='urgent'
-              ? 'Nenhuma meta vencida ou nos próximos 30 dias. Veja Todas para consultar metas futuras.'
-              : reserveView==='complete'
-                ? 'Ainda não há metas concluídas.'
-                : 'Nenhuma reserva cadastrada neste contexto.'}
+              ? 'Nenhuma meta vencida ou nos próximos 30 dias corresponde à busca.'
+              : reserveView==='overdue'
+                ? 'Nenhuma meta vencida corresponde à busca.'
+                : reserveView==='complete'
+                  ? 'Nenhuma meta concluída corresponde à busca.'
+                  : 'Nenhuma reserva corresponde à busca neste contexto.'}
           </p>
         )}
       </div>
