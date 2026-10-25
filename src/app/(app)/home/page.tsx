@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { belongsInFinancialInbox, pendingDueDate, needsFinancialReview } from '@/lib/inboxPolicy'
 import { homeInboxSummary } from '@/lib/homeInboxSummary'
+import { homeOperationalInsight } from '@/lib/homeOperationalInsight'
 import { resolveKnownCommitments } from '@/lib/financialCommitments'
 import { useEffect, useState, useCallback, useRef, lazy, Suspense, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
@@ -1054,6 +1055,16 @@ function HomeContent() {
     [totalAccountsBalance, operationalCommitted]
   )
 
+  const operationalInsight = useMemo(
+    () => homeOperationalInsight({
+      available: operationalAvailable,
+      committed: operationalCommitted,
+      reviewCount: inboxSummary.review
+    }),
+    [operationalAvailable, operationalCommitted, inboxSummary.review]
+  )
+
+
   const openCards = useMemo(
     () =>
       cards.filter(
@@ -1643,6 +1654,14 @@ function HomeContent() {
                     <p className="leading-relaxed text-gray-500 dark:text-gray-400">
                       Considera o saldo das contas e os compromissos imediatos identificados.
                       Receitas previstas não aumentam o disponível antes de serem recebidas.
+                    </p>
+                    <p
+                      role="status"
+                      className="rounded-lg border border-gray-200 px-2 py-2 text-[11px] leading-relaxed text-gray-600 dark:border-slate-700 dark:text-gray-300"
+                    >
+                      {hideBalance
+                        ? 'Análise financeira oculta enquanto os saldos estiverem protegidos.'
+                        : operationalInsight}
                     </p>
                   </div>
                 )}
