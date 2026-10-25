@@ -55,6 +55,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           node node_modules/jest/bin/jest.js --config scripts/jest-financial.cjs --runInBand
+          node scripts/check-r114-financial-invariants.mjs
+          node scripts/check-r116-preapk-integration.mjs
+          node node_modules/jest/bin/jest.js --config scripts/jest-r115-financial.cjs --runInBand --runTestsByPath src/__tests__/financialSurgeryR115.test.ts
           node scripts/check-v84-financial-sql.mjs
           node scripts/check-v158-current-sync-architecture.mjs
           node scripts/check-v158-r3-financial-runtime.cjs
