@@ -106,6 +106,7 @@ function HomeContent() {
   const { success: hapticSuccess, vibrate } = useHapticFeedback()
 
   const [hideBalance, setHideBalance] = useState(false)
+  const [showOperationalDetail, setShowOperationalDetail] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
@@ -1598,6 +1599,53 @@ function HomeContent() {
                     {inboxSummary.detail}
                   </p>
                 </button>
+              </div>
+
+              <div className="border-t border-gray-100 px-3 pb-3 dark:border-slate-700/60">
+                <button
+                  type="button"
+                  aria-expanded={showOperationalDetail}
+                  aria-controls="operational-detail-v205"
+                  onClick={() => setShowOperationalDetail(value => !value)}
+                  className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl px-2 text-left text-[11px] font-semibold text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 dark:text-gray-300 dark:hover:bg-slate-800"
+                >
+                  <span>Como o disponível é calculado?</span>
+                  <ChevronRight
+                    size={15}
+                    aria-hidden="true"
+                    className={showOperationalDetail ? 'rotate-90 transition-transform' : 'transition-transform'}
+                  />
+                </button>
+
+                {showOperationalDetail && (
+                  <div
+                    id="operational-detail-v205"
+                    className="space-y-2 rounded-xl bg-gray-50 px-3 py-3 text-xs dark:bg-slate-800/70"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-gray-500 dark:text-gray-400">Saldo das contas</span>
+                      <strong className="tabular-nums text-gray-800 dark:text-gray-100">
+                        {hideBalance ? '••••' : formatCurrency(totalAccountsBalance)}
+                      </strong>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-gray-500 dark:text-gray-400">Compromissos imediatos</span>
+                      <strong className="tabular-nums text-gray-800 dark:text-gray-100">
+                        {hideBalance ? '••••' : formatCurrency(operationalCommitted)}
+                      </strong>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 border-t border-gray-200 pt-2 dark:border-slate-700">
+                      <span className="font-bold text-gray-700 dark:text-gray-200">Disponível operacional</span>
+                      <strong className="tabular-nums text-teal-700 dark:text-teal-300">
+                        {hideBalance ? '••••' : formatCurrency(operationalAvailable)}
+                      </strong>
+                    </div>
+                    <p className="leading-relaxed text-gray-500 dark:text-gray-400">
+                      Considera o saldo das contas e os compromissos imediatos identificados.
+                      Receitas previstas não aumentam o disponível antes de serem recebidas.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {hasPriorities && (
