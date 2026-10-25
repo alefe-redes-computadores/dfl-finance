@@ -110,6 +110,7 @@ jobs:
           node scripts/check-v208-action-clarity.mjs
           node scripts/check-v209-planning-hub.mjs
           node scripts/check-v210-planning-decision.mjs
+          node scripts/check-v211-reserve-priority.mjs
           node scripts/check-v84-edge-runtime.mjs
 
       - name: Mobile contracts
