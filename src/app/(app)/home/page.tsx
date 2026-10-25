@@ -1677,10 +1677,15 @@ function HomeContent() {
                       type="button"
                       onClick={() => router.push(operationalAction.href)}
                       className="flex min-h-11 w-full items-center justify-between rounded-xl bg-teal-50 px-3 text-left text-xs font-semibold text-teal-800 transition active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 dark:bg-teal-500/10 dark:text-teal-300"
-                      aria-label={operationalAction.label}
+                      aria-label={`${operationalAction.label}. ${operationalAction.reason}`}
                     >
-                      <span>{operationalAction.label}</span>
-                      <ChevronRight size={16} aria-hidden="true" />
+                      <span className="min-w-0">
+                        <span className="block">{operationalAction.label}</span>
+                        <span className="mt-1 block text-[10px] font-normal leading-4 text-teal-700/80 dark:text-teal-300/80">
+                          {operationalAction.reason}
+                        </span>
+                      </span>
+                      <ChevronRight size={16} aria-hidden="true" className="shrink-0" />
                     </button>
                   </div>
                 )}

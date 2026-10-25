@@ -107,6 +107,7 @@ jobs:
           node scripts/check-v205-operational-detail.mjs
           node scripts/check-v206-home-insight.mjs
           node scripts/check-v207-home-actions.mjs
+          node scripts/check-v208-action-clarity.mjs
           node scripts/check-v84-edge-runtime.mjs
 
       - name: Mobile contracts

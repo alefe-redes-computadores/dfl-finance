@@ -16,7 +16,9 @@ export function homeOperationalAction(input: {
     return {
       label: 'Revisar Inbox',
       href: '/conciliation',
-      reason: 'Existem informações que precisam de conferência'
+      reason: Number.isFinite(input.available) && input.available < 0
+        ? 'Há itens para revisar e compromissos acima do saldo. Confira a Inbox primeiro.'
+        : 'Existem informações que precisam de conferência'
     }
   }
 
@@ -31,6 +33,8 @@ export function homeOperationalAction(input: {
   return {
     label: 'Ver planejamento',
     href: '/planning',
-    reason: 'Acompanhar compromissos futuros'
+    reason: Number.isFinite(input.available)
+      ? 'Acompanhar compromissos futuros, sem considerá-los dinheiro disponível'
+      : 'Valores operacionais indisponíveis; consulte o planejamento sem presumir saldo confirmado'
   }
 }

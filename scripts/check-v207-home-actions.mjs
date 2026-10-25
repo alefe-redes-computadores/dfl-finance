@@ -40,7 +40,7 @@ test('Nenhuma mutacao financeira',()=>{
 test('Home integra decisao',()=>{
   assert.ok(home.includes('homeOperationalAction({'))
   assert.ok(home.includes('router.push(operationalAction.href)'))
-  assert.ok(home.includes('aria-label={operationalAction.label}'))
+  assert.ok(home.includes('operationalAction.reason}'))
 })
 test('Formula financeira intocada',()=>{
   assert.ok(home.includes('totalAccountsBalance - operationalCommitted'))
