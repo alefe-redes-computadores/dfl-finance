@@ -84,6 +84,18 @@ export default function CashPressurePage() {
     </section>
     <section className={card}>
       <div className="flex gap-2"><SlidersHorizontal size={19} className="mt-0.5 shrink-0 text-violet-600"/><div><h2 className="text-[15px] font-bold text-slate-900 dark:text-white">E se...? Simule sem mexer no dinheiro</h2><p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">O gasto extra hipotético é lançado apenas no primeiro dia desta simulação. A proteção mínima é um alerta, não uma reserva real.</p></div></div>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+          Valores hipotéticos · nenhuma transação será criada
+        </p>
+        {(extra || cushion) && (
+          <button type="button"
+            onClick={() => { setExtra(''); setCushion('') }}
+            className="min-h-11 rounded-xl border border-violet-200 px-3 text-xs font-semibold text-violet-700 dark:border-violet-800 dark:text-violet-300">
+            Zerar simulação
+          </button>
+        )}
+      </div>
       <div className="mt-3 grid grid-cols-2 gap-3">
         <div><label htmlFor="stress-extra" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Gasto extra (R$)</label><input id="stress-extra" type="text" inputMode="decimal" placeholder="Ex.: 350,00" value={extra} onChange={e=>setExtra(e.target.value)} className="mt-1 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"/></div>
         <div><label htmlFor="stress-buffer" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Proteção mínima (R$)</label><input id="stress-buffer" type="text" inputMode="decimal" placeholder="Ex.: 500,00" value={cushion} onChange={e=>setCushion(e.target.value)} className="mt-1 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"/></div>

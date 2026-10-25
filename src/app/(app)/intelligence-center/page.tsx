@@ -9,6 +9,7 @@ import {
   PiggyBank, Search, ShieldCheck
 } from 'lucide-react'
 import ContextToggle from '@/components/ContextToggle'
+import { searchIntelligenceGroups } from '@/lib/intelligenceSearchPolicy'
 import {
   intelligenceGroups,
   type IntelligenceGroupId
@@ -50,25 +51,10 @@ export default function IntelligenceCenterPage() {
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
 
-  const groups = useMemo(() => {
-    const search = query.trim().toLocaleLowerCase('pt-BR')
-    return intelligenceGroups
-      .filter(group => filter === 'all' || group.id === filter)
-      .map(group => ({
-        ...group,
-        links: group.links.filter(link => {
-          if (!search) return true
-          const haystack = [
-            group.title,
-            link.title,
-            link.description,
-            link.tag
-          ].join(' ').toLocaleLowerCase('pt-BR')
-          return haystack.includes(search)
-        })
-      }))
-      .filter(group => group.links.length > 0)
-  }, [filter, query])
+  const groups = useMemo(
+    () => searchIntelligenceGroups(intelligenceGroups, filter, query),
+    [filter, query]
+  )
 
   const total = groups.reduce(
     (sum, group) => sum + group.links.length,
@@ -120,6 +106,24 @@ export default function IntelligenceCenterPage() {
       </section>
 
       <section className={surface}>
+        <h2 className="mb-3 text-xs font-bold text-slate-900 dark:text-white">
+          Acesso rápido
+        </h2>
+        <div className="grid grid-cols-3 gap-2">
+          {([
+            ['Conferir', '/conciliation'],
+            ['Fôlego', '/cash-pressure'],
+            ['Planejar', '/planning']
+          ] as const).map(([label,href])=>(
+            <Link key={href} href={href} prefetch={false}
+              className="flex min-h-11 items-center justify-center rounded-xl border border-slate-200 px-2 text-center text-[11px] font-semibold text-teal-700 dark:border-slate-700 dark:text-teal-300">
+              {label}
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className={surface}>
         <label htmlFor="intelligence-search"
           className="text-[12px] font-bold text-slate-900 dark:text-white">
           Encontrar uma ferramenta
@@ -152,9 +156,18 @@ export default function IntelligenceCenterPage() {
             </button>
           ))}
         </div>
-        <p className="mt-1 text-[10px] text-slate-500">
-          {total} ferramenta(s) disponíveis neste filtro.
-        </p>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p role="status" className="text-[10px] text-slate-500">
+            {total} ferramenta(s) encontradas.
+          </p>
+          {(query || filter !== 'all') && (
+            <button type="button"
+              onClick={() => { setQuery(''); setFilter('all') }}
+              className="min-h-11 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-teal-700 dark:border-slate-700 dark:text-teal-300">
+              Limpar filtros
+            </button>
+          )}
+        </div>
       </section>
 
       {groups.length === 0 && (

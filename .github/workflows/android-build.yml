@@ -116,6 +116,7 @@ jobs:
           node scripts/check-v214-planning-usability.mjs
           node scripts/check-v215-conciliation-view.mjs
           node scripts/check-v216-inbox-organization.mjs
+          node scripts/check-v217-intelligence-radar.mjs
           node scripts/check-v84-edge-runtime.mjs
 
       - name: Mobile contracts
