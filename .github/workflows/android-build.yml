@@ -103,6 +103,7 @@ jobs:
           node scripts/check-v201-query-contracts.mjs
           node scripts/check-v202-search-experience.mjs
           node scripts/check-v203-home-clarity.mjs
+          node scripts/check-v204-home-inbox.mjs
           node scripts/check-v84-edge-runtime.mjs
 
       - name: Mobile contracts

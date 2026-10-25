@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { belongsInFinancialInbox, pendingDueDate, needsFinancialReview } from '@/lib/inboxPolicy'
+import { homeInboxSummary } from '@/lib/homeInboxSummary'
 import { resolveKnownCommitments } from '@/lib/financialCommitments'
 import { useEffect, useState, useCallback, useRef, lazy, Suspense, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
@@ -590,6 +591,11 @@ function HomeContent() {
       reviewCount: inboxItems.filter((tx: any) => needsFinancialReview(tx) || !pendingDueDate(tx)).length,
     }
   }, [localTransactions, cards, debtsList, todayIso])
+
+  const inboxSummary = useMemo(
+    () => homeInboxSummary(pendings.actionableCount, pendings.reviewCount),
+    [pendings.actionableCount, pendings.reviewCount]
+  )
 
   const homePriorityAlerts = useMemo(() => {
     type HomePriorityAlert = {
@@ -1579,25 +1585,17 @@ function HomeContent() {
                 <button
                   type="button"
                   onClick={() => router.push('/conciliation')}
-                  aria-label={pendings.reviewCount > 0
-                    ? `Abrir Inbox financeira. ${pendings.reviewCount} item(ns) para revisar`
-                    : pendings.actionableCount > 0
-                      ? `Abrir Inbox financeira. ${pendings.actionableCount} pendência(s)`
-                      : 'Abrir Inbox financeira'}
+                  aria-label={inboxSummary.accessible}
                   className="min-w-0 rounded-[17px] bg-violet-50/70 p-3 text-left transition active:scale-[0.985] dark:bg-violet-500/10"
                 >
                   <p className="text-[9px] font-black uppercase tracking-[0.1em] text-violet-700/70 dark:text-violet-400/70">
                     Inbox financeira
                   </p>
                   <p className="mt-1 truncate text-[15px] font-black text-violet-800 dark:text-violet-300">
-                    {pendings.reviewCount > 0
-                      ? `${pendings.reviewCount} para revisar`
-                      : pendings.actionableCount > 0
-                        ? `${pendings.actionableCount} pendente${pendings.actionableCount === 1 ? '' : 's'}`
-                        : 'Tudo em dia'}
+                    {inboxSummary.title}
                   </p>
                   <p className="mt-1 text-[9.5px] leading-4 text-violet-700/60 dark:text-violet-400/60">
-                    WhatsApp, comprovantes e pendências
+                    {inboxSummary.detail}
                   </p>
                 </button>
               </div>
