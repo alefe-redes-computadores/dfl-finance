@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import {
   AlertTriangle,
   Loader2,
@@ -10,7 +10,8 @@ import {
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import {
   getNetworkNotice,
-  shouldShowNetworkNotice
+  shouldShowNetworkNotice,
+  type NetworkNotice
 } from '@/lib/networkNoticePolicy'
 
 interface NetworkStatusProps {
@@ -39,28 +40,31 @@ export default function NetworkStatus({
   pendingCount,
   isSyncing = false
 }: NetworkStatusProps) {
-  const [dismissedKey, setDismissedKey] = useState<string | null>(null)
-  const cycleRef = useRef(0)
-  const lastKeyRef = useRef<string | null>(null)
-  const { light } = useHapticFeedback()
-
   const notice = getNetworkNotice({
     isOnline,
     pendingCount,
     isSyncing
   })
 
-  // Novo ciclo: a dispensa anterior nao bloqueia o novo alerta.
-  const currentKey = notice?.key ?? null
-  if (lastKeyRef.current !== currentKey) {
-    cycleRef.current += 1
-    lastKeyRef.current = currentKey
-  }
-  const cycleKey = notice
-    ? `${cycleRef.current}:${notice.key}`
-    : null
+  if (!notice) return null
 
-  if (!shouldShowNetworkNotice(notice, dismissedKey === cycleKey ? notice?.key ?? null : null) || !notice) {
+  // Cada aviso tem seu proprio estado de dispensa.
+  // Ao desaparecer, o componente interno e desmontado.
+  return <NetworkNoticeBanner key={notice.key} notice={notice} />
+}
+
+function NetworkNoticeBanner({
+  notice
+}: {
+  notice: NetworkNotice
+}) {
+  const [dismissed, setDismissed] = useState(false)
+  const { light } = useHapticFeedback()
+
+  if (!shouldShowNetworkNotice(
+    notice,
+    dismissed ? notice.key : null
+  )) {
     return null
   }
 
@@ -94,7 +98,7 @@ export default function NetworkStatus({
           aria-label="Dispensar aviso de conexão"
           onClick={() => {
             light()
-            setDismissedKey(cycleKey)
+            setDismissed(true)
           }}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] transition-colors hover:bg-black/5 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current motion-reduce:transition-none dark:hover:bg-white/10"
         >

@@ -25,9 +25,9 @@ for(const p of [
   test(`Sintaxe ${p}`,ast.parseDiagnostics.length===0)
 }
 
-test('Avisos distinguem ciclos',n.includes('cycleRef.current += 1'))
-test('Estado anterior rastreado',n.includes('lastKeyRef.current'))
-test('Dispensa usa ciclo',n.includes('setDismissedKey(cycleKey)'))
+test('Avisos distinguem ciclos',n.includes('<NetworkNoticeBanner key={notice.key} notice={notice} />'))
+test('Estado anterior rastreado',n.includes('const [dismissed, setDismissed] = useState(false)'))
+test('Dispensa usa ciclo',n.includes('setDismissed(true)'))
 test('Aviso acessivel',n.includes('aria-live='))
 test('Haptico preservado',n.includes('useHapticFeedback'))
 test('Filtro de usuario protegido',q.includes("key !== 'user_id'"))

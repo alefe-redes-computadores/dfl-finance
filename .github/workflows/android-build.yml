@@ -97,6 +97,7 @@ jobs:
           node scripts/check-v195-transaction-performance.mjs
           node scripts/check-v196-integrated-release.mjs
           node scripts/check-v197-offline-query.mjs
+          node scripts/check-v198-network-lifecycle.mjs
           node scripts/check-v84-edge-runtime.mjs
 
       - name: Mobile contracts
