@@ -107,7 +107,7 @@ function HomeContent() {
   const [hideBalance, setHideBalance] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
 
-  const monthLabel = format(currentDate, 'MMMM', { locale: ptBR })
+  const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
   const greeting = getGreeting()
   const firstName = (user?.user_metadata?.name || 'Visitante').split(' ')[0]
 
@@ -1554,6 +1554,9 @@ function HomeContent() {
                 <button
                   type="button"
                   onClick={() => router.push('/accounts')}
+                  aria-label={hideBalance
+                    ? 'Ver contas. Valor operacional oculto'
+                    : `Ver contas. Disponível operacional: ${formatCurrency(operationalAvailable)}`}
                   className="min-w-0 rounded-[17px] bg-teal-50/70 p-3 text-left transition active:scale-[0.985] dark:bg-teal-500/10"
                 >
                   <p className="text-[9px] font-black uppercase tracking-[0.1em] text-teal-700/70 dark:text-teal-400/70">
@@ -1567,13 +1570,20 @@ function HomeContent() {
                     {hideBalance ? '••••' : formatCurrency(operationalAvailable)}
                   </p>
                   <p className="mt-1 text-[9.5px] leading-4 text-teal-700/60 dark:text-teal-400/60">
-                    Saldo menos compromissos imediatos
+                    {operationalAvailable < 0
+                      ? 'Compromissos imediatos superam o saldo disponível'
+                      : 'Saldo menos compromissos imediatos'}
                   </p>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => router.push('/conciliation')}
+                  aria-label={pendings.reviewCount > 0
+                    ? `Abrir Inbox financeira. ${pendings.reviewCount} item(ns) para revisar`
+                    : pendings.actionableCount > 0
+                      ? `Abrir Inbox financeira. ${pendings.actionableCount} pendência(s)`
+                      : 'Abrir Inbox financeira'}
                   className="min-w-0 rounded-[17px] bg-violet-50/70 p-3 text-left transition active:scale-[0.985] dark:bg-violet-500/10"
                 >
                   <p className="text-[9px] font-black uppercase tracking-[0.1em] text-violet-700/70 dark:text-violet-400/70">
@@ -2399,7 +2409,7 @@ function HomeContent() {
 
           <div role="group" aria-label="Selecionar mês da Home" className="flex min-w-0 items-center gap-1 rounded-full border border-gray-200/70 bg-white/90 px-1.5 py-1 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/90">
             <button type="button" aria-label="Mês anterior" onClick={() => { setCurrentDate(previous => subMonths(previous, 1)); vibrate(10) }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-teal-500 active:scale-95 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-gray-200 motion-reduce:transition-none"><ChevronLeft size={16} aria-hidden="true" /></button>
-            <span aria-live="polite" className="min-w-[82px] max-w-[120px] truncate text-center text-[11px] font-bold uppercase tracking-[0.10em] text-gray-700 dark:text-gray-200">{monthLabel}</span>
+            <span aria-live="polite" className="min-w-[105px] max-w-[150px] truncate text-center text-[11px] font-bold uppercase tracking-[0.10em] text-gray-700 dark:text-gray-200">{monthLabel}</span>
             <button type="button" aria-label="Próximo mês" onClick={() => { setCurrentDate(previous => addMonths(previous, 1)); vibrate(10) }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-teal-500 active:scale-95 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-gray-200 motion-reduce:transition-none"><ChevronRight size={16} aria-hidden="true" /></button>
           </div>
         </div>
