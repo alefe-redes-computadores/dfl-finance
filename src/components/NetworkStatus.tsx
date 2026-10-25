@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Loader2,
@@ -40,6 +40,8 @@ export default function NetworkStatus({
   isSyncing = false
 }: NetworkStatusProps) {
   const [dismissedKey, setDismissedKey] = useState<string | null>(null)
+  const cycleRef = useRef(0)
+  const lastKeyRef = useRef<string | null>(null)
   const { light } = useHapticFeedback()
 
   const notice = getNetworkNotice({
@@ -48,7 +50,17 @@ export default function NetworkStatus({
     isSyncing
   })
 
-  if (!shouldShowNetworkNotice(notice, dismissedKey) || !notice) {
+  // Novo ciclo: a dispensa anterior nao bloqueia o novo alerta.
+  const currentKey = notice?.key ?? null
+  if (lastKeyRef.current !== currentKey) {
+    cycleRef.current += 1
+    lastKeyRef.current = currentKey
+  }
+  const cycleKey = notice
+    ? `${cycleRef.current}:${notice.key}`
+    : null
+
+  if (!shouldShowNetworkNotice(notice, dismissedKey === cycleKey ? notice?.key ?? null : null) || !notice) {
     return null
   }
 
@@ -82,7 +94,7 @@ export default function NetworkStatus({
           aria-label="Dispensar aviso de conexão"
           onClick={() => {
             light()
-            setDismissedKey(notice.key)
+            setDismissedKey(cycleKey)
           }}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] transition-colors hover:bg-black/5 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current motion-reduce:transition-none dark:hover:bg-white/10"
         >

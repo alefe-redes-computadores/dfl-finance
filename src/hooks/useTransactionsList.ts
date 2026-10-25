@@ -64,18 +64,20 @@ export function useTransactionsList(
         .toArray()
     }
 
-    if (filters) {
-      for (const [key, value] of Object.entries(filters)) {
-        if (
-          value !== undefined &&
-          value !== null &&
-          value !== ''
-        ) {
-          items = items.filter(
-            (item: any) => item[key] === value
-          )
-        }
-      }
+    const activeFilters = Object.entries(filters || {}).filter(
+      ([key, value]) =>
+        key !== 'user_id' &&
+        value !== undefined &&
+        value !== null &&
+        value !== ''
+    )
+
+    if (activeFilters.length) {
+      items = items.filter((item: any) =>
+        activeFilters.every(
+          ([key, value]) => item[key] === value
+        )
+      )
     }
 
     return items.sort((a, b) => {
