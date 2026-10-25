@@ -85,7 +85,7 @@ const getAttachmentIcon = (url: string | null) => {
 }
 
 function groupByDate(transactions: any[]) {
-  const groups: Record<string, any[]> = {}
+  const groups: Record<string, any[]> = Object.create(null)
   transactions.forEach(t => {
     const key = t.date || 'Sem Data'
     if (!groups[key]) groups[key] = []
@@ -547,6 +547,7 @@ export default function TransactionsPage() {
   // A digitação mantém prioridade sobre o filtro da lista.
   const deferredSearch = useDeferredValue(search)
   const searchUpdating = search !== deferredSearch
+  const normalizedSearch = deferredSearch.toLowerCase()
   const [currentDate, setCurrentDate] = useState(new Date())
 
   useEffect(() => {
@@ -882,7 +883,7 @@ export default function TransactionsPage() {
     if (advFilters.maxAmount && safeNum(t.amount) > safeNum(advFilters.maxAmount)) return false
 
     if (deferredSearch) {
-      const term = deferredSearch.toLowerCase()
+      const term = normalizedSearch
       const desc = String(t.description || '').toLowerCase()
       const cat = String(t.categories?.name || '').toLowerCase()
       const notes = String(t.notes || '').toLowerCase()
@@ -924,6 +925,7 @@ export default function TransactionsPage() {
       quickFilter,
       pendingKind,
       deferredSearch,
+      normalizedSearch,
       todayIso,
       effectiveCategoryFilter,
       advFilters,
@@ -980,7 +982,7 @@ export default function TransactionsPage() {
       }
 
       if (deferredSearch) {
-        const term = deferredSearch.toLowerCase()
+        const term = normalizedSearch
         const description = String(
           tx.description || ''
         ).toLowerCase()
@@ -1020,6 +1022,7 @@ export default function TransactionsPage() {
       advFilters.searchNotes,
       effectiveCategoryFilter,
       deferredSearch,
+      normalizedSearch,
     ]
   )
   const pendingTxs = useMemo(
@@ -1060,9 +1063,7 @@ export default function TransactionsPage() {
     [displayTxs]
   )
 
-  const debtSearchTerm = deferredSearch
-    .trim()
-    .toLowerCase()
+  const debtSearchTerm = normalizedSearch.trim()
 
   const visibleDebtReceivables = useMemo(() => {
     if (quickFilter !== 'pending') return []
@@ -1640,9 +1641,13 @@ export default function TransactionsPage() {
                 </div>
               )}
 
-            <div className="space-y-4 animate-in fade-in duration-500">
+            <div aria-busy={searchUpdating}
+              className="space-y-4 animate-in fade-in duration-500">
               {sortedDates.map(date => (
-                <div key={date} className="relative">
+                <div
+                  key={date}
+                  className="relative [content-visibility:auto] [contain-intrinsic-size:auto_180px]"
+                >
                   <div className="mb-2 flex items-center gap-2 px-1">
                     <p className="text-[10px] font-bold uppercase tracking-[0.11em] text-gray-400 dark:text-gray-500">
                       {dateLabels.get(date) ?? date}
