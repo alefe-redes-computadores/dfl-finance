@@ -45,7 +45,7 @@ check('Filtro principal usa busca diferida', () => {
 
 check('Busca de dividas usa valor diferido', () => {
   assert.ok(source.includes(
-    'const debtSearchTerm = deferredSearch'
+    'const debtSearchTerm = normalizedSearch.trim()'
   ))
 })
 

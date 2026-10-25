@@ -19,7 +19,7 @@ test('TSX valido',()=>{
 })
 
 const a=source.indexOf('const pendingSummaryTxs = useMemo(')
-const b=source.indexOf('const pendingTxs = filtered.filter(',a)
+const b=source.indexOf('const pendingTxs = useMemo(',a)
 test('Memoizacao localizada',()=>{
   assert.ok(a>=0&&b>a)
 })
