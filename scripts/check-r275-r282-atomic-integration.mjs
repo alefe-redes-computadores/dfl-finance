@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+const path='supabase/functions/_shared/atomicV2Integration.ts';
+const source=fs.readFileSync(path,'utf8');
+const wh=fs.readFileSync('supabase/functions/whatsapp-webhook/index.ts','utf8');
+assert.ok(wh.includes('const atomicMode=false;')&&wh.includes('DFL_ATOMIC_V2_NOT_RELEASED'),'V2 nao pode estar ativa');
+assert.ok(!wh.includes('atomicV2Integration.ts'),'nao integrar ao webhook antes de teste ledger REAL');
+const transpiled=ts.transpileModule(source,{fileName:path,reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});
+assert.ok(!(transpiled.diagnostics||[]).some(d=>d.category===ts.DiagnosticCategory.Error),'Transpilacao');
+let prep=0,commits=0,recoveries=0;
+let commitResult={data:{transaction_id:'tx123'},error:null};
+let recoveryResult={transaction_id:'tx123',verified:true,ledgerReadOnly:true,status:'pending'};
+const deps={prepareAtomicV2Session:async()=>{prep++;return{revision:5}},commitPreparedAtomicV2:async()=>{commits++;return commitResult},verifyAtomicV2Recovery:async()=>{recoveries++;return recoveryResult}};
+const exports={};
+vm.runInNewContext(transpiled.outputText,{exports,require:name=>{assert.equal(name,'./atomicV2Orchestrator.ts');return deps},Error,Number,String,Object},{timeout:3000});
+const run=exports.runAtomicV2Integration;
+const input={db:{},u:{user_id:'owner'},phone:'5511999999999',sd:{provider_message_id:'message',type:'expense',amount:25},acc:{id:'account'},cat:{id:'category'},params:{p_user_id:'owner',p_account_id:'account',p_category_id:'category',p_idempotency_key:'key'}};
+let r=await run('prepare',input);assert.equal(r.phase,'prepared');assert.equal(prep,1);assert.equal(commits,0);
+r=await run('commit',input);assert.equal(r.transaction_id,'tx123');assert.equal(commits,1);
+r=await run('recover',input);assert.equal(r.verified,true);assert.equal(recoveries,1);assert.equal(commits,1);
+for(const [name,part] of [['usuario',{u:{user_id:'other'}}],['conta',{acc:{id:'other'}}],['categoria',{cat:{id:'other'}}],['sem chave',{params:{...input.params,p_idempotency_key:null}}],['recorrencia',{sd:{...input.sd,recurrence:{frequency:'monthly'}}}],['valor',{sd:{...input.sd,amount:-1}}]]){
+ const before=[prep,commits,recoveries].join(',');await assert.rejects(()=>run('commit',{...input,...part}),/INVALID_INPUT/);assert.equal([prep,commits,recoveries].join(','),before);console.log('OK: entrada invalida bloqueada:',name);
+}
+await assert.rejects(()=>run('unknown',input),/INVALID_ACTION/);
+commitResult={data:{},error:null};await assert.rejects(()=>run('commit',input),/MISSING_FINANCIAL_RECEIPT/);
+commitResult={data:{transaction_id:'tx123'},error:new Error('SQL falhou')};await assert.rejects(()=>run('commit',input),/SQL falhou/);
+recoveryResult={transaction_id:'tx123',verified:false,ledgerReadOnly:true};await assert.rejects(()=>run('recover',input),/RECOVERY_UNVERIFIED/);
+assert.ok(!source.includes('bot_record_transaction'),'sem fallback legado');
+console.log('R275-R282: 13 cenarios e isolamento da ponte aprovados');

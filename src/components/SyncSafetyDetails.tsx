@@ -13,11 +13,16 @@ export default function SyncSafetyDetails() {
     const [queue, outbox] = await Promise.all([
       db.syncQueue.where('user_id').equals(user.id).toArray(), db.financialOutbox.get(user.id),
     ])
-    const errors = Array.from(new Set(queue.map(item => syncFailurePresentation(item.last_error)?.message).filter(Boolean)))
-    return { pending: queue.length, outbox: Boolean(outbox), errors }
+    const errors = Array.from(new Set(queue.map(item => syncFailurePresentation(item.last_error)?.message).filter((x): x is string => Boolean(x))))
+    const reviewCount = queue.filter(item => {
+      const kind = syncFailurePresentation(item.last_error)?.kind
+      return kind === 'conflict' || kind === 'legacy' || kind === 'ledger' || kind === 'backend'
+    }).length
+    return { pending: queue.length, outbox: Boolean(outbox), errors, reviewCount }
   }, [user?.id])
   if (!data) return null
   return <div className="mb-4 space-y-2 text-xs leading-5 text-gray-500 dark:text-gray-400">
+    {data.reviewCount > 0 && <p role="status" className="rounded-xl bg-amber-50 p-3 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">{data.reviewCount} operação(ões) precisam de revisão antes de nova tentativa. Os registros permanecem preservados.</p>}
     {data.outbox && <p>Existe um lote preservado aguardando confirmação. Repetir a sincronização reutiliza sua identidade.</p>}
     {data.errors.map(message => <p key={message} role="status" className="rounded-xl bg-amber-50 p-3 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">{message}</p>)}
     {(data.pending > 0 || data.outbox) && <Link href="/data-safety" className="inline-flex min-h-11 items-center font-semibold text-teal-700 dark:text-teal-400">Preservar backup dos dados locais</Link>}

@@ -125,6 +125,48 @@ jobs:
           node scripts/check-v220-scenario-comparison.mjs
           node scripts/check-v224-premium-fields.mjs
           node scripts/check-v84-edge-runtime.mjs
+          node scripts/check-r119-sync-diagnostics.mjs
+          node scripts/check-r120-bot-periods.mjs
+          node scripts/check-r121-contextual-corrections.mjs
+          node scripts/check-r122-proposal-review.mjs
+          node scripts/check-r123-r124-revision-guard.mjs
+          node scripts/check-r125-r126-proposal-expiry.mjs
+          node scripts/check-r130-plain-confirmation.mjs
+          node scripts/check-r133-bot-session-cas.mjs
+          node scripts/check-r134-r136-postgres-cas.mjs
+          node scripts/check-r137-atomic-authorization.mjs
+          node scripts/check-r139-r141-atomic-contract.mjs
+          node scripts/check-r142-atomic-wrapper.mjs
+          node scripts/check-r146-r150-atomic-entry.mjs
+          node scripts/check-r151-r156-atomic-bridge.mjs
+          node scripts/check-r157-r162-atomic-recovery.mjs
+          node scripts/check-r163-r169-real-wrapper-postgres.mjs
+          node scripts/check-r170-r176-atomic-v2.mjs
+          node scripts/check-r177-r183-authorization-hardening.mjs
+          node scripts/check-r191-r197-release-safety.mjs
+          node scripts/check-r198-r204-v2-safety.mjs
+          node scripts/check-r205-r211-v2-unification.mjs
+          node scripts/check-r212-r219-consolidated-sql.mjs
+          node scripts/check-r220-r226-financial-rollout.mjs
+          node scripts/check-r227-r234-financial-activation.mjs
+          node scripts/check-r235-r241-atomic-session.mjs
+          node scripts/check-r242-r249-cas-stage.mjs
+          node scripts/check-r250-r258-orchestrator.mjs
+          node scripts/check-r259-r266-ledger-recovery.mjs
+          node scripts/check-r267-r274-recovery-guard.mjs
+          node scripts/check-r275-r282-atomic-integration.mjs
+          node scripts/check-r283-r290-webhook-handoff.mjs
+          node scripts/check-r291-r298-postcommit-guard.mjs
+          node scripts/check-r299-r306-ledger-postcommit.mjs
+          node scripts/check-r307-r314-postgres-atomic-e2e.mjs
+          node scripts/check-r315-r322-real-financial-rpc.mjs
+          node scripts/check-r324-r329-v2-canonical-r4.mjs
+          node scripts/check-r330-r338-webhook-v2-integration.mjs
+          node scripts/check-r339-r346-uncertain-commit.mjs
+          node scripts/check-r347-r349-v2-integrity.mjs
+          node scripts/check-r350-v2-release-bundle.mjs
+          node scripts/check-r351-v2-ledger-guard.mjs
+          node scripts/check-r353-remote-migration-alignment.mjs
 
       - name: Mobile contracts
         run: npm run mobile:check

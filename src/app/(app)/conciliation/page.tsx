@@ -34,7 +34,7 @@ import {
   saveConciliationReview,
 } from '@/lib/conciliationOperations'
 import Skeleton from '@/components/Skeleton'
-import { belongsInFinancialInbox, inboxState, pendingDueDate, needsFinancialReview } from '@/lib/inboxPolicy'
+import { belongsInFinancialInbox, inboxState, pendingDueDate, needsFinancialReview, financialReviewReason } from '@/lib/inboxPolicy'
 import { filterConciliationView, type InboxDirection } from '@/lib/conciliationViewPolicy'
 import { sortConciliationView, type InboxSort } from '@/lib/conciliationViewSort'
 
@@ -474,7 +474,13 @@ export default function ConciliationPage() {
                           </span>
                           {(needsFinancialReview(tx) || !pendingDueDate(tx)) && (
                             <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[9.5px] font-bold text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">
-                              Revisão recomendada
+                              {financialReviewReason(tx) === 'whatsapp'
+                                ? 'WhatsApp · revisar dados'
+                                : financialReviewReason(tx) === 'ocr'
+                                  ? 'Comprovante · revisar dados'
+                                  : financialReviewReason(tx) === 'import'
+                                    ? 'Importação · revisar dados'
+                                    : 'Revisão recomendada'}
                             </span>
                           )}
                         </div>

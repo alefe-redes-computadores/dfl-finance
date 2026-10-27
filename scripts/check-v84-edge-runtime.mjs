@@ -21,6 +21,31 @@ assert.equal(typeof financeComparisons.parseFinanceComparison,'function')
 assert.equal(typeof financeComparisons.aggregateFinanceMonths,'function')
 assert.equal(typeof financePace.buildFinancePace,'function')
 const financePlanning=evaluate('supabase/functions/_shared/financePlanning.ts',name=>{if(name==='./financePace.ts')return financePace;throw Error('Unexpected financePlanning import '+name)})
+// R151-R156 R5: carregar a dependencia pura real com importacao explicita e fail-closed.
+const atomicBotSingle=evaluate('supabase/functions/_shared/atomicBotSingle.ts',name=>{throw Error('Unexpected atomicBotSingle import '+name)})
+assert.equal(typeof atomicBotSingle.atomicBotSingle,'function')
+assert.equal(typeof atomicBotSingle.atomicBotFinalize,'function')
+/* R335: dependencies V2 enumeradas; imports arbitrarios continuam proibidos. */
+const v2Bridge=evaluate('supabase/functions/_shared/atomicBotV2Bridge.ts',name=>{throw Error('Unexpected v2Bridge import '+name)})
+const v2Session=evaluate('supabase/functions/_shared/atomicV2Session.ts',name=>{
+ if(name==='./atomicBotV2Bridge.ts')return v2Bridge;throw Error('Unexpected v2Session import '+name)
+})
+const v2Stage=evaluate('supabase/functions/_shared/atomicV2Stage.ts',name=>{
+ if(name==='./atomicV2Session.ts')return v2Session;throw Error('Unexpected v2Stage import '+name)
+})
+const v2Single=evaluate('supabase/functions/_shared/atomicBotSingleV2.ts',name=>{throw Error('Unexpected v2Single import '+name)})
+const v2Orch=evaluate('supabase/functions/_shared/atomicV2Orchestrator.ts',name=>{
+ const map={'./atomicV2Stage.ts':v2Stage,'./atomicBotSingleV2.ts':v2Single,'./atomicV2Session.ts':v2Session}
+ if(name in map)return map[name];throw Error('Unexpected v2Orch import '+name)
+})
+const v2Integration=evaluate('supabase/functions/_shared/atomicV2Integration.ts',name=>{
+ if(name==='./atomicV2Orchestrator.ts')return v2Orch;throw Error('Unexpected v2Integration import '+name)
+})
+const v2Handoff=evaluate('supabase/functions/_shared/atomicV2WebhookHandoff.ts',name=>{
+ if(name==='./atomicV2Integration.ts')return v2Integration;throw Error('Unexpected v2Handoff import '+name)
+})
+assert.equal(typeof v2Handoff.handoffAtomicV2,'function')
+assert.equal(typeof v2Handoff.recoverAtomicV2Handoff,'function')
 assert.equal(typeof financePlanning.buildFinancePlanning,'function')
 const env={SUPABASE_URL:'https://example.test',SUPABASE_SERVICE_ROLE_KEY:'internal-test-secret',
  EVOLUTION_API_KEY:'evolution-test-secret',EVOLUTION_API_URL:'https://evolution.test',EVOLUTION_INSTANCE:'test'}
@@ -35,6 +60,8 @@ function handler(file, client, webPush={setVapidDetails(){},async sendNotificati
   if(name==='../_shared/financeComparisons.ts')return financeComparisons
   if(name==='../_shared/financePace.ts')return financePace
   if(name==='../_shared/financePlanning.ts')return financePlanning
+  if(name==='../_shared/atomicBotSingle.ts')return atomicBotSingle
+  if(name==='../_shared/atomicV2WebhookHandoff.ts')return v2Handoff
   if(name.includes('/http/server'))return{serve:fn=>{serveHandler=fn}}
   if(name.includes('supabase-js'))return{createClient:()=>client}
   if(name==='npm:web-push')return webPush

@@ -15,3 +15,53 @@ export function syncSafetyStatus(input: { online: boolean; pending: number; hasO
   if (!input.lastSuccess) return { kind: 'unverified' as const, message: 'A fila está vazia. A sincronização ainda não foi verificada nesta sessão.' }
   return { kind: 'verified' as const, message: 'A última sincronização completa foi confirmada e não há alterações na fila.' }
 }
+
+
+/** R119: diagnostico local somente-leitura. Nunca autoriza retry ou altera fila. */
+export type LocalSyncDiagnostic = {
+  kind: SyncSafetyKind
+  headline: string
+  action: 'none' | 'wait' | 'connect' | 'review' | 'retry'
+  canRetry: boolean
+  pendingCount: number
+  hasOutbox: boolean
+}
+
+export function localSyncDiagnostic(input: {
+  online: boolean
+  syncing: boolean
+  pending: number
+  hasOutbox: boolean
+  lastSuccess: string | null
+  lastError: string | null
+}): LocalSyncDiagnostic {
+  const pendingCount = Number.isFinite(input.pending)
+    ? Math.max(0, Math.floor(input.pending)) : 0
+  const status = syncSafetyStatus({
+    online: input.online,
+    pending: pendingCount,
+    hasOutbox: input.hasOutbox,
+    lastSuccess: input.lastSuccess,
+    lastError: input.lastError,
+  })
+  if (!input.online) return {
+    kind: 'offline', headline: status.message, action: 'connect',
+    canRetry: false, pendingCount, hasOutbox: input.hasOutbox,
+  }
+  if (input.syncing) return {
+    kind: status.kind, headline: 'Sincronizacao em andamento. Aguarde a confirmacao.',
+    action: 'wait', canRetry: false, pendingCount, hasOutbox: input.hasOutbox,
+  }
+  const needsReview = ['legacy', 'conflict', 'ledger', 'backend'].includes(status.kind)
+  if (needsReview) return {
+    kind: status.kind, headline: status.message, action: 'review',
+    canRetry: false, pendingCount, hasOutbox: input.hasOutbox,
+  }
+  const retry = status.kind === 'retry' || status.kind === 'pending'
+  return {
+    kind: status.kind, headline: status.message,
+    action: retry ? 'retry' : 'none',
+    canRetry: retry,
+    pendingCount, hasOutbox: input.hasOutbox,
+  }
+}

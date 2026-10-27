@@ -1,3 +1,5 @@
+import { atomicBotSingle, atomicBotFinalize } from '../_shared/atomicBotSingle.ts';
+import { handoffAtomicV2, recoverAtomicV2Handoff } from '../_shared/atomicV2WebhookHandoff.ts';
 import { trustedWebhook, readBoundedJson, receiptMimeMatches } from '../_shared/requestSecurity.ts';
 import { buildFinancePace } from '../_shared/financePace.ts';
 import { buildFinancePlanning, normalizePlanningGroups, normalizePlanningReserves, normalizePlanningFlexLimits } from '../_shared/financePlanning.ts';
@@ -52,6 +54,21 @@ const txCorrectionPatch=(raw:string,focus:string|null=null)=>{
   const put=(key:string,value:any)=>{patch[key]=value;if(!fields.includes(key))fields.push(key)};
   for(const piece of parts){
     const n=N(piece);
+    /* R121: correcoes naturais somente no rascunho, jamais executam transacao. */
+    const contextualAmount=n.match(/^(?:na verdade\s+)?(?:era|foi)\s+(?:r\$\s*)?(\d[\d.,]*)\s*$/i);
+    const contextualAccount=piece.match(/^(?:na verdade\s+)?(?:foi|paguei|recebi)\s+(?:na|no|pela|pelo)\s+(.+?)\s*$/i);
+    if(contextualAmount){
+      const candidate=amount(contextualAmount[1]);
+      if(!candidate||!Number.isFinite(candidate))errors.push("Valor inválido: "+piece);
+      else put("amount",candidate);
+      continue;
+    }
+    if(contextualAccount){
+      const accountName=contextualAccount[1].trim().replace(/[.!?]+$/g,"").trim();
+      if(!accountName||accountName.length>120)errors.push("Conta inválida: "+piece);
+      else put("accountName",accountName);
+      continue;
+    }
     const amountMatch=n.match(/^(?:(?:corrigir|corrige|mudar|altera(?:r)?|troca(?:r)?|ajustar)\s+)?(?:o\s+)?(?:valor|quantia|preco)\s*(?:para|de|:|=)?\s*(.+)$/i);
     const descMatch=piece.match(/^(?:(?:corrigir|corrige|mudar|altera(?:r)?|troca(?:r)?|ajustar)\s+)?(?:o\s+|a\s+)?(?:nome(?:\s+d[ao]\s+(?:lancamento|lançamento|transacao|transação))?|descri(?:cao|ção)|t[ií]tulo|hist[oó]rico)\s*(?:para|de|:|=)?\s*(.+)$/i);
     const shortDesc=piece.match(/^de\s+["“']?(.+?)['”"]?$/i);
@@ -146,7 +163,40 @@ const botNextMonthlyDueCivil=(billingDay:number,reference:string=day()):string=>
 /* V168_FINANCIAL_DATE_HELPERS_END */
 
 const monthAliases:any={jan:1,janeiro:1,fev:2,fevereiro:2,mar:3,marco:3,abril:4,abr:4,maio:5,mai:5,jun:6,junho:6,jul:7,julho:7,ago:8,agosto:8,set:9,setembro:9,out:10,outubro:10,nov:11,novembro:11,dez:12,dezembro:12};
-const pendingPeriod=(s:string)=>{const n=N(s),today=day(),cy=Number(today.slice(0,4)),cm=Number(today.slice(5,7));let y=cy,m=cm,found=false;const iso=n.match(/\b(20\d{2})[-\/](0?[1-9]|1[0-2])\b/);if(iso){y=Number(iso[1]);m=Number(iso[2]);found=true}else{const num=n.match(/\b(0?[1-9]|1[0-2])\s*[\/\-]\s*(\d{2}|20\d{2})\b/);if(num){m=Number(num[1]);y=Number(num[2].length===2?"20"+num[2]:num[2]);found=true}else{for(const [k,v] of Object.entries(monthAliases)){if(new RegExp("\\b"+k+"\\b").test(n)){m=Number(v);found=true;const ym=n.match(/\b(20\d{2})\b/);if(ym)y=Number(ym[1]);break}}if(!found){const only=n.match(/(?:pendencias|pendentes).*?\b(0?[1-9]|1[0-2])\b/);if(only){m=Number(only[1]);found=true}}}}const start=`${y}-${String(m).padStart(2,"0")}-01`;const endDate=new Date(Date.UTC(y,m,0));const end=`${y}-${String(m).padStart(2,"0")}-${String(endDate.getUTCDate()).padStart(2,"0")}`;const label=`${monthNames[m-1].charAt(0).toUpperCase()+monthNames[m-1].slice(1)}/${y}`;return{year:y,month:m,start,end,label,explicit:found}};
+/* R120: periodos financeiros civis. Apenas consulta; sem escrita no ledger. */
+const pendingPeriod=(s:string)=>{
+ const n=N(s).replace(/\s+/g," ").trim();
+ const today=day(),cy=Number(today.slice(0,4)),cm=Number(today.slice(5,7));
+ let y=cy,m=cm,found=false;
+ const civilShift=(offset:number)=>{
+   const d=new Date(Date.UTC(cy,cm-1+offset,1,12));
+   return {y:d.getUTCFullYear(),m:d.getUTCMonth()+1};
+ };
+ const relative=n.match(/\b(?:mes\s+(?:passado|anterior|atual|corrente|que vem|proximo)|este\s+mes|nesse\s+mes|proximo\s+mes|ultimo\s+mes)\b/);
+ if(relative){
+   const offset=/passado|anterior|ultimo/.test(relative[0])?-1:/que vem|proximo/.test(relative[0])?1:0;
+   ({y,m}=civilShift(offset));found=true;
+ }else{
+   const iso=n.match(/\b(20\d{2})[-\/](0?[1-9]|1[0-2])\b/);
+   const num=n.match(/\b(0?[1-9]|1[0-2])\s*[\/\-]\s*(\d{2}|20\d{2})\b/);
+   if(iso){y=Number(iso[1]);m=Number(iso[2]);found=true}
+   else if(num){m=Number(num[1]);y=Number(num[2].length===2?"20"+num[2]:num[2]);found=true}
+   else{
+     const names=Object.entries(monthAliases).sort((a,b)=>b[0].length-a[0].length);
+     const named=names.find(([k])=>new RegExp("\\b"+k+"\\b").test(n));
+     if(named){
+       m=Number(named[1]);found=true;
+       const ym=n.match(/\b(20\d{2})\b/);
+       if(ym)y=Number(ym[1]);
+     }
+   }
+ }
+ const start=`${y}-${String(m).padStart(2,"0")}-01`;
+ const endDate=new Date(Date.UTC(y,m,0,12));
+ const end=`${y}-${String(m).padStart(2,"0")}-${String(endDate.getUTCDate()).padStart(2,"0")}`;
+ const label=`${monthNames[m-1].charAt(0).toUpperCase()+monthNames[m-1].slice(1)}/${y}`;
+ return{year:y,month:m,start,end,label,explicit:found};
+};
 const pendingFilters=(s:string)=>{const n=N(s);return{type:/\b(receitas?|entradas?)\b/.test(n)?"income":/\b(despesas?|gastos?|saidas?)\b/.test(n)?"expense":null,context:/\b(empresa|dfl|empresarial)\b/.test(n)?"dfl":/\b(pessoal|personal)\b/.test(n)?"personal":null}};
 const amount=(s:string)=>{const m=s.match(/(?:r[$][ ]*)?([0-9]+(?:[.][0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:[.][0-9]{1,2})?)/i);if(!m)return null;const raw=m[1];const normalized=raw.includes(",")?raw.split(".").join("").replace(",","."):raw;const x=Number(normalized);return Number.isFinite(x)&&x>0?x:null};
 const typeOf=(s:string)=>/\b(recebi|recebido|receita|entrada|registrar receita|registrar uma receita|entrou|ganhei|vendi|venda|vendas|salario|faturei|pix recebido)\b/.test(N(s))?"income":/\b(gastei|paguei|comprei|despesa|registrar despesa|registrar uma despesa|gasto|saiu|debito|debitei|pago)\b/.test(N(s))?"expense":null;
@@ -265,7 +315,81 @@ async function categoryStep(u:any,phone:string,sd:any,acc:any,reply:any,aid:stri
   await done(aid,"extracted",out,{...sd,category_selection:true});
   return{pending:true}
 }
-async function recordTx(u:any,phone:string,sd:any,acc:any,cat:any,reply:any,aid:string){const key=await uid(`whatsapp:${sd.provider_message_id}`),rpc=sd.recurrence?"bot_record_recurring_transactions":"bot_record_transaction",params=sd.recurrence?{p_user_id:u.user_id,p_account_id:acc.id,p_type:sd.type,p_amount:Number(sd.amount),p_description:sd.description,p_context:sd.context,p_category_id:cat?.id||null,p_idempotency_key:key,p_start_date:sd.date||day(),p_frequency:sd.recurrence.frequency,p_occurrences:sd.recurrence.occurrences,p_custom_interval_months:1}:{p_user_id:u.user_id,p_account_id:acc.id,p_type:sd.type,p_amount:Number(sd.amount),p_description:sd.description,p_context:sd.context,p_category_id:cat?.id||null,p_idempotency_key:key,p_date:sd.date||day()};const r=await db.rpc(rpc,params);if(r.error)throw r.error;const txid=r.data?.transaction_id||null;let heldReceiptLinked=false;if(!sd.recurrence&&txid&&sd.held_receipt_path){const tu=await db.from("transactions").update({receipt_url:sd.held_receipt_path}).eq("id",txid).eq("user_id",u.user_id).is("receipt_url",null).select("id").maybeSingle();if(tu.error)throw tu.error;heldReceiptLinked=!!tu.data;if(heldReceiptLinked&&sd.held_receipt_message_id)await db.from("whatsapp_messages").update({transaction_id:txid,extracted_json:{action:"media.linked_after_transaction_create",storage_bucket:"receipts",storage_path:sd.held_receipt_path,transaction_id:txid},processed_at:new Date().toISOString()}).eq("id",sd.held_receipt_message_id)}if(!sd.recurrence&&txid)await save(phone,"TX_SETTLE",{transaction_id:txid,type:sd.type,amount:sd.amount,account:acc,category:cat,receipt_attached:heldReceiptLinked});else await clear(phone);const out=await reply(`${sd.recurrence?`✅ *${sd.type==="income"?"Receita":"Despesa"} recorrente registrada como pendente!*`:voiceRegistered(sd.type,sd.provider_message_id||aid)}\n\n💰 *${money(sd.amount)}*\n📝 ${sd.description}\n🏦 *${acc.name}*\n🏷️ *${cat?.name||"Sem categoria"}*${sd.recurrence?`\n🔁 ${sd.recurrence.label} · ${sd.recurrence.occurrences} ocorrências`:`\n\n*Deseja efetivar agora?*\n*1* — Efetivar e atualizar saldo\n*2* — Manter pendente\n\n${heldReceiptLinked?"📎 *Comprovante já anexado automaticamente.*":"📎 *Se quiser, pode enviar uma foto ou PDF do comprovante antes de decidir.*"}`}`);await done(sd.audit_message_id,"inserted",out,{...sd,category_id:cat?.id,rpc:r.data},r.data?.transaction_id||null);await done(aid,"extracted",out)}
+async function recordTx(u:any,phone:string,sd:any,acc:any,cat:any,reply:any,aid:string){const key=await uid(`whatsapp:${sd.provider_message_id}`),rpc=sd.recurrence?"bot_record_recurring_transactions":"bot_record_transaction",params=sd.recurrence?{p_user_id:u.user_id,p_account_id:acc.id,p_type:sd.type,p_amount:Number(sd.amount),p_description:sd.description,p_context:sd.context,p_category_id:cat?.id||null,p_idempotency_key:key,p_start_date:sd.date||day(),p_frequency:sd.recurrence.frequency,p_occurrences:sd.recurrence.occurrences,p_custom_interval_months:1}:{p_user_id:u.user_id,p_account_id:acc.id,p_type:sd.type,p_amount:Number(sd.amount),p_description:sd.description,p_context:sd.context,p_category_id:cat?.id||null,p_idempotency_key:key,p_date:sd.date||day()};/* R151-R156: modo atomico exige migrations e dados consistentes; falha fechada. */
+/* R227_R234_UNSAFE_MODE_GUARD: nunca ativar V1 (CAS e registro em chamadas separadas).
+   V2 requer snapshot persistido, migração aplicada e verificacao financeira E2E;
+   ate la nao ha acionamento automatico nem fallback perigoso. */
+if(Deno.env.get("DFL_BOT_ATOMIC_SINGLE_V1")==="enabled"){
+  throw new Error("DFL_ATOMIC_V1_UNSAFE_DISABLED");
+}
+/* R330_V2_DUAL_GATE: V2 nao ativa com uma flag so.
+   DFL_BOT_ATOMIC_V2_RELEASE_GATE deve ficar AUSENTE ate migracao homologada.
+   Modo V1 perigoso segue sempre bloqueado. */
+const v2Requested=Deno.env.get("DFL_BOT_ATOMIC_V2_ENABLED")==="true";
+if(v2Requested && Deno.env.get("DFL_BOT_ATOMIC_V2_RELEASE_GATE")!=="r330-db-approved"){
+  throw new Error("DFL_ATOMIC_V2_NOT_RELEASED");
+}
+const atomicMode=false;
+const v2Mode=v2Requested && Deno.env.get("DFL_BOT_ATOMIC_V2_RELEASE_GATE")==="r330-db-approved";
+if(v2Mode && sd.recurrence)throw new Error("DFL_ATOMIC_V2_RECURRING_NOT_SUPPORTED");
+const r=atomicMode
+  ? await atomicBotSingle(db,u,phone,sd,acc,cat,params,rpc)
+  : v2Mode
+    ? {data:{...(await (async()=>{
+        const input={db,u,phone,sd,acc,cat,params};
+        try{return await handoffAtomicV2(input)}
+        catch(error){
+          /* Apenas retomar se o ledger confirmar o MESMO lancamento.
+             Nunca registrar novamente num caminho de recuperacao. */
+          /* R339_AMBIGUOUS_POSTCOMMIT: timeout pode ocorrer DEPOIS do commit.
+             Recuperacao e SOMENTE leitura/verificacao no ledger.
+             Sem prova, lancamento NAO e declarado bem-sucedido e nao ha fallback. */
+          const ambiguousCommit=/DFL_V2_ORCH_ALREADY_CONSUMED|DFL_V2_ORCH_RECOVERY_REQUIRES_LEDGER_PROOF|DFL_V2_STAGE_ALREADY_FROZEN|(?:Failed to fetch|fetch failed|NetworkError|ETIMEDOUT|ECONNRESET|connection reset|timed out|timeout)/i.test(String(error));
+          if(ambiguousCommit){
+            try { return await recoverAtomicV2Handoff(input); }
+            catch { /* Sem prova: mantem erro de origem, nunca registra novamente. */ }
+          }
+          throw error;
+        }
+      })()),atomic:true},error:null}
+    : await db.rpc(rpc,params);
+if(r.error)throw r.error;const txid=r.data?.transaction_id||null;
+/* R291_POSTCOMMIT_VERIFY: a sessao atomica nao pode ser sobrescrita pelo legado.
+   Sem fallback financeiro, nenhuma escrita ou alteracao de saldo nesta verificacao. */
+if(r.data?.atomic===true){
+  if(sd.recurrence||!txid)throw new Error("DFL_ATOMIC_POSTCOMMIT_INVALID_RESULT");
+  const proof=await db.from("bot_sessions").select("step,temp_data").eq("phone",phone).maybeSingle();
+  if(proof.error)throw proof.error;
+  if(proof.data?.step!=="TX_SETTLE" || !proof.data?.temp_data?.consumed_at ||
+     String(proof.data?.temp_data?.transaction_id||"")!==String(txid) ||
+     String(proof.data?.temp_data?.idempotency_key||"")!==String(key)){
+    throw new Error("DFL_ATOMIC_POSTCOMMIT_SESSION_NOT_VERIFIED");
+  }
+  /* R299_LEDGER_POSTCOMMIT_VERIFY: a sessao consumida nao prova o lancamento.
+     Somente leitura; nunca chama RPC nem grava saldo, sessao ou comprovante. */
+  const ledgerProof=await db.from("transactions")
+    .select("id,user_id,account_id,category_id,type,amount,description,context,date,idempotency_key,status,affects_balance")
+    .eq("id",txid).eq("user_id",u.user_id).eq("idempotency_key",key).maybeSingle();
+  if(ledgerProof.error)throw ledgerProof.error;
+  const lp=ledgerProof.data;
+  if(!lp || String(lp.id)!==String(txid) || String(lp.user_id)!==String(u.user_id) ||
+     String(lp.account_id)!==String(acc.id) || String(lp.category_id||"")!==String(cat?.id||"") ||
+     String(lp.idempotency_key)!==String(key) || String(lp.type)!==String(sd.type) ||
+     String(lp.context)!==String(sd.context) || String(lp.description)!==String(sd.description) ||
+     String(lp.date)!==String(sd.date||day()) ||
+     !Number.isFinite(Number(lp.amount)) || Math.round(Number(lp.amount)*100)!==Math.round(Number(sd.amount)*100) ||
+     !((lp.status==="pending" && lp.affects_balance===false) || (lp.status==="done" && lp.affects_balance===true))){
+    throw new Error("DFL_ATOMIC_POSTCOMMIT_LEDGER_NOT_VERIFIED");
+  }
+}
+let heldReceiptLinked=false;if(!sd.recurrence&&txid&&sd.held_receipt_path){const tu=await db.from("transactions").update({receipt_url:sd.held_receipt_path}).eq("id",txid).eq("user_id",u.user_id).is("receipt_url",null).select("id").maybeSingle();if(tu.error)throw tu.error;heldReceiptLinked=!!tu.data;if(heldReceiptLinked&&sd.held_receipt_message_id)await db.from("whatsapp_messages").update({transaction_id:txid,extracted_json:{action:"media.linked_after_transaction_create",storage_bucket:"receipts",storage_path:sd.held_receipt_path,transaction_id:txid},processed_at:new Date().toISOString()}).eq("id",sd.held_receipt_message_id)}if(!sd.recurrence&&txid){
+  if(v2Mode){
+    /* R334: RPC V2 ja persistiu consumed_at, revision, txid e snapshot.
+       Nunca substituir TX_SETTLE com upsert legado. */
+  }else if(atomicMode){
+    await atomicBotFinalize(db,phone,txid,sd,acc,cat,heldReceiptLinked);
+  }else await save(phone,"TX_SETTLE",{transaction_id:txid,type:sd.type,amount:sd.amount,account:acc,category:cat,receipt_attached:heldReceiptLinked});
+}else await clear(phone);const out=await reply(`${sd.recurrence?`✅ *${sd.type==="income"?"Receita":"Despesa"} recorrente registrada como pendente!*`:voiceRegistered(sd.type,sd.provider_message_id||aid)}\n\n💰 *${money(sd.amount)}*\n📝 ${sd.description}\n🏦 *${acc.name}*\n🏷️ *${cat?.name||"Sem categoria"}*${sd.recurrence?`\n🔁 ${sd.recurrence.label} · ${sd.recurrence.occurrences} ocorrências`:`\n\n*Deseja efetivar agora?*\n*1* — Efetivar e atualizar saldo\n*2* — Manter pendente\n\n${heldReceiptLinked?"📎 *Comprovante já anexado automaticamente.*":"📎 *Se quiser, pode enviar uma foto ou PDF do comprovante antes de decidir.*"}`}`);await done(sd.audit_message_id,"inserted",out,{...sd,category_id:cat?.id,rpc:r.data},r.data?.transaction_id||null);await done(aid,"extracted",out)}
 async function afterConfirm(u:any,phone:string,sd:any,reply:any,aid:string){
   const aa=await allAccs(u.user_id);
   let found=sd.account||matchNamed(aa,sd.account_explicit);
@@ -456,7 +580,37 @@ if(s?.step==="TX_AMOUNT"){
   n=N(text);
 }
 if(s?.step==="TX_CONFIRM"){
-  const choice=conversationalChoice(text,"TX_CONFIRM");
+  /* R130_PLAIN_CONFIRM_GUARD: rascunho revisado exige numero explicito. */
+  const r130Rev=Number(sd.proposal_revision||0);
+  const r130Plain=new Set(["1","sim","isso","isso mesmo","correto","confirmo","confirmar","confirma","pode","pode sim","pode confirmar","pode registrar","ta certo","esta certo","certinho","ok","beleza","fechado"]);
+  if(r130Rev>0&&r130Plain.has(n)){
+    const o=await reply("🔒 *Rascunho corrigido.*\nConfirme a versão atual com *confirmar revisão "+r130Rev+"*. Nenhuma operação foi executada.");
+    await done(aid,"extracted",o,{action:"transaction.requires_revision",revision:r130Rev});
+    return new Response("OK");
+  }
+  /* R123: confirma revisao identificada; respostas simples continuam no fluxo conservador. */
+  const declaredRevision=n.match(/^(?:confirmar|confirmo|confirma)\s+revisao\s+(\d+)$/);
+  const currentRevision=Number(sd.proposal_revision||0);
+  /* R125: prazo de confirmacao explicita; nao altera fluxo legado de "sim".
+     Timestamp associado somente a revisoes que foram corrigidas. */
+  if(declaredRevision && sd.proposal_updated_at){
+    const revisionTime=Date.parse(String(sd.proposal_updated_at));
+    const revisionAge=Date.now()-revisionTime;
+    if(!Number.isFinite(revisionTime)||!Number.isFinite(revisionAge)||revisionAge<0||revisionAge>15*60*1000){
+      const o=await reply("⌛ *Esta revisão expirou.* Para sua segurança, refaça a proposta antes de confirmar. Nenhuma movimentação foi executada.");
+      await done(aid,"extracted",o,{action:"transaction.confirmation.expired_revision"});
+      return new Response("OK");
+    }
+  }
+  if(declaredRevision){
+    const requested=Number(declaredRevision[1]);
+    if(!Number.isSafeInteger(requested)||!Number.isSafeInteger(currentRevision)||requested!==currentRevision){
+      const o=await reply("⚠️ *Revisão desatualizada.* Confira o último rascunho e confirme a revisão "+currentRevision+". Nenhuma operação foi executada.");
+      await done(aid,"extracted",o,{action:"transaction.confirmation.stale_revision",expected:currentRevision});
+      return new Response("OK");
+    }
+  }
+  const choice=declaredRevision?"confirm":conversationalChoice(text,"TX_CONFIRM");
   /* V163: a correção direta do rascunho NÃO equivale à confirmação financeira. */
   const parsedInline=txCorrectionPatch(text);
   const inlineCorrection=choice!=="confirm" && parsedInline.fields.length>0 && parsedInline.errors.length===0;
@@ -497,6 +651,10 @@ if(s?.step==="TX_CORRECT"){
     await done(aid,"extracted",o,{action:"transaction.correction.retry"});return new Response("OK")
   }
   const patch=parsed.patch,next={...sd};delete next.correction_focus;
+  /* R122: revisao local de proposta — nenhuma gravacao financeira. */
+  const previousRevision=Number(sd.proposal_revision||0);
+  next.proposal_revision=Number.isSafeInteger(previousRevision)&&previousRevision>=0&&previousRevision<1000000
+    ? previousRevision+1 : 1;
   if(patch.accountName){
     const all=await allAccs(u.user_id),name=N(patch.accountName);
     const exact=all.filter((a:any)=>N(String(a.name||""))===name);
@@ -519,10 +677,12 @@ if(s?.step==="TX_CORRECT"){
   }
   if(patch.date!==undefined)next.date=patch.date;
   if(patch.categoryName!==undefined){next.category_explicit=patch.categoryName;next.category_hint=null;}
+  /* R126: marco temporal da revisao corrigida, mantido em bot_sessions.temp_data. */
+  next.proposal_updated_at=new Date().toISOString();
   await save(phone,"TX_CONFIRM",next);
   const labels:Record<string,string>={amount:"valor",description:"nome/descrição",accountName:"conta",categoryName:"categoria",context:"contexto",date:"data"};
   const changes=parsed.fields.map((f:string)=>labels[f]||f).join(", ");
-  const o=await reply(`✏️ *Rascunho atualizado:* ${changes}.\n\n${next.type==="income"?"🟢 Receita":"🔴 Despesa"} · *${money(next.amount)}*\n📝 *${next.description||"Sem descrição"}*\n📅 *${brDate(next.date)}*\n🏦 ${next.account?.name||next.account_explicit||"Conta a confirmar"}\n🏷️ ${next.category_explicit||next.category_hint||"Categoria a confirmar"}\n${next.context==="dfl"?"🏢 Empresa":next.context==="personal"?"👤 Pessoal":"Contexto a confirmar"}\n\n*1* — Confirmar\n*2* — Corrigir novamente\n\n_Nenhum lançamento foi registrado nesta correção._`);
+  const o=await reply(`✏️ *Rascunho atualizado (revisão ${next.proposal_revision}):* ${changes}.\n\n${next.type==="income"?"🟢 Receita":"🔴 Despesa"} · *${money(next.amount)}*\n📝 *${next.description||"Sem descrição"}*\n📅 *${brDate(next.date)}*\n🏦 ${next.account?.name||next.account_explicit||"Conta a confirmar"}\n🏷️ ${next.category_explicit||next.category_hint||"Categoria a confirmar"}\n${next.context==="dfl"?"🏢 Empresa":next.context==="personal"?"👤 Pessoal":"Contexto a confirmar"}\n\n*1* — Confirmar\n*2* — Corrigir novamente\n\n_Nenhum lançamento foi registrado nesta correção._`);
   await done(aid,"extracted",o,{action:"transaction.correct",fields:parsed.fields});return new Response("OK")
 }
 if(s?.step==="TX_SETTLE"){const choice=conversationalChoice(text,"TX_SETTLE");if(choice==="pending"){await clear(phone);const o=await reply("🕒 *Mantida como pendente.*\nVocê pode revisar e efetivar depois no DFL Finance.");await done(aid,"extracted",o);return new Response("OK")}if(choice!=="settle"){const o=await reply("Diga *efetivar* para atualizar o saldo ou *deixa pendente* para decidir depois. Também aceito *1* e *2*.");await done(aid,"extracted",o);return new Response("OK")}const rr=await db.rpc("bot_settle_transaction",{p_user_id:u.user_id,p_transaction_id:sd.transaction_id});if(rr.error)throw rr.error;await clear(phone);const meta=rr.data||{},desc=meta.description||"Movimentação",receipt=meta.receipt_attached===true;const o=await reply(`✅ *${sd.type==="income"?"Receita":"Despesa"} efetivada!*\n\n💰 *${money(sd.amount)}*\n📝 ${desc}\n🏦 *${sd.account?.name||"Conta"}*${sd.category?.name?`\n🏷️ *${sd.category.name}*`:""}${receipt?"\n📎 Comprovante anexado":""}\n📊 Novo saldo: *${money(meta.new_balance)}*`);await done(aid,"extracted",o,{settled:true,transaction_id:sd.transaction_id,receipt_attached:receipt,new_balance:meta.new_balance});return new Response("OK")}

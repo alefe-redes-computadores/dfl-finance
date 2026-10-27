@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {createHash} from 'node:crypto';
+import {PGlite} from '@electric-sql/pglite';
+const path='docs/sql-candidates/historical-test-fixtures/20261026220000_r219_bot_atomic_v2_consolidated.sql';
+const cas=fs.readFileSync('docs/sql-candidates/historical-test-fixtures/20261026150000_r133_bot_session_cas.sql','utf8');
+const v2=fs.readFileSync('docs/sql-candidates/historical-test-fixtures/20261026194500_r170_atomic_single_v2.sql','utf8');
+const sql=fs.readFileSync(path,'utf8');
+const unwrap=s=>s.split('\n').filter(line=>!/^\s*(?:begin|commit)\s*;\s*$/i.test(line)).join('\n').trim();
+assert.ok(unwrap(sql).includes(unwrap(cas)) && unwrap(sql).includes(unwrap(v2)),'corpos SQL preservados sem wrappers de transacao');
+assert.ok(sql.indexOf('dfl_bot_session_cas')<sql.indexOf('dfl_bot_commit_single_v2'),'ordem de dependencias');
+for(const word of ['DROP TABLE','TRUNCATE','DELETE FROM public.transactions'])assert.ok(!sql.toUpperCase().includes(word),'comando perigoso '+word);
+console.log('OK: fontes preservadas, ordem de dependencias, sem comandos destrutivos');
+const pg=new PGlite();
+try{
+ await pg.exec(`create role anon;create role authenticated;create role service_role;create schema if not exists auth;
+ create or replace function auth.role() returns text language sql stable as $$ select 'service_role'::text $$;
+ create table public.bot_sessions(phone text primary key,step text,temp_data jsonb,revision bigint not null default 0);
+ create table public.accounts(id uuid primary key,user_id uuid,context text,is_archived boolean default false);
+ create table public.categories(id uuid primary key,user_id uuid,type text,context text);
+ create table public.transactions(id uuid primary key,user_id uuid,account_id uuid,amount numeric, idempotency_key uuid);
+ create or replace function public.bot_record_transaction(p_user_id uuid,p_account_id uuid,p_type text,p_amount numeric,p_description text,p_context text,p_category_id uuid default null,p_idempotency_key uuid default null,p_date date default null) returns jsonb language plpgsql as $fn$ begin return jsonb_build_object('transaction_id','00000000-0000-4000-8000-000000000001'::uuid); end $fn$;`);
+ await pg.exec(sql);
+ const funcs=await pg.query("select proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and proname in ('dfl_bot_session_cas','dfl_bot_commit_single_v2') order by proname");
+ assert.equal(funcs.rows.length,2,'ambas funcoes SQL instaladas no PGlite');
+ const rev=await pg.query("select column_name from information_schema.columns where table_schema='public' and table_name='bot_sessions' and column_name='revision'");
+ assert.equal(rev.rows.length,1,'revision criada');
+ console.log('OK: migração consolidada executa no PGlite com 2 RPCs e revision');
+}catch(e){console.error('Falha PostgreSQL: '+e.message);throw e}finally{await pg.close()}
+console.log('R212-R219: gate SQL consolidado aprovado');

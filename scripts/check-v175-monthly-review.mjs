@@ -225,7 +225,7 @@ test('Navegação para conciliação e revisão', () => {
 })
 test('Menu Mais aponta para V175', () => {
   const more = fs.readFileSync('src/app/(app)/more/page.tsx', 'utf8')
-  assert.ok(more.includes('href="/monthly-review"'))
+  assert.ok(fs.readFileSync('src/lib/financeIntelligenceNavigation.ts','utf8').includes('/monthly-review') && fs.readFileSync('src/app/(app)/more/page.tsx','utf8').includes('href="/intelligence-center"'))
 })
 test('V174 continua presente', () => {
   assert.ok(fs.existsSync('src/lib/financePressure.ts'))
