@@ -109,6 +109,7 @@ function HomeContent() {
 
   const [hideBalance, setHideBalance] = useState(false)
   const [showOperationalDetail, setShowOperationalDetail] = useState(false)
+  const [showAllHomePriorities, setShowAllHomePriorities] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
@@ -766,6 +767,15 @@ function HomeContent() {
         3
       ),
     [homePriorityAlerts]
+  )
+
+  // A Home continua compacta por padrao, mas permite
+  // consultar todas as prioridades sem perder o contexto.
+  const displayedPriorityAlerts = useMemo(
+    () => showAllHomePriorities
+      ? homePriorityAlerts
+      : visiblePriorityAlerts,
+    [showAllHomePriorities, homePriorityAlerts, visiblePriorityAlerts]
   )
 
   const hiddenPriorityAlertsCount =
@@ -1692,8 +1702,8 @@ function HomeContent() {
               </div>
 
               {hasPriorities && (
-                <div className="border-t border-gray-100 dark:border-slate-700/60">
-                  {visiblePriorityAlerts.map((alert, index) => {
+                <div id="home-priorities-list" className="border-t border-gray-100 dark:border-slate-700/60">
+                  {displayedPriorityAlerts.map((alert, index) => {
                     const isDebt = alert.kind === 'debt'
                     const isCard = alert.kind === 'card'
                     const isTransaction =
@@ -1784,11 +1794,18 @@ function HomeContent() {
                   })}
 
                   {hiddenPriorityAlertsCount > 0 && (
-                    <div className="border-t border-gray-100 px-4 py-2.5 text-center text-[11px] font-medium text-gray-400 dark:border-slate-700/50 dark:text-gray-500">
-                      +{hiddenPriorityAlertsCount}{' '}
-                      {hiddenPriorityAlertsCount === 1
-                        ? 'prioridade fora do resumo'
-                        : 'prioridades fora do resumo'}
+                    <div className="border-t border-gray-100 px-3 py-2.5 dark:border-slate-700/50">
+                      <button
+                        type="button"
+                        aria-expanded={showAllHomePriorities}
+                        aria-controls="home-priorities-list"
+                        onClick={() => setShowAllHomePriorities(current => !current)}
+                        className="min-h-11 w-full rounded-xl border border-gray-200 px-3 text-xs font-bold text-gray-700 transition-colors active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-slate-700 dark:text-slate-200"
+                      >
+                        {showAllHomePriorities
+                          ? 'Recolher prioridades'
+                          : `Ver todas as prioridades (+${hiddenPriorityAlertsCount})`}
+                      </button>
                     </div>
                   )}
                 </div>
