@@ -222,7 +222,7 @@ export default function FinancialPlanningPage() {
     <div className="mt-3 space-y-2">
       <input
         type="search"
-        aria-label="Buscar categoria por nome"
+        aria-label="Buscar categoria por nome ou grupo"
         value={categorySearch}
         onChange={e=>setCategorySearch(e.target.value)}
         placeholder="Buscar categoria..."

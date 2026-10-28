@@ -310,6 +310,8 @@ export default function ReportsPage() {
               <button
                 type="button"
                 onClick={() => router.back()}
+                aria-label="Voltar para a página anterior"
+                title="Voltar"
                 className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98] shrink-0"
               >
                 <ChevronLeft size={20} />

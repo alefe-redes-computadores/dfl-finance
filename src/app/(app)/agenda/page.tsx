@@ -2,7 +2,7 @@
 
 import { matchesFinancialSearch } from '@/lib/financialSearchNormalization'
 // V170: agenda 360 em leitura. Fonte: mesmo motor de compromissos das projeções.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   AlertCircle, ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight,
@@ -29,6 +29,11 @@ export default function AgendaPage(){
   const [term,setTerm]=useState('')
   const [selectedDate,setSelectedDate]=useState<string|null>(null)
   const [showNotes,setShowNotes]=useState(false)
+  const [visibleGroupLimit,setVisibleGroupLimit]=useState(10)
+
+  useEffect(()=>{
+    setVisibleGroupLimit(10)
+  },[days,filter,term,selectedDate,effectiveContext])
   const tx=useLocalData({table:'transactions',filters:{context:effectiveContext}})
   const debts=useLocalData({table:'debts',filters:{context:effectiveContext}})
   const loans=useLocalData({table:'loans',filters:{context:effectiveContext}})
@@ -58,6 +63,13 @@ export default function AgendaPage(){
     for(const item of filtered){const arr=map.get(item.date)||[];arr.push(item);map.set(item.date,arr)}
     return Array.from(map.entries())
   },[filtered])
+  const renderedGroups=useMemo(
+    ()=>visibleGroups.slice(0,visibleGroupLimit),
+    [visibleGroups,visibleGroupLimit]
+  )
+  const hiddenGroupCount=Math.max(
+    0,visibleGroups.length-renderedGroups.length
+  )
   const daysStrip=useMemo(()=>Array.from({length:7},(_,i)=>{
     const [y,m,d]=agenda.today.split('-').map(Number)
     const date=new Date(Date.UTC(y,m-1,d+i,12))
@@ -95,14 +107,29 @@ export default function AgendaPage(){
       <div className="mb-3 flex items-center gap-2"><Filter size={16} className="text-teal-600"/><h2 className="text-[14px] font-bold text-gray-900 dark:text-white">Vencimentos e prioridades</h2></div>
       <div className="relative mb-3"><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/><input value={term} onChange={e=>setTerm(e.target.value)} placeholder="Buscar conta, pessoa, assinatura..." aria-label="Buscar compromissos" className="w-full rounded-[14px] border border-gray-200 bg-gray-50 py-3 pl-10 pr-10 text-[12px] text-gray-900 outline-none focus:border-teal-600 dark:border-slate-700 dark:bg-slate-800 dark:text-white"/>{term&&<button type="button" aria-label="Limpar busca" onClick={()=>setTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"><X size={16}/></button>}</div>
       <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-2">{filters.map(f=><button type="button" key={f.id} aria-pressed={filter===f.id} onClick={()=>setFilter(f.id)} className={`shrink-0 rounded-full px-3 py-2 text-[11px] font-semibold ${filter===f.id?'bg-teal-700 text-white':'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-gray-300'}`}>{f.label}</button>)}</div>
-      {pending?<p role="status" className="py-6 text-center text-[12px] text-gray-500">Carregando compromissos locais…</p>:!visibleGroups.length?<div className="py-8 text-center"><CheckCircle2 size={26} className="mx-auto text-teal-600"/><p className="mt-2 text-[13px] font-semibold text-gray-800 dark:text-white">Nenhum compromisso neste filtro</p><p className="mt-1 text-[11px] text-gray-500">Confira outros períodos ou filtros.</p></div>:<div className="space-y-5">{visibleGroups.map(([date,items])=><div key={date}>
+      {pending?<p role="status" className="py-6 text-center text-[12px] text-gray-500">Carregando compromissos locais…</p>:!visibleGroups.length?<div className="py-8 text-center"><CheckCircle2 size={26} className="mx-auto text-teal-600"/><p className="mt-2 text-[13px] font-semibold text-gray-800 dark:text-white">Nenhum compromisso neste filtro</p><p className="mt-1 text-[11px] text-gray-500">Confira outros períodos ou filtros.</p></div>:<div className="space-y-5">{renderedGroups.map(([date,items])=><div key={date}>
         <div className="mb-2 flex items-center gap-2"><span className="text-[11px] font-bold uppercase text-gray-500 dark:text-gray-400">{dateTitle(date)}</span>{date<agenda.today&&<span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-600 dark:bg-rose-900/20">Vencido</span>}{date===agenda.today&&<span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-700 dark:bg-teal-900/20">Hoje</span>}<span className="ml-auto text-[10px] text-gray-400">{items.length} item(ns)</span></div>
         <div className="space-y-2">{items.map(it=><button type="button" key={it.id} onClick={()=>router.push(it.href)} className="flex w-full items-center gap-3 rounded-[17px] border border-gray-100 bg-gray-50 p-3 text-left transition active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800/60">
           <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] ${it.scope==='planning'?'bg-violet-50 text-violet-600 dark:bg-violet-900/20':it.direction==='income'?'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20':'bg-rose-50 text-rose-600 dark:bg-rose-900/20'}`}>{it.kind==='invoice'?<CreditCard size={19}/>:it.kind==='loan'||it.kind==='financing'?<Landmark size={19}/>:it.scope==='planning'?<CalendarDays size={19}/>:it.direction==='income'?<ArrowDownRight size={19}/>:<Wallet size={19}/>}</span>
           <span className="min-w-0 flex-1"><span className="block truncate text-[12px] font-bold text-gray-900 dark:text-white">{it.label}</span><span className="mt-0.5 block text-[10px] text-gray-500 dark:text-gray-400">{kinds[it.kind]} · {it.scope==='planning'?'Planejamento':it.direction==='income'?'A receber':'A pagar'}</span><span className="mt-0.5 block text-[10px] leading-4 text-gray-400">{it.detail}</span></span>
           <span className="shrink-0 text-right"><span className={`block text-[13px] font-bold ${it.scope==='planning'?'text-violet-700 dark:text-violet-300':it.direction==='income'?'text-emerald-600':'text-rose-600'}`}>{money(it.amount)}</span><ChevronRight size={14} className="ml-auto mt-1 text-gray-400"/></span>
         </button>)}</div>
-      </div>)}</div>}
+      </div>)}
+      {hiddenGroupCount>0&&(
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 text-center dark:border-slate-700 dark:bg-slate-900">
+          <p role="status" className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+            {renderedGroups.length} de {visibleGroups.length} datas exibidas
+          </p>
+          <button
+            type="button"
+            onClick={()=>setVisibleGroupLimit(current=>current+10)}
+            className="min-h-11 w-full rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:bg-white dark:text-slate-950"
+          >
+            Mostrar mais datas ({hiddenGroupCount} restantes)
+          </button>
+        </div>
+      )}
+</div>}
     </section>
     <section className={card}>
       <button type="button" aria-expanded={showNotes} onClick={()=>setShowNotes(v=>!v)} className="flex w-full items-center justify-between gap-2 text-left"><span className="flex items-center gap-2 text-[12px] font-bold text-gray-800 dark:text-white"><AlertCircle size={16} className="text-amber-600"/> Cobertura e cuidados</span><ChevronRight size={15} className={`text-gray-400 transition-transform ${showNotes?'rotate-90':''}`}/></button>
