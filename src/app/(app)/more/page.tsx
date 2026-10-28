@@ -678,20 +678,54 @@ export default function MorePage() {
         </div>
       </div>
 
+      {/* R409: acesso rapido sem percorrer todos os menus */}
+      <nav aria-label="Atalhos frequentes" className="px-4 pb-3">
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { label: 'Contas', href: '/accounts', icon: 'wallet' },
+            { label: 'Assistente', href: '/assistant', icon: 'bot' },
+            { label: 'Conciliação', href: '/conciliation', icon: 'check-square' },
+            { label: 'Configurações', href: '/settings', icon: 'sliders-horizontal' },
+          ].map((item) => {
+            const ShortcutIcon = getDynamicIcon(item.icon)
+            return (
+              <button
+                key={item.href}
+                type="button"
+                onClick={() => router.push(item.href)}
+                className="flex min-h-11 min-w-0 items-center gap-2 rounded-[15px] border border-gray-200/70 bg-white px-3 py-2.5 text-left text-[12px] font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200 dark:hover:bg-slate-700/60"
+              >
+                <ShortcutIcon size={16} className="shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                <span className="min-w-0 truncate">{item.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      </nav>
+
       {/* BLOCOS REORGANIZADOS */}
       <div className="px-4 space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div>
-          <SectionTitle>Minha estrutura</SectionTitle>
+        <details open className="group overflow-hidden rounded-[20px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0 text-[13px] font-semibold text-gray-800 dark:text-gray-100">Minha estrutura</span>
+            <ChevronRight size={16} className="shrink-0 text-gray-400 transition-transform group-open:rotate-90" aria-hidden="true" />
+          </summary>
+          <div className="px-2 pb-2">
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 space-y-1">
             <MenuItem iconName="wallet" label="Contas" href="/accounts" colorClass="text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30" />
             <MenuItem iconName="credit-card" label="Cartões de Crédito" href="/cards" colorClass="text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30" />
             <MenuItem iconName="tags" label="Categorias" href="/categories" colorClass="text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/30" />
             <MenuItem iconName="hash" label="Tags" href="/tags" colorClass="text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700" />
           </div>
-        </div>
+          </div>
+        </details>
 
-        <div>
-          <SectionTitle>Planejamento e acompanhamento</SectionTitle>
+        <details className="group overflow-hidden rounded-[20px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0 text-[13px] font-semibold text-gray-800 dark:text-gray-100">Planejamento e acompanhamento</span>
+            <ChevronRight size={16} className="shrink-0 text-gray-400 transition-transform group-open:rotate-90" aria-hidden="true" />
+          </summary>
+          <div className="px-2 pb-2">
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 space-y-1">
             <MenuItem iconName="activity" label="Radar de Fôlego" href="/cash-pressure" colorClass="text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30" />
             <MenuItem iconName="piggy-bank" label="Meu plano financeiro" href="/planning" badge="V173" colorClass="text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30" />
@@ -704,10 +738,15 @@ export default function MorePage() {
             <MenuItem iconName="users" label="Quem me deve" href="/debts" colorClass="text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30" />
             <MenuItem iconName="arrow-right-left" label="Empréstimos PF/PJ" href={appMode === 'full' ? '/loans' : undefined} disabled={appMode === 'personal_only'} colorClass="text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30" />
           </div>
-        </div>
+          </div>
+        </details>
 
-        <div>
-          <SectionTitle>Recursos e inteligência</SectionTitle>
+        <details className="group overflow-hidden rounded-[20px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0 text-[13px] font-semibold text-gray-800 dark:text-gray-100">Recursos e inteligência</span>
+            <ChevronRight size={16} className="shrink-0 text-gray-400 transition-transform group-open:rotate-90" aria-hidden="true" />
+          </summary>
+          <div className="px-2 pb-2">
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 space-y-1">
             <MenuItem iconName="bot" label="Assistente financeiro" href="/assistant" badge="IA" colorClass="text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-900/30" />
             <MenuItem iconName="calendar-days" label="Agenda Financeira 360" href="/agenda" colorClass="text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30" />
@@ -733,10 +772,15 @@ export default function MorePage() {
               />
             )}
           </div>
-        </div>
+          </div>
+        </details>
 
-        <div>
-          <SectionTitle>Aplicativo e dados</SectionTitle>
+        <details className="group overflow-hidden rounded-[20px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0 text-[13px] font-semibold text-gray-800 dark:text-gray-100">Aplicativo e dados</span>
+            <ChevronRight size={16} className="shrink-0 text-gray-400 transition-transform group-open:rotate-90" aria-hidden="true" />
+          </summary>
+          <div className="px-2 pb-2">
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 space-y-1">
             <MenuItem iconName="search" label="Buscar e comandar" href="/search" colorClass="text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30" />
             <MenuItem iconName="bell" label="Central de Notificações" href="/notifications" colorClass="text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30" />
@@ -745,7 +789,8 @@ export default function MorePage() {
             <MenuItem iconName="download" label="Exportar Dados" onClick={() => setShowExportModal(true)} colorClass="text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700" />
             <MenuItem iconName="shield-check" label="Backup e recuperação" href="/data-safety" colorClass="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
           </div>
-        </div>
+          </div>
+        </details>
       </div>
 
       {/* LOGOUT */}

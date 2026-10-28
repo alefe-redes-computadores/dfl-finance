@@ -318,7 +318,7 @@ export default function ReportsPage() {
               </button>
 
               <div className="min-w-0">
-                <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight flex items-center gap-2">
+                <h1 className="text-[20px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight flex items-center gap-2">
                   <BarChart3 size={18} className="text-teal-500" />
                   Relatórios
                 </h1>
@@ -352,6 +352,12 @@ export default function ReportsPage() {
               ))}
             </div>
 
+            <details className="group w-full min-w-0 rounded-[15px] border border-gray-200/70 bg-white dark:border-slate-700 dark:bg-slate-800 sm:w-auto">
+              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-[12px] font-semibold text-gray-600 dark:text-gray-300 [&::-webkit-details-marker]:hidden">
+                <span>Tipo: {filterOptions.find(f => f.key === filterType)?.label || 'Todos'}</span>
+                <span aria-hidden="true" className="text-gray-400 transition-transform group-open:rotate-180">⌄</span>
+              </summary>
+              <div className="border-t border-gray-100 px-2 py-2 dark:border-slate-700/60">
             <div className="flex gap-1 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 p-1 shadow-sm">
               {filterOptions.map(f => (
                 <button
@@ -368,6 +374,8 @@ export default function ReportsPage() {
                 </button>
               ))}
             </div>
+              </div>
+            </details>
           </div>
         </div>
       </div>
@@ -453,7 +461,12 @@ export default function ReportsPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
+            <details className="group rounded-[18px] border border-gray-200/70 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 text-[12px] font-semibold text-gray-700 dark:text-gray-200 [&::-webkit-details-marker]:hidden">
+                <span>Mais gráficos: categorias e saldo diário</span>
+                <span aria-hidden="true" className="text-gray-400">⌄</span>
+              </summary>
+              <div className="mt-2 grid grid-cols-2 gap-3">
               {categoryData.length > 0 && (
                 <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
                   <div className="mb-3">
@@ -502,7 +515,8 @@ export default function ReportsPage() {
                   </div>
                 </div>
               )}
-            </div>
+              </div>
+            </details>
 
             <button
               type="button"

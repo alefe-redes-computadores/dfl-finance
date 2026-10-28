@@ -892,11 +892,27 @@ function AnalysisContent() {
         </div>
       </div>
 
-      <FinancialHealthCenter
-        sources={commitmentSources}
-        intelligence={financialIntelligence}
-        transactions={(localTransactions || []) as any[]}
-      />
+      {/* R409: planejamento completo acessivel sem alongar o resumo */}
+      <details className="group mb-4 rounded-[18px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 [&::-webkit-details-marker]:hidden">
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-gray-900 dark:text-gray-100">
+              Saúde e planejamento completo
+            </p>
+            <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+              Simulações, descobertas e previsão detalhada
+            </p>
+          </div>
+          <ChevronDown size={17} className="shrink-0 text-gray-400 transition-transform group-open:rotate-180" aria-hidden="true" />
+        </summary>
+        <div className="px-2 pb-1">
+          <FinancialHealthCenter
+            sources={commitmentSources}
+            intelligence={financialIntelligence}
+            transactions={(localTransactions || []) as any[]}
+          />
+        </div>
+      </details>
 
       <section
         id="intelligence"
