@@ -1564,8 +1564,8 @@ function HomeContent() {
                 </div>
 
                 {hasPriorities ? (
-                  <div className="flex h-8 min-w-8 items-center justify-center rounded-full bg-orange-50 px-2 text-[11px] font-bold text-orange-500 dark:bg-orange-500/10 dark:text-orange-400">
-                    {homePriorityAlerts.length}
+                  <div role="status" aria-label={`${visiblePriorityAlerts.length} prioridades visíveis`} className="flex h-8 min-w-8 items-center justify-center rounded-full bg-orange-50 px-2 text-[11px] font-bold text-orange-500 dark:bg-orange-500/10 dark:text-orange-400">
+                    {visiblePriorityAlerts.length}
                   </div>
                 ) : hasPendingItems ? (
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 text-amber-500 dark:bg-amber-500/10 dark:text-amber-400">

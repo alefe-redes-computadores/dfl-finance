@@ -1417,7 +1417,7 @@ export default function TransactionsPage() {
           </div>
 
           <div
-            id="transaction-search-status"
+            id="transaction-search-status" data-search-mode="deferred"
             role="status"
             aria-live="polite"
             aria-atomic="true"

@@ -324,8 +324,8 @@ export default function ConciliationPage() {
               Limpar filtros
             </button>
           </div>
-          <p role="status" className="mt-2 text-[11px] text-gray-500 dark:text-slate-400">
-            {displayed.length} de {transactions.length} itens encontrados.
+          <p role="status" aria-live="polite" aria-atomic="true" className="mt-2 text-[11px] leading-relaxed text-gray-500 dark:text-slate-400">
+            {displayed.length} de {transactions.length} pendências exibidas.
             Valores da Inbox não equivalem a saldo bancário confirmado.
           </p>
         </section>
