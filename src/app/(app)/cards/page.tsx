@@ -356,8 +356,8 @@ export default function CardsPage() {
               </div>
               <button
                 onClick={() => setShowPersonalizeModal(false)}
-                className="p-2.5 bg-gray-50 dark:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full transition-colors active:scale-95"
-              >
+                className="p-2.5 bg-gray-50 dark:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full transition-colors active:scale-95 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+               type="button" aria-label="Fechar personalização" title="Fechar personalização">
                 <X size={20} />
               </button>
             </div>
@@ -426,8 +426,8 @@ export default function CardsPage() {
           <div className="flex-shrink-0 bg-white dark:bg-slate-800 px-6 pt-4 pb-6 border-t border-gray-100 dark:border-slate-700/50">
             <button
               onClick={handleSavePersonalize}
-              className="w-full py-3.5 rounded-[20px] bg-teal-600 hover:bg-teal-700 text-white font-bold text-[14px] shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-            >
+              className="w-full py-3.5 rounded-[20px] bg-teal-600 hover:bg-teal-700 text-white font-bold text-[14px] shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+             type="button" aria-label="Salvar personalização" title="Salvar personalização">
               <Check size={18} />
               Guardar Ordem
             </button>
@@ -475,16 +475,16 @@ export default function CardsPage() {
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => router.push('/cards/new')}
-                className="app-icon-button-primary"
-              >
+                className="app-icon-button-primary touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+               type="button" aria-label="Adicionar cartão" title="Adicionar cartão">
                 <Plus size={20} />
               </button>
 
               {/* ✅ BOTÃO PERSONALIZAR - REORDENAR CARTÕES (ITENS) */}
               <button
                 onClick={openPersonalize}
-                className="app-icon-button"
-              >
+                className="app-icon-button touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+               type="button" aria-label="Personalizar cartões" title="Personalizar cartões">
                 <Settings2 size={20} />
               </button>
             </div>
@@ -498,8 +498,8 @@ export default function CardsPage() {
             <div className="flex items-center gap-1.5 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 px-1.5 py-1 shrink-0">
               <button
                 onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-                className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 active:scale-[0.98]"
-              >
+                className="h-11 w-11 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 active:scale-[0.98] touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+               type="button" aria-label="Ver mês anterior" title="Ver mês anterior">
                 <ChevronLeft size={16} />
               </button>
               <span className="min-w-[78px] text-center text-[13px] font-semibold text-gray-800 dark:text-gray-200 capitalize">
@@ -507,8 +507,8 @@ export default function CardsPage() {
               </span>
               <button
                 onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-                className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 active:scale-[0.98]"
-              >
+                className="h-11 w-11 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 active:scale-[0.98] touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+               type="button" aria-label="Ver próximo mês" title="Ver próximo mês">
                 <ChevronRight size={16} />
               </button>
             </div>

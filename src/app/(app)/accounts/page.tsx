@@ -338,10 +338,10 @@ function AccountsContent() {
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
-              <button type="button" onClick={() => { vibrate([5]); setShowSearch((value) => !value) }} className="flex h-9 w-9 items-center justify-center rounded-[14px] border border-black/5 bg-white text-gray-600 shadow-sm transition-all active:scale-95 dark:border-white/10 dark:bg-slate-900 dark:text-gray-300">
+              <button type="button" onClick={() => { vibrate([5]); setShowSearch((value) => !value) }} className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-black/5 bg-white text-gray-600 shadow-sm transition-all active:scale-95 dark:border-white/10 dark:bg-slate-900 dark:text-gray-300 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500" aria-label="Pesquisar contas" title="Pesquisar contas">
                 {showSearch ? <X size={18} /> : <Search size={18} />}
               </button>
-              <button type="button" onClick={() => { vibrate([10]); router.push('/accounts/new') }} className="flex h-9 w-9 items-center justify-center rounded-[14px] bg-teal-600 text-white shadow-sm shadow-teal-600/20 transition-all active:scale-95">
+              <button type="button" onClick={() => { vibrate([10]); router.push('/accounts/new') }} className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-teal-600 text-white shadow-sm shadow-teal-600/20 transition-all active:scale-95 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500" aria-label="Adicionar conta" title="Adicionar conta">
                 <Plus size={20} />
               </button>
             </div>
@@ -359,7 +359,7 @@ function AccountsContent() {
               <div className="flex items-center gap-2 rounded-[16px] border border-gray-200 bg-gray-50 px-4 py-3 focus-within:ring-2 focus-within:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-900">
                 <Search size={18} className="shrink-0 text-gray-400" />
                 <input type="text" placeholder="Buscar conta ou instituição..." value={search} onChange={(event) => setSearch(event.target.value)} className="flex-1 bg-transparent text-[14px] text-gray-800 outline-none placeholder-gray-400 dark:text-gray-200" autoFocus />
-                {search && <button onClick={() => setSearch('')} className="flex h-7 w-7 items-center justify-center rounded-full text-gray-400"><X size={14} /></button>}
+                {search && <button onClick={() => setSearch('')} className="flex h-7 w-7 items-center justify-center rounded-full text-gray-400 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500" type="button" aria-label="Limpar pesquisa" title="Limpar pesquisa"><X size={14} /></button>}
               </div>
             </div>
           )}
@@ -388,8 +388,8 @@ function AccountsContent() {
                 vibrate([5])
                 setShowViewOptions(true)
               }}
-              className="flex h-9 items-center gap-2 rounded-[14px] border border-black/5 bg-white px-3 text-[11px] font-semibold text-gray-600 shadow-sm transition-all active:scale-[0.97] dark:border-white/10 dark:bg-slate-900 dark:text-gray-300"
-            >
+              className="flex h-9 items-center gap-2 rounded-[14px] border border-black/5 bg-white px-3 text-[11px] font-semibold text-gray-600 shadow-sm transition-all active:scale-[0.97] dark:border-white/10 dark:bg-slate-900 dark:text-gray-300 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+             aria-label="Abrir filtros e ordenação" title="Abrir filtros e ordenação">
               <SlidersHorizontal size={14} />
               Filtros e ordem
             </button>
@@ -401,8 +401,8 @@ function AccountsContent() {
                   vibrate([5])
                   setAccountFilter('all')
                 }}
-                className="flex h-9 min-w-0 items-center gap-1.5 rounded-full bg-gray-950 px-3 text-[10px] font-semibold text-white dark:bg-white dark:text-gray-950"
-              >
+                className="flex h-9 min-w-0 items-center gap-1.5 rounded-full bg-gray-950 px-3 text-[10px] font-semibold text-white dark:bg-white dark:text-gray-950 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+               aria-label="Mostrar todas as contas" title="Mostrar todas as contas">
                 <Filter size={12} />
 
                 <span className="truncate">
@@ -465,9 +465,9 @@ function AccountsContent() {
                             event.stopPropagation()
                             moveAccount(String(account.id), 'up')
                           }}
-                          className="flex h-8 w-8 items-center justify-center rounded-[12px] text-gray-400 active:bg-gray-100 dark:active:bg-slate-800"
+                          className="flex h-8 w-8 items-center justify-center rounded-[12px] text-gray-400 active:bg-gray-100 dark:active:bg-slate-800 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
                           aria-label={`Mover ${account.name} para cima`}
-                        >
+                         title="Mover conta para cima">
                           <ArrowUp size={14} />
                         </button>
                         <button
@@ -476,15 +476,15 @@ function AccountsContent() {
                             event.stopPropagation()
                             moveAccount(String(account.id), 'down')
                           }}
-                          className="flex h-8 w-8 items-center justify-center rounded-[12px] text-gray-400 active:bg-gray-100 dark:active:bg-slate-800"
+                          className="flex h-8 w-8 items-center justify-center rounded-[12px] text-gray-400 active:bg-gray-100 dark:active:bg-slate-800 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
                           aria-label={`Mover ${account.name} para baixo`}
-                        >
+                         title="Mover conta para baixo">
                           <ArrowDown size={14} />
                         </button>
                       </div>
                     )}
 
-                    <button onClick={(event) => { event.stopPropagation(); vibrate([10]); setDeleteModal(account.id) }} className="shrink-0 rounded-full p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20" aria-label="Excluir conta"><Trash2 size={16} /></button>
+                    <button onClick={(event) => { event.stopPropagation(); vibrate([10]); setDeleteModal(account.id) }} className="shrink-0 rounded-full p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500" aria-label="Excluir conta" type="button" title="Excluir conta selecionada"><Trash2 size={16} /></button>
 
                     <ChevronRight size={16} className="shrink-0 text-gray-300 dark:text-gray-600" />
                   </div>
@@ -519,8 +519,8 @@ function AccountsContent() {
               <button
                 type="button"
                 onClick={() => setShowViewOptions(false)}
-                className="app-icon-button"
-              >
+                className="app-icon-button touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+               aria-label="Fechar filtros e ordenação" title="Fechar filtros e ordenação">
                 <X size={17} />
               </button>
             </div>
