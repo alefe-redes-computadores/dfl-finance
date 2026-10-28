@@ -1,4 +1,6 @@
 'use client'
+
+import { matchesFinancialSearch } from '@/lib/financialSearchNormalization'
 // V170: agenda 360 em leitura. Fonte: mesmo motor de compromissos das projeções.
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -38,14 +40,17 @@ export default function AgendaPage(){
   const agenda=useMemo(()=>buildFinanceAgenda({context:effectiveContext,
     transactions:tx.data||[],sources:{debts:debts.data||[],loans:loans.data||[],financings:financing.data||[],subscriptions:subscriptions.data||[],creditCards:cards.data||[],creditInvoices:invoices.data||[]},horizonDays:days,
   }),[effectiveContext,tx.data,debts.data,loans.data,financing.data,subscriptions.data,cards.data,invoices.data,days])
-  const normalized=term.toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim()
+  const normalized=term.trim()
   const filtered=useMemo(()=>agenda.items.filter(item=>{
     if(selectedDate&&item.date!==selectedDate)return false
     if(filter==='planning'&&item.scope!=='planning')return false
     if(filter==='overdue'&&(!item.overdue||item.scope!=='known'))return false
     if(filter==='expense'&&(item.scope!=='known'||item.direction!=='expense'))return false
     if(filter==='income'&&(item.scope!=='known'||item.direction!=='income'))return false
-    if(normalized){const corpus=[item.label,item.detail,kinds[item.kind],item.date].join(' ').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g,'');if(!corpus.includes(normalized))return false}
+    if(normalized && !matchesFinancialSearch(
+      [item.label,item.detail,kinds[item.kind],item.date].join(' '),
+      normalized
+    ))return false
     return true
   }),[agenda.items,filter,selectedDate,normalized])
   const visibleGroups=useMemo(()=>{

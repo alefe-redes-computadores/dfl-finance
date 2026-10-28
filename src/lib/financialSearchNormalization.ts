@@ -14,3 +14,23 @@ export function normalizeFinancialSearch(
     .replace(/\s+/g, ' ')
     .trim()
 }
+
+/**
+ * Pesquisa composta: todas as palavras devem existir
+ * no conteúdo, independentemente da ordem.
+ *
+ * Somente leitura. Não modifica dados armazenados.
+ */
+export function matchesFinancialSearch(
+  content: unknown,
+  query: unknown
+): boolean {
+  const normalizedContent = normalizeFinancialSearch(content)
+  const tokens = normalizeFinancialSearch(query)
+    .split(' ')
+    .filter(Boolean)
+
+  return tokens.every(token =>
+    normalizedContent.includes(token)
+  )
+}

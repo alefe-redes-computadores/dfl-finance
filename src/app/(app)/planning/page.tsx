@@ -1,5 +1,7 @@
 'use client'
 
+import { normalizeFinancialSearch } from '@/lib/financialSearchNormalization'
+
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertTriangle, ArrowLeft, CalendarDays, CheckCircle2, ChevronRight, CreditCard, Info, Layers3, PiggyBank, Plus, Save, ShieldCheck, Trash2, Wallet } from 'lucide-react'
@@ -81,7 +83,7 @@ export default function FinancialPlanningPage() {
   const liveIds=useMemo(()=>new Set(data.categoryBreakdown.map(c=>c.id)),[data.categoryBreakdown])
   const displayCategories=useMemo(()=>{
     const base=showAll?categoryRows:categoryRows.filter(c=>liveIds.has(String(c.id)))
-    const tokens=categorySearch.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR').trim().split(/\s+/).filter(Boolean)
+    const tokens=normalizeFinancialSearch(categorySearch).split(/\s+/).filter(Boolean)
     return base.filter(c=>{
       const id=String(c.id)
       const bucket=groups[context][id]||'flex'
