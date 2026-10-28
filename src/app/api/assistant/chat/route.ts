@@ -7,6 +7,10 @@ import {
   GoogleGenerativeAI,
 } from '@google/generative-ai'
 import {
+  assistantNativePreflight,
+  withAssistantNativeCors,
+} from '@/lib/server/assistantNativeCors'
+import {
   createClient,
 } from '@supabase/supabase-js'
 
@@ -589,7 +593,7 @@ function sanitizeFinancialContext(
   }
 }
 
-export async function POST(
+async function handleAssistantPost(
   request: NextRequest
 ) {
   try {
@@ -916,4 +920,19 @@ ${snapshot}`
       }
     )
   }
+}
+
+/**
+ * Preflight para o WebView Capacitor.
+ * Sem autenticação na OPTIONS: o JWT é verificado no POST.
+ */
+export function OPTIONS(request: NextRequest): Response {
+  return assistantNativePreflight(request)
+}
+
+export async function POST(
+  request: NextRequest
+): Promise<Response> {
+  const response = await handleAssistantPost(request)
+  return withAssistantNativeCors(request, response)
 }

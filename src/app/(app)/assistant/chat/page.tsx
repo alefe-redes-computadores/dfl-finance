@@ -523,8 +523,8 @@ function AssistantChatContent() {
           message: 'O provedor respondeu, mas não devolveu conteúdo útil.',
         },
         network: {
-          title: 'Conexão interrompida',
-          message: 'A resposta começou, mas a conexão caiu durante o recebimento.',
+          title: 'Falha na conexão',
+          message: 'Não foi possível comunicar com o servidor do Assistente.',
         },
         unknown: {
           title: 'Não consegui concluir',

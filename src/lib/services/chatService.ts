@@ -215,6 +215,18 @@ export async function streamChatMessage(
       )
     }
 
+    if (
+      error instanceof TypeError ||
+      /failed to fetch|networkerror|load failed/i.test(
+        String(error?.message || '')
+      )
+    ) {
+      throw assistantError(
+        'network',
+        'Não foi possível conectar ao servidor do Assistente. Verifique a internet e tente novamente.',
+      )
+    }
+
     throw error
   }
 
