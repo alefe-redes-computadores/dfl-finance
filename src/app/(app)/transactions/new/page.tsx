@@ -100,6 +100,8 @@ function NewTransactionContent() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [showDetails, setShowDetails] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // R394: trava sincrona entre eventos do mesmo formulario.
+  const submitLockRef = useRef(false)
 
   useEffect(() => {
     return () => {
@@ -707,7 +709,7 @@ function NewTransactionContent() {
 
   // FUNÇÃO HANDLE SAVE CORRIGIDA (COM VALIDAÇÃO DE CONTA OBRIGATÓRIA)
   const handleSave = useCallback(async () => {
-    if (isSubmitting) return
+    if (submitLockRef.current || isSubmitting) return
     if (!user?.id) { showToast('Sessão expirada. Entre novamente.', 'error'); return }
     if (amountNum <= 0) { hapticError(); showToast('Informe um valor maior que zero.', 'warning'); return }
 
@@ -774,6 +776,9 @@ function NewTransactionContent() {
             { length: totalParcels },
             () => amountNum
           )
+
+    if (submitLockRef.current) return
+    submitLockRef.current = true
 
     try {
       const baseDate = createLocalDate(date)
@@ -944,6 +949,7 @@ function NewTransactionContent() {
       hapticError()
       showToast(`Erro ao salvar transação: ${e.message}`, 'error')
     } finally {
+      submitLockRef.current = false
       setIsSubmitting(false)
     }
   }, [isSubmitting, user, amountNum, type, categoryId, desc, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, loanId, isReimbursable, isOnline, router, showToast, effectiveContext, customInterval, customParcels, success, hapticError, safeAdd, safeUpdate, date, selectedCat, isIncome])
