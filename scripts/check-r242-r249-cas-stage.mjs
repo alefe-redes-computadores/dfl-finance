@@ -9,7 +9,7 @@ const bridge=load('supabase/functions/_shared/atomicBotV2Bridge.ts',()=>{throw E
 const session=load('supabase/functions/_shared/atomicV2Session.ts',name=>{assert.equal(name,'./atomicBotV2Bridge.ts');return bridge});
 const stage=load('supabase/functions/_shared/atomicV2Stage.ts',name=>{assert.equal(name,'./atomicV2Session.ts');return session});
 const w=read('supabase/functions/whatsapp-webhook/index.ts');
-assert.ok(w.includes('DFL_ATOMIC_V2_NOT_RELEASED')&&w.includes('const atomicMode=false;'));
+assert.ok(w.includes('DFL_R369_ROLLOUT_GATE_UNAVAILABLE')&&w.includes('const atomicMode=false;'));
 assert.ok(!w.includes("import { atomicBotSingleV2 }"));
 const s=read('supabase/functions/_shared/atomicV2Stage.ts');
 assert.ok(!/bot_record_transaction|bot_record_transfer|bot_settle_transaction/.test(s),'staging nao movimenta dinheiro');

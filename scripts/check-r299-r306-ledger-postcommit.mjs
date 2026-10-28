@@ -11,13 +11,19 @@ assert.ok(block.includes('R299_LEDGER_POSTCOMMIT_VERIFY'));
 assert.ok(!block.includes('db.rpc('),'prova nao pode escrever financeiramente');
 assert.ok(!block.includes('await save('),'prova nao deve sobrescrever sessao');
 assert.ok(!block.includes('await clear('),'prova nao deve apagar sessao');
-assert.ok(src.includes('DFL_ATOMIC_V2_NOT_RELEASED'),'V2 precisa continuar bloqueada');
+assert.ok(src.includes('DFL_R369_ROLLOUT_GATE_UNAVAILABLE'),'V2 precisa continuar bloqueada');
 const code=ts.transpileModule('async function check(){'+block+'}',{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
 const base={id:'tx-1',user_id:'u-1',account_id:'a-1',category_id:'c-1',type:'expense',amount:75.2,description:'Fornecedor',context:'dfl',date:'2026-10-27',idempotency_key:'k-1',status:'pending',affects_balance:false};
 async function run({row=base,session=true,atomic=true,dbError=null}={}){
  let tables=[];
  const fakeDb={from(table){tables.push(table);const query={select(){return query},eq(){return query},async maybeSingle(){if(table==='bot_sessions')return {error:null,data:session?{step:'TX_SETTLE',temp_data:{consumed_at:'2026-10-27T11:00:00Z',transaction_id:'tx-1',idempotency_key:'k-1'}}:null};if(table==='transactions')return {error:dbError,data:row};throw Error('unexpected table')}};return query}};
- const context={r:{data:atomic?{atomic:true}:{}},sd:{recurrence:false,type:'expense',context:'dfl',amount:75.2,description:'Fornecedor',date:'2026-10-27'},txid:'tx-1',key:'k-1',phone:'fake',u:{user_id:'u-1'},acc:{id:'a-1'},cat:{id:'c-1'},db:fakeDb,Number,String,Math,Error,day:()=> '2026-10-27'};
+ const context={
+  r361IsProtectedCanary:async(userId,txid)=>{
+    assert.equal(userId,'u-1')
+    assert.equal(txid,'tx-1')
+    return true
+  },
+  r:{data:atomic?{atomic:true}:{}},sd:{recurrence:false,type:'expense',context:'dfl',amount:75.2,description:'Fornecedor',date:'2026-10-27'},txid:'tx-1',key:'k-1',phone:'fake',u:{user_id:'u-1'},acc:{id:'a-1'},cat:{id:'c-1'},db:fakeDb,Number,String,Math,Error,day:()=> '2026-10-27'};
  await vm.runInNewContext(code+';check()',context,{timeout:3000});return tables;
 }
 assert.deepEqual(await run(),['bot_sessions','transactions']);

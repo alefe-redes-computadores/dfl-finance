@@ -18,7 +18,14 @@ const compiled=ts.transpileModule(raw,{compilerOptions:{target:ts.ScriptTarget.E
 async function run({atomic=true,step='TX_SETTLE',consumed_at='2026-10-27T12:00:00Z',transaction_id='tx-1',idempotency_key='key-1',recurrence=false,dbError=null,txid='tx-1'}={}){
   let reads=0
   const q={select(){return q},eq(){return q},async maybeSingle(){reads++;return{error:dbError,data:{step,temp_data:{consumed_at,transaction_id,idempotency_key}}}}}
-  const context={r:{data:atomic?{atomic:true}:{}},sd:{recurrence},txid,key:'key-1',phone:'fake',db:{from(table){assert.equal(table,'bot_sessions');return q}},String,Error}
+  const context={
+  u:{user_id:'u-1'},
+  r361IsProtectedCanary:async(userId,txid)=>{
+    assert.equal(userId,'u-1')
+    assert.ok(txid)
+    return true
+  },
+  r:{data:atomic?{atomic:true}:{}},sd:{recurrence},txid,key:'key-1',phone:'fake',db:{from(table){assert.equal(table,'bot_sessions');return q}},String,Error}
   await vm.runInNewContext(compiled+';verify()',context,{timeout:2000})
   return reads
 }
@@ -28,5 +35,5 @@ for(const x of [{step:'TX_CONFIRM'},{consumed_at:null},{transaction_id:'other'},
   await assert.rejects(()=>run(x),/DFL_ATOMIC_POSTCOMMIT_|db unavailable/)
 }
 assert.equal(s.match(/\}\s*else\s+await\s+save\(phone\s*,\s*["']TX_SETTLE["']/g)?.length,1,'ramo legado inalterado')
-assert.ok(s.includes('DFL_ATOMIC_V2_NOT_RELEASED'),'V2 deve permanecer bloqueada')
+assert.ok(s.includes('DFL_R369_ROLLOUT_GATE_UNAVAILABLE'),'V2 deve permanecer bloqueada')
 console.log('R291-R298 R3: 9 casos, legado preservado, falha fechada OK')

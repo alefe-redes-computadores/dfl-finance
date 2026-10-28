@@ -5,7 +5,7 @@ import ts from 'typescript';
 const path='supabase/functions/_shared/atomicV2Integration.ts';
 const source=fs.readFileSync(path,'utf8');
 const wh=fs.readFileSync('supabase/functions/whatsapp-webhook/index.ts','utf8');
-assert.ok(wh.includes('const atomicMode=false;')&&wh.includes('DFL_ATOMIC_V2_NOT_RELEASED'),'V2 nao pode estar ativa');
+assert.ok(wh.includes('const atomicMode=false;')&&wh.includes('DFL_R369_ROLLOUT_GATE_UNAVAILABLE'),'V2 nao pode estar ativa');
 assert.ok(!wh.includes('atomicV2Integration.ts'),'nao integrar ao webhook antes de teste ledger REAL');
 const transpiled=ts.transpileModule(source,{fileName:path,reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});
 assert.ok(!(transpiled.diagnostics||[]).some(d=>d.category===ts.DiagnosticCategory.Error),'Transpilacao');

@@ -6,7 +6,7 @@ const load=file=>fs.readFileSync(file,'utf8');
 const bridge=load('supabase/functions/_shared/atomicBotV2Bridge.ts');
 const session=load('supabase/functions/_shared/atomicV2Session.ts');
 const wh=load('supabase/functions/whatsapp-webhook/index.ts');
-assert.ok(wh.includes('DFL_ATOMIC_V2_NOT_RELEASED'));
+assert.ok(wh.includes('DFL_R369_ROLLOUT_GATE_UNAVAILABLE'));
 assert.ok(!wh.includes('atomicBotSingleV2('));
 for(const [name,s] of [['bridge',bridge],['session',session]]){
  const ast=ts.createSourceFile(name+'.ts',s,ts.ScriptTarget.Latest,true);

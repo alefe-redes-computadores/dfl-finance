@@ -6,7 +6,7 @@ const file='supabase/functions/_shared/atomicV2Orchestrator.ts';
 const read=p=>fs.readFileSync(p,'utf8');
 const source=read(file),webhook=read('supabase/functions/whatsapp-webhook/index.ts');
 assert.ok(source.includes('R267_RECOVERY_FINAL'));
-assert.ok(webhook.includes('DFL_ATOMIC_V2_NOT_RELEASED')&&webhook.includes('const atomicMode=false;'));
+assert.ok(webhook.includes('DFL_R369_ROLLOUT_GATE_UNAVAILABLE')&&webhook.includes('const atomicMode=false;'));
 assert.ok(!webhook.includes('atomicV2Orchestrator.ts'));
 const code=ts.transpileModule(source,{fileName:file,compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
 const stub={stageAtomicV2Snapshot:async()=>({revision:2})};

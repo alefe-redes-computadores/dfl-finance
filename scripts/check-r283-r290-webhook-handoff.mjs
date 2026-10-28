@@ -5,7 +5,7 @@ import ts from 'typescript';
 const path='supabase/functions/_shared/atomicV2WebhookHandoff.ts';
 const source=fs.readFileSync(path,'utf8');
 const webhook=fs.readFileSync('supabase/functions/whatsapp-webhook/index.ts','utf8');
-assert.ok(webhook.includes('const atomicMode=false;')&&webhook.includes('DFL_ATOMIC_V2_NOT_RELEASED'));
+assert.ok(webhook.includes('const atomicMode=false;')&&webhook.includes('DFL_R369_ROLLOUT_GATE_UNAVAILABLE'));
 assert.ok(webhook.includes("from '../_shared/atomicV2WebhookHandoff.ts'")&&webhook.includes('DFL_BOT_ATOMIC_V2_RELEASE_GATE'),'handoff importado apenas com gate duplo');
 assert.ok(!source.includes('bot_record_transaction')&&!source.includes('bot_settle_transaction'),'sem RPC antiga');
 const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},reportDiagnostics:true});
