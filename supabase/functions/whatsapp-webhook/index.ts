@@ -600,7 +600,24 @@ if(!text){
     console.log("[DFL_RECEIPT_LINKED]",JSON.stringify({kind,mimetype:outMime,size:bin.length}));
   }
   return new Response("OK")
-}const phone=u.phone,k=String(p.data?.key?.id||`${sender}:${p.data?.messageTimestamp||0}:${text}`),aid=await audit(u.user_id,sender,text,k);if(!aid)return new Response("OK");let n=N(text);const reply=(s:string)=>send(phone,s);await db.from("user_phones").update({last_interaction:new Date().toISOString()}).eq("user_id",u.user_id).eq("phone",phone);
+}const phone=u.phone,k=String(p.data?.key?.id||`${sender}:${p.data?.messageTimestamp||0}:${text}`),aid=await audit(u.user_id,sender,text,k);if(!aid)return new Response("OK");let n=N(text);
+
+/* R376: perguntas financeiras explicitas, sem capturar
+   conversas pessoais ou criar comandos financeiros. */
+const naturalFinanceQuery=(value:string):string=>{
+  if(/^quais (?:sao )?(?:os )?comandos (?:voce )?(?:entende|conhece|aceita)\??$/.test(value))
+    return 'ajuda';
+
+  if(/^(?:quais (?:sao )?(?:as )?|mostre (?:as )?|mostrar (?:as )?)minhas pendencias\b/.test(value))
+    return value.replace(
+      /^(?:quais (?:sao )?(?:as )?|mostre (?:as )?|mostrar (?:as )?)minhas pendencias\b(?: de)?/,
+      'pendencias'
+    ).trim();
+
+  return value;
+};
+n=naturalFinanceQuery(n);
+const reply=(s:string)=>send(phone,s);await db.from("user_phones").update({last_interaction:new Date().toISOString()}).eq("user_id",u.user_id).eq("phone",phone);
 if(n==="/ping"){const o=await reply("🤖 *DFL Finance Bot operacional.*\n✅ Conectado e pronto para lançamentos, consultas e pendências.");await done(aid,"extracted",o,{command:"ping",self_chat:fromMe});return new Response("OK")}
 /* R362: a sessao V2 consumida conserva prova financeira e nao pode receber
    novas sessoes por comandos genericos. Durante o canario, so /ping e cancelar
