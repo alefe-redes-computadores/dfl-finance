@@ -3,6 +3,10 @@
 
 import { liveQuery } from 'dexie'
 import {
+  protectedReconciliationAccountIds,
+  canReconcileAccount,
+} from '@/lib/accountReconciliationPolicy'
+import {
   mergeSyncRequests,
   isSyncRetryDue,
   type PendingSyncRequest,
@@ -343,16 +347,17 @@ export async function reconcileAccountBalancesFast(
   setSnapshot({ isBalanceReconciling: true })
 
   try {
-    const [localAccounts, queueItems] = await Promise.all([
+    const [localAccounts, queueItems, pendingOutbox] = await Promise.all([
       db.accounts.where('user_id').equals(userId).toArray(),
       db.syncQueue.where('user_id').equals(userId).toArray(),
+      db.financialOutbox.get(userId),
     ])
 
-    const protectedAccountIds = new Set(
-      queueItems
-        .filter((item) => item.table === 'accounts')
-        .map((item) => item.record_id)
-    )
+    const protectedAccountIds =
+      protectedReconciliationAccountIds(
+        queueItems,
+        pendingOutbox?.queue ?? []
+      )
 
     const remoteAccounts = await fetchRemoteSyncRows('accounts', userId)
     if (currentUserId !== userId) return false
@@ -362,8 +367,38 @@ export async function reconcileAccountBalancesFast(
         .filter((id: any): id is string => typeof id === 'string')
     )
 
-    await db.transaction('rw', db.accounts, db.syncQueue, async () => {
+    await db.transaction(
+      'rw',
+      db.accounts,
+      db.syncQueue,
+      db.financialOutbox,
+      async () => {
+      if (currentUserId !== userId) {
+        throw new Error('Reconciliação interrompida por troca de usuário.')
+      }
+
+      const currentOutbox = await db.financialOutbox.get(userId)
+
+      const currentQueue = await db.syncQueue
+        .where('user_id')
+        .equals(userId)
+        .toArray()
+
+      const transactionProtectedIds =
+        protectedReconciliationAccountIds(
+          currentQueue,
+          currentOutbox?.queue ?? []
+        )
+
       for (const remoteAccount of remoteAccounts) {
+        if (currentUserId !== userId) {
+          throw new Error('Reconciliação interrompida por troca de usuário.')
+        }
+
+        if (!canReconcileAccount(
+          remoteAccount.id,
+          transactionProtectedIds
+        )) continue
         const activeQueue = await db.syncQueue
           .where('user_id')
           .equals(userId)
@@ -388,7 +423,11 @@ export async function reconcileAccountBalancesFast(
       }
 
       const currentAccountQueue = await db.syncQueue.where('user_id').equals(userId).filter(item => item.table === 'accounts').toArray()
-      const currentlyProtected = new Set(currentAccountQueue.map(item => item.record_id))
+      const currentlyProtected =
+        protectedReconciliationAccountIds(
+          currentAccountQueue,
+          currentOutbox?.queue ?? []
+        )
       const staleIds = localAccounts
         .filter(
           (account: any) =>
@@ -399,13 +438,34 @@ export async function reconcileAccountBalancesFast(
         )
         .map((account: any) => account.id)
 
+      if (currentUserId !== userId) {
+        throw new Error('Reconciliação interrompida por troca de usuário.')
+      }
+
       if (staleIds.length > 0) {
         await db.accounts.bulkDelete(staleIds)
       }
     })
 
     const verifiedAt = new Date().toISOString()
-    const stillProtected = await db.syncQueue.where('user_id').equals(userId).filter(item => item.table === 'accounts').count()
+    if (currentUserId !== userId) return false
+
+    const [remainingAccountQueue, remainingOutbox] = await Promise.all([
+      db.syncQueue
+        .where('user_id')
+        .equals(userId)
+        .filter(item => item.table === 'accounts')
+        .toArray(),
+      db.financialOutbox.get(userId),
+    ])
+
+    const stillProtected =
+      protectedReconciliationAccountIds(
+        remainingAccountQueue,
+        remainingOutbox?.queue ?? []
+      ).size
+
+    if (currentUserId !== userId) return false
     setSnapshot({ balanceVerifiedAt: stillProtected ? null : verifiedAt })
     renderLog('Saldos das contas reconciliados com prioridade.', 'success')
     return true
