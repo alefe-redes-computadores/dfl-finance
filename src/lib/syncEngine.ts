@@ -2,6 +2,11 @@
 'use client'
 
 import { liveQuery } from 'dexie'
+import {
+  mergeSyncRequests,
+  isSyncRetryDue,
+  type PendingSyncRequest,
+} from '@/lib/syncRecoveryPolicy'
 import { pushAtomicFinancialBatch } from '@/lib/atomicFinancialSync'
 import { remoteSyncBase } from '@/lib/financialSyncContract'
 import { fetchRemoteSyncRows } from '@/lib/remoteSyncPages'
@@ -93,6 +98,7 @@ let runtimeInitialized = false
 let pendingSubscription: { unsubscribe: () => void } | null = null
 let activeSyncPromise: Promise<SyncCycleResult> | null = null
 let queuedForcePromise: Promise<SyncCycleResult> | null = null
+let queuedForceRequest: PendingSyncRequest | null = null
 let periodicSyncTimer: ReturnType<typeof setInterval> | null = null
 let lastPassiveSyncAt = 0
 
@@ -323,30 +329,8 @@ export async function getSyncQueueDiagnostics(
 }
 
 
-function retryDelayMs(attempts: number) {
-  if (attempts <= 0) return 0
-  if (attempts === 1) return 30_000
-  if (attempts === 2) return 60_000
-  if (attempts === 3) return 2 * 60_000
-  if (attempts === 4) return 5 * 60_000
-  if (attempts === 5) return 15 * 60_000
-  return 30 * 60_000
-}
-
 function isRetryDue(item: LocalSyncQueue) {
-  const attempts = item.attempts || 0
-
-  if (attempts === 0 || !item.last_attempt_at) {
-    return true
-  }
-
-  const lastAttemptAt = Date.parse(item.last_attempt_at)
-
-  if (!Number.isFinite(lastAttemptAt)) {
-    return true
-  }
-
-  return Date.now() - lastAttemptAt >= retryDelayMs(attempts)
+  return isSyncRetryDue(item, Date.now())
 }
 
 export async function reconcileAccountBalancesFast(
@@ -841,27 +825,44 @@ export function processSyncQueue(
       return activeSyncPromise
     }
 
-    if (!queuedForcePromise) {
-      const running =
-        activeSyncPromise
+    const incomingRequest = {
+      forcePull,
+      forcePushRetry,
+    }
 
-      queuedForcePromise =
-        running
-          .then(
-            () =>
-              startSyncCycle(
-                forcePull,
-                forcePushRetry
-              ),
-            () =>
-              startSyncCycle(
-                forcePull,
-                forcePushRetry
-              )
-          )
-          .finally(() => {
-            queuedForcePromise = null
-          })
+    queuedForceRequest = queuedForceRequest
+      ? mergeSyncRequests(queuedForceRequest, incomingRequest)
+      : incomingRequest
+
+    if (!queuedForcePromise) {
+      const running = activeSyncPromise
+
+      const runQueued = () => {
+        const request = queuedForceRequest ?? {
+          forcePull: false,
+          forcePushRetry: false,
+        }
+
+        queuedForceRequest = null
+
+        return startSyncCycle(
+          request.forcePull,
+          request.forcePushRetry
+        )
+      }
+
+      const queued = running.then(
+        runQueued,
+        runQueued
+      )
+
+      const wrapped = queued.finally(() => {
+        if (queuedForcePromise === wrapped) {
+          queuedForcePromise = null
+        }
+      })
+
+      queuedForcePromise = wrapped
     }
 
     return queuedForcePromise
