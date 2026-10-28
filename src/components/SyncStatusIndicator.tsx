@@ -54,12 +54,14 @@ export function SyncStatusIndicator() {
       <button
         type="button"
         title={status.detail}
-        aria-label={`${status.label}. Abrir detalhes`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={`${status.label}. ${status.detail}. Abrir detalhes da sincronização`}
         onClick={() => {
           light()
           setOpen(true)
         }}
-        className={`fixed right-3 top-[calc(4.5rem+var(--safe-area-top))] z-40 flex h-10 w-10 items-center justify-center rounded-2xl border bg-white/95 shadow-md backdrop-blur-xl transition-transform active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:bg-slate-900/95 motion-reduce:transition-none ${tone}`}
+        className={`fixed right-3 top-[calc(4.5rem+var(--safe-area-top))] z-40 flex h-10 w-10 items-center justify-center rounded-2xl border bg-white/95 shadow-md backdrop-blur-xl transition-transform active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-teal-500 dark:bg-slate-900/95 motion-reduce:transition-none ${tone}`}
       >
         <Icon
           size={19}

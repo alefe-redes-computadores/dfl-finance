@@ -326,7 +326,7 @@ function AccountsContent() {
         <div className="mx-auto w-full max-w-2xl">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
-              <button onClick={() => { vibrate([5]); router.push('/more') }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] border border-black/5 bg-white text-gray-500 shadow-sm transition-all active:scale-95 dark:border-white/10 dark:bg-slate-900 dark:text-gray-300">
+              <button type="button" aria-label="Voltar para Mais opções" title="Voltar" onClick={() => { vibrate([5]); router.push('/more') }} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-black/5 bg-white text-gray-500 shadow-sm transition-all active:scale-95 dark:border-white/10 dark:bg-slate-900 dark:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 touch-manipulation">
                 <ChevronLeft size={20} />
               </button>
               <div className="min-w-0">

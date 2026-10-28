@@ -457,9 +457,9 @@ export default function CardsPage() {
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <button
+                <button type="button" aria-label="Voltar para Mais opções" title="Voltar"
                   onClick={() => router.push('/more')}
-                  className="h-9 w-9 -ml-1 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98]"
+                  className="h-11 w-11 -ml-1 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 touch-manipulation"
                 >
                   <ChevronLeft size={20} />
                 </button>

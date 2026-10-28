@@ -70,10 +70,16 @@ export function useLocalSync() {
       await processSyncQueue(
         true,
         true
-      ).catch((): SyncCycleResult => ({
-        ...EMPTY_RESULT,
-        pendingCount: getSyncSnapshot().pendingCount,
-      }))
+      ).catch((): SyncCycleResult => {
+        showToast(
+          'Erro inesperado na sincronização. Seus dados locais foram preservados.',
+          'error'
+        )
+        return {
+          ...EMPTY_RESULT,
+          pendingCount: getSyncSnapshot().pendingCount,
+        }
+      })
 
     if (!result.success && !result.pullSuccess && result.pendingCount === 0) {
       showToast(
@@ -149,10 +155,16 @@ export function useLocalSync() {
       await processSyncQueue(
         true,
         true
-      ).catch((): SyncCycleResult => ({
-        ...EMPTY_RESULT,
-        pendingCount: getSyncSnapshot().pendingCount,
-      }))
+      ).catch((): SyncCycleResult => {
+        showToast(
+          'Erro inesperado na sincronização. Seus dados locais foram preservados.',
+          'error'
+        )
+        return {
+          ...EMPTY_RESULT,
+          pendingCount: getSyncSnapshot().pendingCount,
+        }
+      })
 
     if (result.success) {
       showToast('Ressincronização completa concluída.', 'success')
