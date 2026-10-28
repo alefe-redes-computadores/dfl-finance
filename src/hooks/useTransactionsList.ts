@@ -7,7 +7,8 @@ import { db } from '@/lib/db'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   localFilterSignature,
-  stableLocalRows
+  stableLocalRows,
+  sortLocalRowsIfNeeded
 } from '@/lib/localQueryPolicy'
 import {
   activeTransactionFilters,
@@ -80,7 +81,7 @@ export function useTransactionsList(
       )
     }
 
-    return items.sort((a, b) => {
+    return sortLocalRowsIfNeeded(items, (a, b) => {
       const dateCompare = String(b.date || '').localeCompare(
         String(a.date || '')
       )

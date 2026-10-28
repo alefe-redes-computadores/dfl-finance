@@ -7,7 +7,8 @@ import { db } from '@/lib/db'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   stableLocalRows,
-  localFilterSignature
+  localFilterSignature,
+  sortLocalRowsIfNeeded
 } from '@/lib/localQueryPolicy'
 
 type AllTables =
@@ -187,7 +188,7 @@ export function useLocalData<T = any>({
       )
 
     if (shouldSort) {
-      results = [...results].sort((a: any, b: any) => {
+      results = sortLocalRowsIfNeeded(results, (a: any, b: any) => {
         const valA = a?.[orderBy]
         const valB = b?.[orderBy]
 

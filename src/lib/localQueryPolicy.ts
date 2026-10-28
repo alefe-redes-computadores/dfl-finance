@@ -39,3 +39,29 @@ export function localFilterSignature(
 ): string {
   return JSON.stringify(stableValue(filters || {}))
 }
+
+/**
+ * R396 — evita ordenar novamente resultados que já estão
+ * monotonicamente ordenados.
+ *
+ * Mantém exatamente o mesmo comparador e o mesmo array,
+ * sem produzir operações no banco ou efeitos externos.
+ *
+ * O método pode ordenar o array recebido quando necessário.
+ * Use somente com arrays locais de consulta, nunca com
+ * coleções compartilhadas ou congeladas.
+ */
+export function sortLocalRowsIfNeeded<T>(
+  rows: T[],
+  compare: (a: T, b: T) => number
+): T[] {
+  if (rows.length < 2) return rows
+
+  for (let i = 1; i < rows.length; i++) {
+    if (compare(rows[i - 1], rows[i]) > 0) {
+      return rows.sort(compare)
+    }
+  }
+
+  return rows
+}

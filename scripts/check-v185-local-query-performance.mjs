@@ -134,7 +134,7 @@ check('Transações preservam índices por período', () => {
 
 check('Transações continuam ordenadas por data', () => {
   const source = read(paths[2])
-  assert.ok(source.includes('return items.sort('))
+  assert.ok(source.includes('return sortLocalRowsIfNeeded(items,'))
   assert.ok(source.includes('created_at'))
 })
 

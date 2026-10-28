@@ -4,7 +4,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, LocalDebt } from '@/lib/db'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { stableLocalRows } from '@/lib/localQueryPolicy'
+import { stableLocalRows, sortLocalRowsIfNeeded } from '@/lib/localQueryPolicy'
 
 export function useDebtsList(context?: 'dfl' | 'personal') {
   const { user } = useAuth()
@@ -22,7 +22,7 @@ export function useDebtsList(context?: 'dfl' | 'personal') {
           .equals(user.id)
           .toArray()
 
-    return results.sort((a: LocalDebt, b: LocalDebt) => {
+    return sortLocalRowsIfNeeded(results, (a: LocalDebt, b: LocalDebt) => {
       const updatedA = a.updated_at || ''
       const updatedB = b.updated_at || ''
       return updatedB.localeCompare(updatedA)
