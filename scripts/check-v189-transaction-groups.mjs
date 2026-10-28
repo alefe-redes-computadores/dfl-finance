@@ -64,7 +64,7 @@ check('Transferencias preservadas', () => {
 
 check('Busca diferida V188 preservada', () => {
   assert.ok(source.includes('useDeferredValue(search)'))
-  assert.ok(source.includes('deferredSearch.toLowerCase()'))
+  assert.ok(source.includes('const normalizedSearch = normalizeFinancialSearch(deferredSearch)'))
 })
 
 check('Campo de busca imediato preservado', () => {

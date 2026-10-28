@@ -20,7 +20,7 @@ const ast=ts.createSourceFile(
 test('TSX valido',ast.parseDiagnostics.length===0)
 test('Grupos protegidos',s.includes('Object.create(null)'))
 test('Agrupamento preserva registros',s.includes('groups[key].push(t)'))
-test('Normalizacao unica',s.includes('const normalizedSearch = deferredSearch.toLowerCase()'))
+test('Normalizacao unica',s.includes('const normalizedSearch = normalizeFinancialSearch(deferredSearch)'))
 test('Filtro principal reutiliza termo',s.includes('const term = normalizedSearch'))
 test('V188: busca diferida continua ativa',s.includes('useDeferredValue(search)'))
 test('V188: entrada imediata preservada',s.includes('value={search}'))
