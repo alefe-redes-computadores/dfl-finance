@@ -1,3 +1,4 @@
+import { validateAtomicAck } from '@/lib/atomicAckPolicy'
 import { db, getPendingSyncItems, markSyncFailedIfCurrent, type LocalSyncQueue } from '@/lib/db'
 import { supabase } from '@/lib/supabase'
 import { batchIdentity, expectedSyncBase, remoteSyncBase, type FinancialBatchItem } from '@/lib/financialSyncContract'
@@ -53,6 +54,13 @@ async function prepareOutbox(userId: string): Promise<FinancialOutbox | null> {
 
 /** Acknowledgement and revision rebasing commit together, after remote commit. */
 export async function acknowledgeOutbox(envelope: FinancialOutbox, versions: Record<string, string | null>, accounts: Record<string, any> = {}) {
+  validateAtomicAck(envelope, {
+    batch_id: envelope.id,
+    status: 'committed',
+    versions,
+    accounts,
+  })
+
   await db.transaction('rw', [db.syncQueue, db.financialOutbox,
     ...ATOMIC_SYNC_TABLES.map(name => db.table(name))], async () => {
     const stored = await db.financialOutbox.get(envelope.user_id)
@@ -117,6 +125,7 @@ export async function pushAtomicFinancialBatch(userId: string, force: boolean,
     if (data?.batch_id !== envelope.id || data?.status !== 'committed' || !data.versions) {
       throw new Error('O servidor não confirmou a operação financeira completa.')
     }
+    validateAtomicAck(envelope, data)
     await acknowledgeOutbox(envelope, data.versions, data.accounts)
     return 0
   } catch (error: any) {
