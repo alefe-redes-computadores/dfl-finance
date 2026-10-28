@@ -263,7 +263,7 @@ function NewLoanContent() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pt-6 pb-28 space-y-4 animate-in fade-in duration-300">
+      <div className="flex-1 overflow-y-auto px-4 pt-3 pb-28 space-y-3 animate-in fade-in duration-300">
         <FieldCard>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500">
             Resumo

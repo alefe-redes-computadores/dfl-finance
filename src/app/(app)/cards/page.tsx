@@ -526,7 +526,7 @@ export default function CardsPage() {
                 <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">
                   Faturas do mês
                 </p>
-                <p className="text-[28px] leading-none font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+                <p className="text-[24px] leading-none font-bold text-gray-900 dark:text-gray-100 tracking-tight">
                   {formatCurrency(totalInvoices)}
                 </p>
                 <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-2">

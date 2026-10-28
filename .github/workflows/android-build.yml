@@ -67,6 +67,7 @@ jobs:
           node scripts/check-v163-app-release.mjs
           node scripts/check-r408-assistant-native-cors.mjs
           node scripts/check-r409-visual-hierarchy.mjs
+          node scripts/check-r410-global-density.mjs
           node scripts/check-v164-finance-premium-forms.mjs
           node scripts/check-v165-daily-ready.mjs
           node scripts/check-v166-default-settings.mjs

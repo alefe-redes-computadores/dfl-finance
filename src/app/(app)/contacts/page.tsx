@@ -206,7 +206,7 @@ export default function ContactsPage() {
       )}
 
       <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-[#f8f9fa]/94 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/94">
-        <div className="mx-auto max-w-xl rounded-[26px] border border-slate-200/70 bg-white/95 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/95">
+        <div className="mx-auto max-w-xl rounded-[22px] border border-slate-200/70 bg-white/95 p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/95">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <button
@@ -222,7 +222,7 @@ export default function ContactsPage() {
               </button>
 
               <div className="min-w-0">
-                <h1 className="text-[23px] font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                <h1 className="text-[20px] font-bold tracking-tight text-slate-900 dark:text-slate-100">
                   Contatos
                 </h1>
                 <p className="mt-0.5 text-[12px] text-slate-500 dark:text-slate-400">
@@ -321,7 +321,12 @@ export default function ContactsPage() {
           </div>
         )}
 
-        <div className="mb-4 flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        <details className="group mb-3 rounded-[15px] border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-3 text-[12px] font-semibold text-slate-700 dark:text-slate-200 [&::-webkit-details-marker]:hidden">
+            <span>Relação: {filterOptions.find((option) => option.key === relationshipFilter)?.label || 'Todos'}</span>
+            <span aria-hidden="true" className="text-slate-400">⌄</span>
+          </summary>
+          <div className="flex gap-2 overflow-x-auto px-2 pb-2 scrollbar-hide">
           {filterOptions.map((option) => {
             const active = relationshipFilter === option.key
             return (
@@ -342,7 +347,8 @@ export default function ContactsPage() {
               </button>
             )
           })}
-        </div>
+          </div>
+        </details>
 
         {loading ? (
           <div className="space-y-3">

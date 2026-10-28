@@ -347,6 +347,12 @@ export default function FinancingsPage() {
           )}
 
           {!loading && sortedFinancings.length > 0 && (
+
+            <details className="group rounded-[16px] border border-gray-200/70 bg-white/90 p-1 dark:border-slate-700 dark:bg-slate-800/90">
+              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 px-3 text-[12px] font-semibold text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 dark:text-gray-200 [&::-webkit-details-marker]:hidden">
+                <span>Ordenar: {sortBy === 'total_amount' ? 'Valor total' : sortBy === 'start_date' ? 'Data de início' : 'Mais recentes'}</span>
+                <span aria-hidden="true" className="text-gray-400 transition-transform group-open:rotate-180">⌄</span>
+              </summary>
             <div className="scrollbar-hide flex gap-2 overflow-x-auto pb-1">
               {[
                 { key: 'updated_at', label: 'Mais recentes' },
@@ -369,18 +375,19 @@ export default function FinancingsPage() {
                   {f.label}
                 </button>
               ))}
-            </div>
+            </div>            </details>
+
           )}
         </div>
       </div>
 
       <div className="custom-scrollbar flex-1 overflow-y-auto px-4 pb-24 pt-3">
         {!loading && (financings || []).length > 0 && (
-          <section className="mb-4 overflow-hidden rounded-[28px] border border-teal-100/80 bg-gradient-to-br from-teal-600 to-teal-700 p-5 text-white shadow-[0_16px_40px_rgba(13,148,136,0.20)] dark:border-teal-800/50">
+          <section className="mb-4 overflow-hidden rounded-[28px] border border-teal-100/80 bg-gradient-to-br from-teal-600 to-teal-700 p-4 text-white shadow-[0_16px_40px_rgba(13,148,136,0.20)] dark:border-teal-800/50">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-100">Compromissos financiados</p>
-                <p className="mt-1 text-[26px] font-black tracking-tight">{formatCurrency(summary.open)}</p>
+                <p className="mt-1 text-[23px] font-black tracking-tight">{formatCurrency(summary.open)}</p>
                 <p className="mt-0.5 text-[12px] font-medium text-teal-100/90">Saldo restante dos contratos</p>
               </div>
               <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-white/15 ring-1 ring-white/15">

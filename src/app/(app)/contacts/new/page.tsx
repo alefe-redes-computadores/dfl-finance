@@ -353,7 +353,7 @@ function ContactForm() {
       </header>
 
       <main className="flex-1 px-4 pb-32 pt-4">
-        <div className="mx-auto max-w-xl space-y-4">
+        <div className="mx-auto max-w-xl space-y-3">
           <Section
             title="Como este contato participa do financeiro?"
             subtitle="Isso ajuda a organizar clientes e fornecedores sem confundir com pessoa física ou jurídica."

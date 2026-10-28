@@ -390,7 +390,7 @@ function NewFinancingContent() {
         </div>
       </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto px-4 pt-5 pb-32 animate-in fade-in slide-in-from-bottom-4 duration-300">
+      <div className="flex-1 space-y-3 overflow-y-auto px-4 pt-3 pb-32 animate-in fade-in slide-in-from-bottom-4 duration-300">
         <div className="rounded-[28px] bg-gradient-to-br from-teal-600 to-teal-700 p-5 text-white shadow-[0_14px_40px_rgba(13,148,136,0.28)]">
           <div className="flex items-start justify-between gap-3">
             <div>

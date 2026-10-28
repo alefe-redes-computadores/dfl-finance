@@ -103,7 +103,7 @@ const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR',
               </button>
 
               <div className="min-w-0">
-                <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+                <h1 className="text-[20px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
                   Metas
                 </h1>
                 <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">

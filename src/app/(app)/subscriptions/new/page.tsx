@@ -225,7 +225,7 @@ function NewSubscriptionContent() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pt-5 pb-32 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+      <div className="flex-1 overflow-y-auto px-4 pt-3 pb-32 space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
         <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 shadow-[0_6px_24px_rgba(15,23,42,0.05)] dark:shadow-none p-5">
           <div className="space-y-5">
             <div>

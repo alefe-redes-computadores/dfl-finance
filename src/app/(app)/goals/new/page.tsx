@@ -519,7 +519,7 @@ function NewGoalContent() {
           }}
         />
 
-        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
           <GoalPreview
             name={name}
             color={color}

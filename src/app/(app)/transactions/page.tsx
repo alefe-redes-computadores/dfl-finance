@@ -1288,7 +1288,7 @@ export default function TransactionsPage() {
         <div className="mx-auto max-w-md">
           <div className="mb-3 flex items-center justify-between">
             <div className="min-w-0">
-              <h1 className="text-[25px] font-bold tracking-[-0.035em] text-gray-950 dark:text-white">
+              <h1 className="text-[20px] font-bold tracking-[-0.025em] text-gray-950 dark:text-white">
                 Transações
               </h1>
               <p className="mt-0.5 text-[11.5px] font-medium text-gray-400 dark:text-gray-500">
@@ -1421,7 +1421,7 @@ export default function TransactionsPage() {
             role="status"
             aria-live="polite"
             aria-atomic="true"
-            className="min-h-5 px-1 text-[11px] font-medium text-gray-500 dark:text-gray-400"
+            className="empty:hidden px-1 text-[11px] font-medium text-gray-500 dark:text-gray-400"
           >
             {search.trim() && (
               searchUpdating ? (

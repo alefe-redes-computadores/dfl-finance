@@ -292,7 +292,7 @@ function NewCardContent() {
         </div>
       </div>
 
-      <div className="px-4 -mt-3 relative z-10 space-y-4">
+      <div className="px-4 -mt-3 relative z-10 space-y-3">
         <section className="app-form-section">
           <div className="mb-4">
             <h2 className="text-[15px] font-bold text-gray-900 dark:text-gray-100">

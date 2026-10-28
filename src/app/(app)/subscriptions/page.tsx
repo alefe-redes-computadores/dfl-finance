@@ -261,13 +261,13 @@ export default function SubscriptionsPage() {
 
       <div className="flex-1 overflow-y-auto px-4 pt-3 pb-28 custom-scrollbar">
         {!loading && (
-          <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 mb-4">
+          <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4 mb-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">
                   Comprometimento mensal
                 </p>
-                <p className="text-[30px] leading-none font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+                <p className="text-[24px] leading-none font-bold text-gray-900 dark:text-gray-100 tracking-tight">
                   {formatCurrency(monthlyTotal)}
                 </p>
                 <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-2">
@@ -332,6 +332,12 @@ export default function SubscriptionsPage() {
         )}
 
         {!loading && filteredSubscriptions.length > 0 && (
+
+            <details className="group rounded-[16px] border border-gray-200/70 bg-white/90 p-1 dark:border-slate-700 dark:bg-slate-800/90">
+              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 px-3 text-[12px] font-semibold text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 dark:text-gray-200 [&::-webkit-details-marker]:hidden">
+                <span>Ordenar: {sortBy === 'amount' ? 'Maior valor' : sortBy === 'name' ? 'Por nome' : 'Mais recentes'}</span>
+                <span aria-hidden="true" className="text-gray-400 transition-transform group-open:rotate-180">⌄</span>
+              </summary>
           <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide mb-1">
             {[
               { key: 'updated_at', label: 'Mais recentes' },
@@ -351,7 +357,8 @@ export default function SubscriptionsPage() {
                 {f.label}
               </button>
             ))}
-          </div>
+          </div>            </details>
+
         )}
 
         {loading ? (

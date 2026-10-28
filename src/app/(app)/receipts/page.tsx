@@ -663,7 +663,7 @@ export default function ReceiptsPage() {
             </button>
           </div>
 
-          <div className="relative mt-4">
+          <div className="relative mt-3">
             <Search
               size={17}
               className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
@@ -672,7 +672,7 @@ export default function ReceiptsPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Buscar loja, banco, valor ou data"
-              className="h-12 w-full rounded-[17px] border border-gray-200 bg-gray-50 pl-11 pr-10 text-[13px] text-gray-900 outline-none transition focus:border-teal-500/50 focus:ring-2 focus:ring-teal-500/10 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100"
+              className="h-11 w-full rounded-[17px] border border-gray-200 bg-gray-50 pl-11 pr-10 text-[13px] text-gray-900 outline-none transition focus:border-teal-500/50 focus:ring-2 focus:ring-teal-500/10 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100"
             />
             {search && (
               <button
@@ -707,7 +707,12 @@ export default function ReceiptsPage() {
             ))}
           </div>
 
-          <div className="mt-2 flex gap-2 overflow-x-auto pb-0.5 scrollbar-hide">
+          <details className="group mt-2 rounded-[14px] border border-gray-200/70 bg-white/80 dark:border-slate-700 dark:bg-slate-800/80">
+            <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 px-3 text-[11px] font-semibold text-gray-600 dark:text-gray-300 [&::-webkit-details-marker]:hidden">
+              <span>Vínculos: {linkFilter === 'linked' ? 'Vinculados' : linkFilter === 'loose' ? 'Avulsos' : 'Todos'}</span>
+              <span aria-hidden="true" className="text-gray-400">⌄</span>
+            </summary>
+            <div className="flex gap-2 overflow-x-auto px-2 pb-2 scrollbar-hide">
             {([
               ['all', 'Todos os vínculos'],
               ['linked', 'Vinculados'],
@@ -726,7 +731,8 @@ export default function ReceiptsPage() {
                 {label}
               </button>
             ))}
-          </div>
+            </div>
+          </details>
         </div>
       </header>
 

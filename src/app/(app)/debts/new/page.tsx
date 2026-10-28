@@ -315,7 +315,7 @@ function NewDebtContent() {
           </div>
         </header>
 
-        <main className="space-y-4">
+        <main className="space-y-3">
           <section className="app-form-section">
             <label className="app-form-label">
               Contexto

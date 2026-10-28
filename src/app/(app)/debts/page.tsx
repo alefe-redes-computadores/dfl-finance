@@ -236,26 +236,26 @@ function DebtsContent() {
 
       <div className="px-4 pt-3">
         <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+          <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-3.5">
             <div className="w-10 h-10 rounded-[16px] bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center mb-3">
               <Wallet size={18} className="text-orange-600 dark:text-orange-400" />
             </div>
             <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">
               A receber
             </p>
-            <p className="text-[20px] font-bold tracking-tight text-gray-900 dark:text-gray-100">
+            <p className="text-[18px] font-bold tracking-tight text-gray-900 dark:text-gray-100">
               {formatCurrency(totalToReceiveState)}
             </p>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+          <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-3.5">
             <div className="w-10 h-10 rounded-[16px] bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center mb-3">
               <Users size={18} className="text-teal-600 dark:text-teal-400" />
             </div>
             <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">
               Pessoas
             </p>
-            <p className="text-[20px] font-bold tracking-tight text-gray-900 dark:text-gray-100">
+            <p className="text-[18px] font-bold tracking-tight text-gray-900 dark:text-gray-100">
               {activePeopleCount}
             </p>
           </div>

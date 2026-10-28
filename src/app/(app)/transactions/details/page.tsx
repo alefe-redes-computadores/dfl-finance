@@ -1291,7 +1291,7 @@ function EditTransactionContent() {
       )}
 
       {/* FORMULÁRIO COMPLETO */}
-      <div className="px-4 pt-5 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+      <div className="px-4 pt-3 space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
         {/* HERO VALOR */}
         <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 px-5 pt-5 pb-6 shadow-[0_6px_24px_rgba(15,23,42,0.04)] dark:shadow-none">
           <div className="flex items-center justify-between mb-4">
