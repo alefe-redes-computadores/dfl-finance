@@ -158,7 +158,7 @@ function NewTransactionContent() {
 
   const [financingId, setFinancingId] = useState<string | null>(null)
   const [loanId, setLoanId] = useState<string | null>(null)
-  
+
   const [showFinancingModal, setShowFinancingModal] = useState(false)
   const [showLoanModal, setShowLoanModal] = useState(false)
   const [showCustomRecurrenceModal, setShowCustomRecurrenceModal] = useState(false)
@@ -777,7 +777,7 @@ function NewTransactionContent() {
 
     try {
       const baseDate = createLocalDate(date)
-      
+
       await db.transaction(
         'rw',
         db.accounts,
@@ -959,15 +959,15 @@ function NewTransactionContent() {
 
   return (
     <div className="mx-auto min-h-full w-full max-w-2xl bg-gray-50 pb-28 dark:bg-slate-950">
-      
+
       {/* HEADER */}
       <div className="app-topbar">
         <div className="rounded-[20px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3">
             <button
               onClick={() => { vibrate([5]); router.replace('/transactions'); }}
-              className="h-10 w-10 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform shrink-0"
-            >
+              className="h-11 w-11 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform shrink-0 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+             type="button" aria-label="Voltar para transações" title="Voltar para transações">
               <ChevronLeft size={20} className="text-gray-700 dark:text-gray-300" />
             </button>
 
@@ -983,15 +983,15 @@ function NewTransactionContent() {
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => { setShowQRScanner(true); vibrate([10]) }}
-                className="h-10 w-10 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform"
-              >
+                className="h-11 w-11 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+               type="button" aria-label="Ler QR Code" title="Ler QR Code">
                 <QrCode size={18} className="text-gray-700 dark:text-gray-300" />
               </button>
 
               <button
                 onClick={() => { !receiptUrl && setShowReceiptModal(true); vibrate([10]) }}
-                className="h-10 w-10 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform"
-              >
+                className="h-11 w-11 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+               type="button" aria-label="Adicionar comprovante" title="Adicionar comprovante">
                 {AttachmentIcon}
               </button>
             </div>
@@ -1002,7 +1002,7 @@ function NewTransactionContent() {
       {/* CORPO DO FORMULÁRIO - COM pb-40 PARA O BOTÃO FICAR VISÍVEL */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-40">
         <div className="space-y-4">
-          
+
           {/* TIPO DA TRANSAÇÃO */}
           <div className="rounded-[20px] border border-gray-200/70 bg-white p-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div className="grid grid-cols-2 gap-1.5">
@@ -1099,8 +1099,8 @@ function NewTransactionContent() {
 
               <button
                 onClick={handleRemoveReceipt}
-                className="h-9 w-9 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 bg-gray-50 dark:bg-slate-700/50 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors active:scale-[0.98]"
-              >
+                className="h-11 w-11 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 bg-gray-50 dark:bg-slate-700/50 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors active:scale-[0.98] touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+               type="button" aria-label="Remover comprovante" title="Remover comprovante">
                 <Trash2 size={16} />
               </button>
             </div>
@@ -1603,7 +1603,7 @@ function NewTransactionContent() {
       {/* ============================================================
           TODOS OS MODAIS COM PORTAL E Z-INDEX CORRETO
           ============================================================ */}
-      
+
       {/* MODAL CATEGORIA */}
       {showCatModal && createPortal(
         <div className="app-overlay z-[150000] flex items-end justify-center overscroll-contain" onClick={() => setShowCatModal(false)}>
