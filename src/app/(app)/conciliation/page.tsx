@@ -254,8 +254,8 @@ export default function ConciliationPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push('/more')}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border border-black/5 bg-white text-gray-600 active:scale-95 dark:border-white/5 dark:bg-slate-900 dark:text-gray-300"
-          >
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border border-black/5 bg-white text-gray-600 active:scale-95 dark:border-white/5 dark:bg-slate-900 dark:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 touch-manipulation"
+           type="button" aria-label="Voltar para Mais opções" title="Voltar para Mais opções">
             <ArrowLeft size={19} />
           </button>
           <div className="min-w-0 flex-1">
@@ -538,8 +538,8 @@ export default function ConciliationPage() {
               <button
                 type="button"
                 onClick={() => setReview(null)}
-                className="flex h-9 w-9 items-center justify-center rounded-[14px] bg-gray-50 text-gray-400 dark:bg-slate-800"
-              >
+                className="flex h-9 w-9 items-center justify-center rounded-[14px] bg-gray-50 text-gray-400 dark:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 touch-manipulation"
+               aria-label="Fechar revisão" title="Fechar revisão">
                 <X size={17} />
               </button>
             </div>

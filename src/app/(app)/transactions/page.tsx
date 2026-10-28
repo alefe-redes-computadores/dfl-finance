@@ -1,6 +1,7 @@
 // src/app/(app)/transactions/page.tsx
 'use client'
 
+import { normalizeFinancialSearch } from '@/lib/financialSearchNormalization'
 import SelectField from '@/components/SelectField'
 import TransferModal from '@/components/TransferModal'
 export const dynamic = 'force-dynamic'
@@ -547,7 +548,7 @@ export default function TransactionsPage() {
   // A digitação mantém prioridade sobre o filtro da lista.
   const deferredSearch = useDeferredValue(search)
   const searchUpdating = search !== deferredSearch
-  const normalizedSearch = deferredSearch.toLowerCase()
+  const normalizedSearch = normalizeFinancialSearch(deferredSearch)
   const [currentDate, setCurrentDate] = useState(new Date())
 
   useEffect(() => {
@@ -884,9 +885,9 @@ export default function TransactionsPage() {
 
     if (deferredSearch) {
       const term = normalizedSearch
-      const desc = String(t.description || '').toLowerCase()
-      const cat = String(t.categories?.name || '').toLowerCase()
-      const notes = String(t.notes || '').toLowerCase()
+      const desc = normalizeFinancialSearch(t.description || '')
+      const cat = normalizeFinancialSearch(t.categories?.name || '')
+      const notes = normalizeFinancialSearch(t.notes || '')
 
       if (advFilters.searchNotes) {
         if (!desc.includes(term) && !cat.includes(term) && !notes.includes(term)) return false
@@ -983,15 +984,15 @@ export default function TransactionsPage() {
 
       if (deferredSearch) {
         const term = normalizedSearch
-        const description = String(
+        const description = normalizeFinancialSearch(
           tx.description || ''
-        ).toLowerCase()
-        const category = String(
+        )
+        const category = normalizeFinancialSearch(
           tx.categories?.name || ''
-        ).toLowerCase()
-        const notes = String(
+        )
+        const notes = normalizeFinancialSearch(
           tx.notes || ''
-        ).toLowerCase()
+        )
 
         if (advFilters.searchNotes) {
           return (
@@ -1712,7 +1713,7 @@ export default function TransactionsPage() {
                   <h2 className="text-[20px] font-bold text-gray-900 dark:text-white">Filtros</h2>
                   <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-1">Refine a análise exibida</p>
                 </div>
-                <button onClick={() => setShowFilterDrawer(false)} className="p-2 -mr-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                <button onClick={() => setShowFilterDrawer(false)} className="p-2 -mr-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 touch-manipulation" type="button" aria-label="Fechar filtros avançados" title="Fechar filtros avançados">
                   <X size={22} />
                 </button>
               </div>

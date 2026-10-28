@@ -40,7 +40,14 @@ check('Campo de texto continua imediato', () => {
 
 check('Filtro principal usa busca diferida', () => {
   assert.ok(source.includes('if (deferredSearch)'))
-  assert.ok(source.includes('deferredSearch.toLowerCase()'))
+  assert.ok(
+    source.includes(
+      'normalizeFinancialSearch(deferredSearch)'
+    )
+  )
+  assert.ok(source.includes(
+    "from '@/lib/financialSearchNormalization'"
+  ))
 })
 
 check('Busca de dividas usa valor diferido', () => {
