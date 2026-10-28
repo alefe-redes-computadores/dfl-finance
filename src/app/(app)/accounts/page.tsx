@@ -1,6 +1,8 @@
 // src/app/(app)/accounts/page.tsx
 'use client'
 
+import { normalizeFinancialSearch } from '@/lib/financialSearchNormalization'
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
@@ -135,8 +137,7 @@ function AccountsContent() {
   )
 
   const filteredAccounts = useMemo(() => {
-    const term =
-      search.trim().toLocaleLowerCase('pt-BR')
+    const term = normalizeFinancialSearch(search)
 
     const filtered = activeAccounts.filter(
       (account: any) => {
@@ -154,9 +155,7 @@ function AccountsContent() {
           getAccountInstitutionLabel(account),
           getAccountTypeLabel(account.type),
         ].some((value) =>
-          String(value || '')
-            .toLocaleLowerCase('pt-BR')
-            .includes(term)
+          normalizeFinancialSearch(value).includes(term)
         )
       }
     )

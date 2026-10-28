@@ -303,10 +303,12 @@ export default function CardsPage() {
     return cardsWithInvoice
   }, [cardsWithInvoice])
 
+  const [visibleCardLimit, setVisibleCardLimit] = useState(12)
+
   const sortedCards = useMemo(() => {
     const visible = getVisibleCards()
     if (cardOrder.length === 0) return visible
-    
+
     return [...visible].sort((a, b) => {
       const idxA = cardOrder.indexOf(a.id)
       const idxB = cardOrder.indexOf(b.id)
@@ -561,7 +563,7 @@ export default function CardsPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {sortedCards.map((card: any, index: number) => {
+            {sortedCards.slice(0, visibleCardLimit).map((card: any, index: number) => {
               const limitPercent = getLimitPercent(
                 card.usedLimit || 0,
                 Number(card.limit_amount) || 0
@@ -649,6 +651,21 @@ export default function CardsPage() {
                 </button>
               )
             })}
+
+            {sortedCards.length > visibleCardLimit && (
+              <div className="rounded-2xl border border-gray-200 bg-white p-3 text-center dark:border-slate-700 dark:bg-slate-900">
+                <p role="status" className="mb-2 text-xs text-gray-500 dark:text-slate-400">
+                  {Math.min(visibleCardLimit, sortedCards.length)} de {sortedCards.length} cartões exibidos
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setVisibleCardLimit(current => current + 12)}
+                  className="min-h-11 w-full rounded-xl bg-gray-950 px-4 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:bg-white dark:text-gray-950"
+                >
+                  Mostrar mais cartões
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
