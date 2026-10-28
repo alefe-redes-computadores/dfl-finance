@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -98,6 +98,13 @@ export default function ConciliationPage() {
   const [search, setSearch] = useState('')
   const [direction, setDirection] = useState<InboxDirection>('all')
   const [sortMode, setSortMode] = useState<InboxSort>('priority')
+  const [visibleLimit, setVisibleLimit] = useState(30)
+
+  // R389: filtros sempre operam sobre a lista completa.
+  // Apenas a renderizacao dos cards e progressiva.
+  useEffect(() => {
+    setVisibleLimit(30)
+  }, [filter, search, direction, sortMode, effectiveContext])
 
   const data = useLiveQuery(async () => {
     if (!user?.id) return { transactions: [], accounts: [], categories: [] }
@@ -166,6 +173,16 @@ export default function ConciliationPage() {
       today
     ),
     [visible, direction, search, sortMode, today]
+  )
+
+  const renderedPendings = useMemo(
+    () => displayed.slice(0, visibleLimit),
+    [displayed, visibleLimit]
+  )
+
+  const remainingPendings = Math.max(
+    0,
+    displayed.length - renderedPendings.length
   )
 
   const accountMap = useMemo(
@@ -325,7 +342,7 @@ export default function ConciliationPage() {
             </button>
           </div>
           <p role="status" aria-live="polite" aria-atomic="true" className="mt-2 text-[11px] leading-relaxed text-gray-500 dark:text-slate-400">
-            {displayed.length} de {transactions.length} pendências exibidas.
+            {renderedPendings.length} exibidas de {displayed.length} encontradas ({transactions.length} na Inbox).
             Valores da Inbox não equivalem a saldo bancário confirmado.
           </p>
         </section>
@@ -410,10 +427,25 @@ export default function ConciliationPage() {
                 ? 'Nenhum item desta fila exige revisão agora. Cartões e contratos continuam nos seus próprios fluxos.'
                 : 'As outras pendências continuam preservadas na caixa de revisão.'}
             </p>
+            {transactions.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('')
+                  setDirection('all')
+                  setFilter('all')
+                  setSortMode('priority')
+                  setVisibleLimit(30)
+                }}
+                className="mt-4 min-h-11 rounded-2xl border border-teal-200 px-5 text-xs font-bold text-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-teal-800 dark:text-teal-300"
+              >
+                Limpar filtros e ver pendências
+              </button>
+            )}
           </section>
         ) : (
           <section className="space-y-2.5">
-            {displayed.map((tx: any) => {
+            {renderedPendings.map((tx: any) => {
               const account = tx.account_id ? accountMap.get(tx.account_id) : null
               const category = tx.category_id ? categoryMap.get(tx.category_id) : null
               const meta = sourceMeta(tx.source)
@@ -510,6 +542,20 @@ export default function ConciliationPage() {
                 </article>
               )
             })}
+            {remainingPendings > 0 && (
+              <div className="rounded-2xl border border-gray-200 bg-white p-3 text-center dark:border-slate-700 dark:bg-slate-900">
+                <p role="status" className="mb-2 text-xs text-gray-500 dark:text-slate-400">
+                  {renderedPendings.length} de {displayed.length} pendências exibidas
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setVisibleLimit(current => current + 30)}
+                  className="min-h-11 w-full rounded-xl bg-gray-950 px-4 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:bg-white dark:text-gray-950"
+                >
+                  Carregar mais ({remainingPendings} restantes)
+                </button>
+              </div>
+            )}
           </section>
         )}
       </main>

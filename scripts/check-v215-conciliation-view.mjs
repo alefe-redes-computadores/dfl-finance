@@ -43,7 +43,10 @@ check('Entrada imutavel',()=>{
 check('UI filtra sem mudar Inbox base',()=>{
   const s=read(page)
   assert.ok(s.includes('filterConciliationView(visible, direction, search)'))
-  assert.ok(s.includes('displayed.map((tx: any)'))
+  assert.ok(s.includes('renderedPendings.map((tx: any)'))
+  assert.ok(s.includes('displayed.slice(0, visibleLimit)'))
+  assert.ok(s.includes('sortConciliationView('))
+  assert.ok(s.includes('setVisibleLimit(current => current + 30)'))
   assert.ok(s.includes('belongsInFinancialInbox(tx, today)'))
 })
 check('Revisao e conciliacao originais',()=>{
