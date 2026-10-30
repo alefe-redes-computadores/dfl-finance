@@ -35,6 +35,8 @@ import {
   type GlobalSearchResult,
 } from '@/lib/globalSearch'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import { useFinancialSpeech } from '@/hooks/useFinancialSpeech'
+import { consumeFinancialVoiceTranscript } from '@/lib/voiceHandoff'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { interpretFinancialInput, smartDraftUrl } from '@/lib/smartFinancialInput'
 
@@ -56,17 +58,6 @@ const formatDate = (value?: string) => {
   return dateFormatter.format(date).replace('.', '')
 }
 
-
-type FinancialSpeechRecognition = {
-  lang: string
-  interimResults: boolean
-  maxAlternatives: number
-  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
-  onerror: (() => void) | null
-  onend: (() => void) | null
-  start: () => void
-  stop: () => void
-}
 
 type SearchFilter =
   | 'income'
@@ -347,59 +338,31 @@ export default function Page() {
   const [searchAttempt, setSearchAttempt] = useState(0)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [activeFilters, setActiveFilters] = useState<SearchFilter[]>([])
-  const [listening, setListening] = useState(false)
-  const [voiceNotice, setVoiceNotice] = useState('')
-  const recognitionRef = useRef<FinancialSpeechRecognition | null>(null)
+  const { status: voiceStatus, notice: voiceNotice, transcript, start: startVoice, cancel: cancelVoice } = useFinancialSpeech()
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const receivedVoiceRef = useRef(false)
 
-  useEffect(() => () => {
-    recognitionRef.current?.stop()
-    recognitionRef.current = null
+  // Uma transcricao vinda do botao global passa pela memoria de sessao,
+  // nunca pela URL e nunca por gravacao automatica.
+  useEffect(() => {
+    if (receivedVoiceRef.current) return
+    const incoming = consumeFinancialVoiceTranscript()
+    if (incoming) {
+      receivedVoiceRef.current = true
+      setQuery(incoming)
+      inputRef.current?.blur()
+    } else {
+      inputRef.current?.focus()
+    }
   }, [])
+  useEffect(() => {
+    if (transcript) setQuery(transcript)
+  }, [transcript])
 
   const toggleVoice = () => {
     vibrate([8])
-    if (listening) {
-      recognitionRef.current?.stop()
-      setListening(false)
-      return
-    }
-    const speechWindow = window as unknown as {
-      SpeechRecognition?: new () => FinancialSpeechRecognition
-      webkitSpeechRecognition?: new () => FinancialSpeechRecognition
-    }
-    const Speech = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition
-    if (!Speech) {
-      setVoiceNotice('Reconhecimento de voz nao disponivel neste navegador. Use o microfone do teclado ou digite o comando.')
-      return
-    }
-    try {
-      const recognition = new Speech()
-      recognitionRef.current = recognition
-      recognition.lang = 'pt-BR'
-      recognition.interimResults = false
-      recognition.maxAlternatives = 1
-      recognition.onresult = (event) => {
-        const transcript = event.results[0]?.[0]?.transcript?.trim()
-        if (transcript) {
-          setQuery(transcript.slice(0, 400))
-          setVoiceNotice('Comando transcrito. Confira o texto e a previa antes de continuar.')
-        }
-      }
-      recognition.onerror = () => {
-        setVoiceNotice('Nao foi possivel transcrever. Verifique a permissao de microfone ou tente digitando.')
-        setListening(false)
-      }
-      recognition.onend = () => {
-        setListening(false)
-        recognitionRef.current = null
-      }
-      recognition.start()
-      setListening(true)
-      setVoiceNotice('Ouvindo em portugues...')
-    } catch {
-      setListening(false)
-      setVoiceNotice('Microfone indisponivel neste dispositivo. Voce pode digitar normalmente.')
-    }
+    if (voiceStatus === 'listening') cancelVoice()
+    else void startVoice()
   }
 
   const trimmedQuery = query.trim()
@@ -552,7 +515,7 @@ export default function Page() {
               autoComplete="off"
               spellCheck={false}
               aria-label="Buscar nas finanças"
-              autoFocus
+              ref={inputRef}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Busque ou diga: paguei 48 de gasolina…"
@@ -573,11 +536,11 @@ export default function Page() {
             <button
               type="button"
               onClick={toggleVoice}
-              aria-label={listening ? 'Parar reconhecimento de voz' : 'Ditar comando financeiro'}
-              aria-pressed={listening}
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] transition active:scale-90 ${listening ? 'bg-rose-500 text-white animate-pulse motion-reduce:animate-none' : 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300'}`}
+              aria-label={voiceStatus === 'listening' ? 'Parar reconhecimento de voz' : 'Ditar comando financeiro'}
+              aria-pressed={voiceStatus === 'listening'}
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] transition active:scale-90 ${voiceStatus === 'listening' ? 'bg-rose-500 text-white animate-pulse motion-reduce:animate-none' : 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300'}`}
             >
-              {listening ? <MicOff size={17} /> : <Mic size={17} />}
+              {voiceStatus === 'listening' ? <MicOff size={17} /> : <Mic size={17} />}
             </button>
 
             <button

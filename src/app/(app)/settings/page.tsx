@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Bell, BrainCircuit, Check, CircleHelp, Landmark, Settings2, ShieldCheck, Sparkles } from 'lucide-react'
 import BankLogo from '@/components/BankLogo'
@@ -10,6 +10,8 @@ import { useAccountsList } from '@/hooks/useAccountsList'
 import { useUserSettings } from '@/hooks/useUserSettings'
 import { useToast } from '@/contexts/ToastContext'
 import { defaultAccountPatch, validDefaultAccountId, type AccountContext } from '@/lib/defaultAccount'
+import { financialVoiceFabEnabled, setFinancialVoiceFabEnabled } from '@/lib/voicePreferences'
+import { Mic } from 'lucide-react'
 
 const surface = 'rounded-[22px] border border-black/5 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-800/90'
 
@@ -21,6 +23,8 @@ export default function FinanceSettingsPage() {
   const { data: personalAccounts } = useAccountsList('personal')
   const { showToast } = useToast()
   const [saving, setSaving] = useState(false)
+  const [voiceEnabled, setVoiceEnabled] = useState(true)
+  useEffect(() => { setVoiceEnabled(financialVoiceFabEnabled()) }, [])
   const defaults = settings?.preferences.default_accounts
 
   const chooseAccount = async (context: AccountContext, id: string) => {
@@ -78,6 +82,19 @@ export default function FinanceSettingsPage() {
       </header>
       {loading && <p role="status" className="mb-3 text-[12px] text-gray-400">Carregando suas preferências…</p>}
       <div className="space-y-4">
+        <section className={surface} aria-label="Voz e comandos financeiros">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h2 className="flex items-center gap-2 text-[14px] font-bold text-gray-900 dark:text-white"><Mic size={18} className="text-teal-500" /> DFL Voice</h2>
+              <p className="mt-1 text-[11px] leading-5 text-gray-500 dark:text-gray-400">Mostrar microfone flutuante nas telas principais. A fala só é captada depois de tocar em “Começar a falar”.</p>
+            </div>
+            <label className="flex min-h-11 items-center gap-2 text-[12px] font-semibold text-gray-700 dark:text-gray-200">
+              <input type="checkbox" checked={voiceEnabled} onChange={event => { setVoiceEnabled(event.target.checked); setFinancialVoiceFabEnabled(event.target.checked) }}
+                aria-label="Ativar microfone flutuante" className="h-5 w-5 accent-teal-600" /> {voiceEnabled ? 'Ligado' : 'Desligado'}
+            </label>
+          </div>
+          <p className="mt-2 text-[10px] text-gray-400 dark:text-gray-500">Preferência local deste dispositivo. O reconhecimento pode usar os serviços de voz do sistema Android.</p>
+        </section>
         <section className={surface}>
           <div className="mb-2 flex items-center gap-2"><Settings2 size={18} className="text-teal-500" /><h2 className="text-[15px] font-bold text-gray-900 dark:text-white">Preferências financeiras</h2></div>
           <p className="text-[12px] leading-5 text-gray-500 dark:text-gray-400">Uma conta padrão por contexto. O cadastro, a edição e os detalhes da conta também permitem definir a preferência.</p>

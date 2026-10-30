@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import TransferModal from './TransferModal'
 import FAB from './FAB'
+import FinanceVoiceOrb from './FinanceVoiceOrb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useBottomNavVisible } from '@/hooks/useBottomNavVisible'
 
@@ -234,6 +235,8 @@ export default function BottomNav() {
       </div>
         </>
       )}
+
+      <FinanceVoiceOrb pathname={pathname} />
 
       <nav
         className="app-nav-shell"

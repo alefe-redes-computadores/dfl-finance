@@ -2532,7 +2532,7 @@ function HomeContent() {
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[12px] font-extrabold text-slate-800 dark:text-slate-100">DFL Comando</span>
-            <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400">Busque, pergunte ou lance por voz</span>
+            <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400">Busque, fale ou lance com o DFL Voice</span>
           </span>
           <ChevronRight size={18} className="shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
         </button>

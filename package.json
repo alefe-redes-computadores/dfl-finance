@@ -19,6 +19,7 @@
     "finance:check": "node scripts/check-v84-financial.mjs"
   },
   "dependencies": {
+    "@capacitor-community/speech-recognition": "6.0.1",
     "@capacitor/android": "^6.1.0",
     "@capacitor/app": "^6.0.0",
     "@capacitor/browser": "^6.0.0",
