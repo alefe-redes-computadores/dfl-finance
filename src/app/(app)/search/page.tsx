@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
@@ -12,6 +12,8 @@ import {
   CreditCard,
   Landmark,
   LoaderCircle,
+  Mic,
+  MicOff,
   Paperclip,
   PiggyBank,
   Receipt,
@@ -34,6 +36,7 @@ import {
 } from '@/lib/globalSearch'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { getDynamicIcon } from '@/lib/iconUtils'
+import { interpretFinancialInput, smartDraftUrl } from '@/lib/smartFinancialInput'
 
 const money = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -53,6 +56,17 @@ const formatDate = (value?: string) => {
   return dateFormatter.format(date).replace('.', '')
 }
 
+
+type FinancialSpeechRecognition = {
+  lang: string
+  interimResults: boolean
+  maxAlternatives: number
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
+  onerror: (() => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+}
 
 type SearchFilter =
   | 'income'
@@ -333,8 +347,63 @@ export default function Page() {
   const [searchAttempt, setSearchAttempt] = useState(0)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [activeFilters, setActiveFilters] = useState<SearchFilter[]>([])
+  const [listening, setListening] = useState(false)
+  const [voiceNotice, setVoiceNotice] = useState('')
+  const recognitionRef = useRef<FinancialSpeechRecognition | null>(null)
+
+  useEffect(() => () => {
+    recognitionRef.current?.stop()
+    recognitionRef.current = null
+  }, [])
+
+  const toggleVoice = () => {
+    vibrate([8])
+    if (listening) {
+      recognitionRef.current?.stop()
+      setListening(false)
+      return
+    }
+    const speechWindow = window as unknown as {
+      SpeechRecognition?: new () => FinancialSpeechRecognition
+      webkitSpeechRecognition?: new () => FinancialSpeechRecognition
+    }
+    const Speech = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition
+    if (!Speech) {
+      setVoiceNotice('Reconhecimento de voz nao disponivel neste navegador. Use o microfone do teclado ou digite o comando.')
+      return
+    }
+    try {
+      const recognition = new Speech()
+      recognitionRef.current = recognition
+      recognition.lang = 'pt-BR'
+      recognition.interimResults = false
+      recognition.maxAlternatives = 1
+      recognition.onresult = (event) => {
+        const transcript = event.results[0]?.[0]?.transcript?.trim()
+        if (transcript) {
+          setQuery(transcript.slice(0, 400))
+          setVoiceNotice('Comando transcrito. Confira o texto e a previa antes de continuar.')
+        }
+      }
+      recognition.onerror = () => {
+        setVoiceNotice('Nao foi possivel transcrever. Verifique a permissao de microfone ou tente digitando.')
+        setListening(false)
+      }
+      recognition.onend = () => {
+        setListening(false)
+        recognitionRef.current = null
+      }
+      recognition.start()
+      setListening(true)
+      setVoiceNotice('Ouvindo em portugues...')
+    } catch {
+      setListening(false)
+      setVoiceNotice('Microfone indisponivel neste dispositivo. Voce pode digitar normalmente.')
+    }
+  }
 
   const trimmedQuery = query.trim()
+  const smartDraft = useMemo(() => interpretFinancialInput(trimmedQuery), [trimmedQuery])
 
   const commands = useMemo(
     () => resolveFinancialCommands(trimmedQuery),
@@ -359,7 +428,7 @@ export default function Page() {
   )
 
   useEffect(() => {
-    if (!user?.id || trimmedQuery.length < 2) {
+    if (!user?.id || trimmedQuery.length < 2 || smartDraft) {
       setItems([])
       setLoading(false)
       setSearchError(false)
@@ -392,7 +461,7 @@ export default function Page() {
       active = false
       clearTimeout(timer)
     }
-  }, [trimmedQuery, user?.id, context, searchAttempt])
+  }, [trimmedQuery, user?.id, context, searchAttempt, smartDraft])
 
   const openResult = (item: GlobalSearchResult) => {
     vibrate([10])
@@ -486,7 +555,7 @@ export default function Page() {
               autoFocus
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Ex.: pendências, nova despesa, outubro…"
+              placeholder="Busque ou diga: paguei 48 de gasolina…"
               className="h-full min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-slate-900 outline-none placeholder:font-medium placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-600"
             />
 
@@ -500,6 +569,16 @@ export default function Page() {
                 <X size={15} />
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={toggleVoice}
+              aria-label={listening ? 'Parar reconhecimento de voz' : 'Ditar comando financeiro'}
+              aria-pressed={listening}
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] transition active:scale-90 ${listening ? 'bg-rose-500 text-white animate-pulse motion-reduce:animate-none' : 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300'}`}
+            >
+              {listening ? <MicOff size={17} /> : <Mic size={17} />}
+            </button>
 
             <button
               type="button"
@@ -545,6 +624,46 @@ export default function Page() {
           )}
         </div>
 
+        {voiceNotice && (
+          <p role="status" className="mb-3 px-2 text-[11px] leading-4 text-teal-700 dark:text-teal-300">
+            {voiceNotice}
+          </p>
+        )}
+
+        {smartDraft && (
+          <section aria-label="Previa de lancamento inteligente" className="mb-4 rounded-[23px] border border-teal-500/25 bg-white p-4 shadow-sm dark:bg-slate-800/90">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-teal-700 dark:text-teal-300">
+                <CircleDollarSign size={15} /> Lancamento entendido
+              </span>
+              <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[10px] font-bold text-amber-600 dark:text-amber-400">Nao salvo</span>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-[15px] font-extrabold text-slate-900 dark:text-slate-100">{smartDraft.description}</p>
+                <p className="mt-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                  {smartDraft.type === 'income' ? 'Receita' : 'Despesa'} • {smartDraft.paid ? 'Realizada' : 'Pendente'} • {formatDate(smartDraft.date)}
+                </p>
+              </div>
+              <span className={`shrink-0 text-[17px] font-black tabular-nums ${smartDraft.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                {money.format(smartDraft.amount)}
+              </span>
+            </div>
+            <div className="mt-3 space-y-1">
+              {smartDraft.warnings.map((warning) => (
+                <p key={warning} className="text-[11px] leading-4 text-slate-500 dark:text-slate-400">• {warning}</p>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => { vibrate([10]); router.push(smartDraftUrl(smartDraft)) }}
+              className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-[15px] bg-teal-700 px-4 text-[12px] font-extrabold text-white transition active:scale-[0.98] dark:bg-teal-600"
+            >
+              Revisar no cadastro completo <ChevronRight size={16} />
+            </button>
+          </section>
+        )}
+
         <div className="sr-only" aria-live="polite" aria-atomic="true">
           {trimmedQuery.length >= 2 && !loading
             ? `${visibleItems.length} ${visibleItems.length === 1 ? 'resultado encontrado' : 'resultados encontrados'}`
@@ -573,7 +692,7 @@ export default function Page() {
           </section>
         )}
 
-        {trimmedQuery.length < 2 ? (
+        {smartDraft ? null : trimmedQuery.length < 2 ? (
           <div className="mt-10 flex flex-col items-center px-7 text-center">
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[20px] bg-teal-50 text-teal-600 dark:bg-teal-950/40 dark:text-teal-400">
               <Search size={24} />

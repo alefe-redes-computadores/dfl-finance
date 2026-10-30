@@ -88,10 +88,28 @@ function NewTransactionContent() {
   const { settings } = useUserSettings()
   const manualAccountRef = useRef(false)
   const [type, setType] = useState<TxType>((searchParams.get('type') as TxType) || 'expense')
-  const [amountNum, setAmountNum] = useState(0)
-  const [isPaid, setIsPaid] = useState(true)
-  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'))
-  const [desc, setDesc] = useState('')
+  // R411: somente preenchimento inicial mediante escolha explicita na Busca.
+  // Nao confirma, nao categoriza e nao grava sem submit do usuario.
+  const [amountNum, setAmountNum] = useState(() => {
+    if (searchParams.get('intent') !== 'smart') return 0
+    const candidate = Number(searchParams.get('amount') || '0')
+    return Number.isFinite(candidate) && candidate > 0 && candidate <= 100000000
+      ? Math.round(candidate * 100) / 100 : 0
+  })
+  const [isPaid, setIsPaid] = useState(() =>
+    searchParams.get('intent') !== 'smart' || searchParams.get('paid') !== '0'
+  )
+  const [date, setDate] = useState(() => {
+    const value = searchParams.get('intent') === 'smart' ? searchParams.get('date') : null
+    if (value && /^20\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/.test(value)) {
+      const parsed = new Date(`${value}T12:00:00`)
+      if (!Number.isNaN(parsed.getTime()) && format(parsed, 'yyyy-MM-dd') === value) return value
+    }
+    return format(new Date(), 'yyyy-MM-dd')
+  })
+  const [desc, setDesc] = useState(() =>
+    searchParams.get('intent') === 'smart' ? (searchParams.get('description') || '').slice(0, 160) : ''
+  )
   const [notes, setNotes] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [accountId, setAccountId] = useState('')
