@@ -70,6 +70,7 @@ jobs:
           node scripts/check-r410-global-density.mjs
           node scripts/check-r411-smart-command.mjs
           node scripts/check-r412-native-voice.mjs
+          node scripts/check-r413-whatsapp-audio.mjs
           node scripts/check-v164-finance-premium-forms.mjs
           node scripts/check-v165-daily-ready.mjs
           node scripts/check-v166-default-settings.mjs

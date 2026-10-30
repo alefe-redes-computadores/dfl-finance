@@ -1,6 +1,7 @@
 import { atomicBotSingle, atomicBotFinalize } from '../_shared/atomicBotSingle.ts';
 import { handoffAtomicV2, recoverAtomicV2Handoff } from '../_shared/atomicV2WebhookHandoff.ts';
 import { trustedWebhook, readBoundedJson, receiptMimeMatches } from '../_shared/requestSecurity.ts';
+import { audioFeatureEnabled, inspectWhatsAppAudio, transcribeWhatsAppAudio } from '../_shared/whatsappAudioIngress.ts';
 import { buildFinancePace } from '../_shared/financePace.ts';
 import { buildFinancePlanning, normalizePlanningGroups, normalizePlanningReserves, normalizePlanningFlexLimits } from '../_shared/financePlanning.ts';
 import { parseFinanceComparison, aggregateFinanceMonths, financeCompareDelta, monthLabel } from '../_shared/financeComparisons.ts';
@@ -503,6 +504,34 @@ let p:any;
 try{p=await readBoundedJson(req)}catch{return new Response("Invalid request",{status:400})}
 if(!trustedWebhook(req,p,Deno.env.get("DFL_WEBHOOK_SECRET"),Deno.env.get("EVOLUTION_API_KEY")))return new Response("Unauthorized",{status:401});
 try{if(p.event!=="messages.upsert")return new Response("OK");const raw=String(p.data?.key?.remoteJid||"");if(!raw||raw.includes("@g.us"))return new Response("OK");const sender=raw.split("@")[0],u=await userFor(sender);if(!u)return new Response("OK");const fromMe=!!p.data?.key?.fromMe;if(fromMe&&sender!==String(u.phone_id||"")&&sender!==String(u.phone||""))return new Response("OK");let text=String(p.data?.message?.conversation||p.data?.message?.extendedTextMessage?.text||"").trim();
+/* R413: entrada de audio isolada do motor financeiro.
+ * A transcricao NUNCA vira comando automaticamente: usuario deve reenviar texto.
+ * Flag desligada por padrao inclusive em producao. */
+if(!text && p.data?.message?.audioMessage){
+  if(!audioFeatureEnabled(Deno.env.get('DFL_WA_AUDIO_ROLLOUT')))return new Response('OK');
+  const inspected=inspectWhatsAppAudio(p.data.message);
+  const audioKey=String(p.data?.key?.id||'');
+  if(!audioKey || !inspected)return new Response('OK');
+  const auditId=await audit(u.user_id,sender,'[audio recebido para transcricao]',audioKey);
+  if(!auditId)return new Response('OK');
+  try{
+    const transcript=await transcribeWhatsAppAudio({
+      message:p.data,mime:inspected.mime,maxBytes:inspected.size,fetcher:fetch,
+      evolutionUrl:Deno.env.get('EVOLUTION_API_URL')||'',
+      evolutionInstance:Deno.env.get('EVOLUTION_INSTANCE')||'',
+      evolutionKey:Deno.env.get('EVOLUTION_API_KEY')||'',
+      geminiKey:Deno.env.get('GEMINI_API_KEY')||'',
+    });
+    // Nao persistir nem encaminhar transcricao a funcoes financeiras.
+    const response=await send(u.phone,'🎙️ *Entendi este áudio:*\n\n“'+transcript+'”\n\n✍️ Confira e envie a mensagem por texto se quiser continuar. *Nenhuma transação foi criada.*');
+    await done(auditId,'extracted',response,{action:'r413.audio.transcribed_preview',duration:inspected.seconds});
+  }catch(error){
+    console.warn('[R413_AUDIO_FAILED]',String(error).slice(0,160));
+    const response=await send(u.phone,'🎙️ Não consegui transcrever o áudio com segurança. Envie sua mensagem por texto. Nenhuma transação foi criada.');
+    await done(auditId,'extracted',response,{action:'r413.audio.transcription_failed'});
+  }
+  return new Response('OK');
+}
 if(!text){
   const m=p.data?.message||{}, media=m.imageMessage||m.documentMessage||null;
   if(media){
