@@ -14,6 +14,14 @@ function evaluate(file, requireFn, deno = {}) {
   return exports
 }
 const security=evaluate('supabase/functions/_shared/requestSecurity.ts',()=>{throw Error('unexpected import')})
+// R414: dependência de áudio real e pura, sem liberar imports arbitrários.
+const whatsappAudioIngress=evaluate('supabase/functions/_shared/whatsappAudioIngress.ts',name=>{throw Error('Unexpected audio import '+name)})
+assert.equal(typeof whatsappAudioIngress.audioFeatureEnabled,'function')
+assert.equal(typeof whatsappAudioIngress.inspectWhatsAppAudio,'function')
+assert.equal(typeof whatsappAudioIngress.safeAudioTranscript,'function')
+assert.equal(typeof whatsappAudioIngress.transcribeWhatsAppAudio,'function')
+assert.equal(whatsappAudioIngress.audioFeatureEnabled(undefined),false)
+
 // R4 V172: executar os módulos PUROS reais dentro da suíte V84. Não liberar imports genéricos.
 const financeComparisons=evaluate('supabase/functions/_shared/financeComparisons.ts',name=>{throw Error('Unexpected financeComparisons import '+name)})
 const financePace=evaluate('supabase/functions/_shared/financePace.ts',name=>{throw Error('Unexpected financePace import '+name)})
@@ -57,6 +65,7 @@ function handler(file, client, webPush={setVapidDetails(){},async sendNotificati
  let serveHandler
  evaluate(file,name=>{
   if(name.includes('requestSecurity'))return security
+  if(name==='../_shared/whatsappAudioIngress.ts')return whatsappAudioIngress
   if(name==='../_shared/financeComparisons.ts')return financeComparisons
   if(name==='../_shared/financePace.ts')return financePace
   if(name==='../_shared/financePlanning.ts')return financePlanning
