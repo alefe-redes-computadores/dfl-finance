@@ -215,13 +215,17 @@ function fuzzyTokenMatch(token: string, haystack: string) {
     .some((word) => editDistanceAtMostOne(token, word))
 }
 
-function resolveMonthIntentToken(token: string) {
+// R425: palavras de uso diario nao podem virar meses por diferenca de uma letra.
+// Meses curtos exigem formato exato ou contexto temporal explicito; nomes
+// longos continuam tolerando pequenos erros de digitacao.
+const NON_MONTH_WORDS = new Set(['abrir', 'maior', 'junto', 'julgo'])
+function resolveMonthIntentToken(token: string, shortFuzzyContext = false) {
   if (MONTHS[token]) return { token, month: MONTHS[token] }
 
-  if (token.length < 4) return null
+  if (token.length < 4 || NON_MONTH_WORDS.has(token)) return null
 
   const candidate = Object.entries(MONTHS)
-    .filter(([name]) => name.length >= 4)
+    .filter(([name]) => name.length >= 6 || (shortFuzzyContext && name.length >= 4))
     .find(([name]) => editDistanceAtMostOne(token, name))
 
   return candidate
@@ -265,14 +269,21 @@ export function parseDateIntent(query: string, reference = new Date()): DateInte
   })
   const monthYear = q.match(/\b([a-z]+|\d{1,2})\/(20\d{2}|\d{2})\b/)
   if (monthYear) {
-    const resolved = resolveMonthIntentToken(monthYear[1])
+    // O formato mes/ano eh evidencia explicita de periodo, inclusive com typo.
+    const resolved = resolveMonthIntentToken(monthYear[1], true)
     const month = resolved?.month || Number(monthYear[1])
     const year = Number(monthYear[2]) + (monthYear[2].length === 2 ? 2000 : 0)
     if (month >= 1 && month <= 12) return monthRange(year, month, [monthYear[0]])
   }
-  const parts = q.split(/\s+/)
+  const parts = q.split(/\s+/).map(part => part.replace(/^[?!.,;:]+|[?!.,;:]+$/g, ''))
   for (let index = 0; index < parts.length; index++) {
-    const resolved = resolveMonthIntentToken(parts[index])
+    const before = parts[index - 1] || ''
+    const after = parts[index + 1] || ''
+    const afterNext = parts[index + 2] || ''
+    const shortFuzzyContext = /^(?:em|de|do|da|no|na|mes)$/.test(before)
+      || /^20\d{2}$/.test(after)
+      || (after === 'de' && /^20\d{2}$/.test(afterNext))
+    const resolved = resolveMonthIntentToken(parts[index], shortFuzzyContext)
     if (!resolved) continue
     const possibleYear = parts[index + 1] === 'de' ? parts[index + 2] : parts[index + 1]
     const explicitYear = /^20\d{2}$/.test(possibleYear || '')
@@ -289,11 +300,23 @@ export function parseDateIntent(query: string, reference = new Date()): DateInte
   return null
 }
 
+// R425: comandos com entidade especifica devem pesquisar a entidade.
+// "abrir cartoes do Nubank" nao deve procurar a palavra "abrir" no banco.
+const LOOKUP_ACTION = /^(?:(?:por favor )?(?:abrir|abra|abre|ver|visualizar|mostrar|mostre|me mostre|me mostra|quero ver|buscar|pesquisar|procurar|procure|encontrar|localizar|consultar|consulte|acessar|acesse|ir para|ir))\b/
+const LOOKUP_VERBS = new Set(['por', 'favor', 'abrir', 'abra', 'abre', 'ver', 'visualizar', 'mostrar', 'mostre', 'me', 'mostra', 'quero', 'buscar', 'pesquisar', 'procurar', 'procure', 'encontrar', 'localizar', 'consultar', 'consulte', 'acessar', 'acesse', 'ir', 'para'])
+const LOOKUP_DOMAINS = new Set(['cartao', 'cartoes', 'fatura', 'faturas', 'conta', 'contas', 'transacao', 'transacoes', 'movimentacao', 'movimentacoes', 'despesa', 'despesas', 'gasto', 'gastos', 'pagamento', 'pagamentos', 'receita', 'receitas', 'entrada', 'entradas', 'comprovante', 'comprovantes', 'recibo', 'recibos', 'anexo', 'anexos'])
 function searchableTokens(query: string, intent: DateIntent | null) {
   const consumed = new Set(intent?.consumed.map(norm) || [])
-  return norm(query)
-    .split(/\s+/)
-    .filter((token) => token.length >= 2 && !consumed.has(token) && !['de', 'em', 'no', 'na', 'completo', 'inteiro', 'ano', 'r$', 'reais'].includes(token))
+  const normalized = norm(query)
+  const tokens = normalized.split(/\s+/)
+    .map(token => token.replace(/^[?!.,;:]+|[?!.,;:]+$/g, ''))
+    .filter(token => token.length >= 2 && !consumed.has(token) &&
+      !['de', 'em', 'no', 'na', 'do', 'da', 'dos', 'das', 'nos', 'nas', 'meu', 'minha', 'meus', 'minhas', 'completo', 'inteiro', 'ano', 'r$', 'reais'].includes(token))
+  if (!LOOKUP_ACTION.test(normalized)) return tokens
+  const withoutAction = tokens.filter(token => !LOOKUP_VERBS.has(token))
+  const entity = withoutAction.filter(token => !LOOKUP_DOMAINS.has(token))
+  // So retirar nomes genericos se um qualificador verificavel permanecer.
+  return entity.length ? entity : withoutAction
 }
 
 export async function searchFinancialData(
