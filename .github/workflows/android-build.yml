@@ -80,6 +80,7 @@ jobs:
           node scripts/check-r423-command-intent-safety.mjs
           node scripts/check-r424-search-continuity.mjs
           node scripts/check-r425-search-month-language.mjs
+          node scripts/check-r426-search-360.mjs
           node scripts/check-v164-finance-premium-forms.mjs
           node scripts/check-v165-daily-ready.mjs
           node scripts/check-v166-default-settings.mjs

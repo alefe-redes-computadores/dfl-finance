@@ -305,6 +305,26 @@ export function parseDateIntent(query: string, reference = new Date()): DateInte
 const LOOKUP_ACTION = /^(?:(?:por favor )?(?:abrir|abra|abre|ver|visualizar|mostrar|mostre|me mostre|me mostra|quero ver|buscar|pesquisar|procurar|procure|encontrar|localizar|consultar|consulte|acessar|acesse|ir para|ir))\b/
 const LOOKUP_VERBS = new Set(['por', 'favor', 'abrir', 'abra', 'abre', 'ver', 'visualizar', 'mostrar', 'mostre', 'me', 'mostra', 'quero', 'buscar', 'pesquisar', 'procurar', 'procure', 'encontrar', 'localizar', 'consultar', 'consulte', 'acessar', 'acesse', 'ir', 'para'])
 const LOOKUP_DOMAINS = new Set(['cartao', 'cartoes', 'fatura', 'faturas', 'conta', 'contas', 'transacao', 'transacoes', 'movimentacao', 'movimentacoes', 'despesa', 'despesas', 'gasto', 'gastos', 'pagamento', 'pagamentos', 'receita', 'receitas', 'entrada', 'entradas', 'comprovante', 'comprovantes', 'recibo', 'recibos', 'anexo', 'anexos'])
+/** R426: preferência de relevância, sem filtrar nem inventar resultados. */
+export function preferredFinancialSearchKind(query: string): string | null {
+  const q = norm(query)
+  if (!LOOKUP_ACTION.test(q)) return null
+  const candidates: string[] = []
+  const choices: ReadonlyArray<[string, RegExp]> = [
+    ['card', /\b(cartoes?|faturas?)\b/],
+    ['account', /\b(contas?|conta bancaria|contas bancarias)\b/],
+    ['expense', /\b(despesas?|gastos?|pagamentos?)\b/],
+    ['income', /\b(receitas?|entradas?|recebimentos?)\b/],
+    ['transfer', /\b(transferencias?)\b/],
+    ['subscription', /\b(assinaturas?|recorrencias?)\b/],
+    ['goal', /\b(metas?|objetivos?)\b/],
+    ['category', /\b(categorias?)\b/],
+    ['receipt', /\b(comprovantes?|recibos?|anexos?)\b/],
+  ]
+  for (const [kind, words] of choices) if (words.test(q)) candidates.push(kind)
+  return candidates.length === 1 ? candidates[0] : null
+}
+
 function searchableTokens(query: string, intent: DateIntent | null) {
   const consumed = new Set(intent?.consumed.map(norm) || [])
   const normalized = norm(query)
@@ -327,6 +347,11 @@ export async function searchFinancialData(
 ): Promise<GlobalSearchResult[]> {
   const term = norm(query)
   if (term.length < 2) return []
+  const dateIntent = parseDateIntent(query)
+  const tokens = searchableTokens(query, dateIntent)
+  // Comando sem entidade nem periodo nao precisa abrir dez tabelas do IndexedDB.
+  if (!dateIntent && tokens.length === 0) return []
+  const preferredKind = preferredFinancialSearchKind(query)
 
   const names = [
     'transactions', 'accounts', 'credit_cards', 'debts', 'loans',
@@ -343,8 +368,6 @@ export async function searchFinancialData(
   const categoryMap = new Map(categories.map((row: any) => [row.id, row]))
   const accountMap = new Map(accounts.map((row: any) => [row.id, row]))
   const contactMap = new Map(contacts.map((row: any) => [row.id, row]))
-  const dateIntent = parseDateIntent(query)
-  const tokens = searchableTokens(query, dateIntent)
   const out: Array<GlobalSearchResult & { _score: number; _fuzzy: number; _group?: string }> = []
 
   const config: Record<string, { kind: string; label: string; base: string }> = {
@@ -395,6 +418,14 @@ export async function searchFinancialData(
 
       const cfg = config[name]
       const transfer = name === 'transactions' && (row.type === 'transfer' || row.transfer_group_id)
+      const isPreferred = preferredKind === cfg.kind || (cfg.kind === 'transaction' && (
+        (preferredKind === 'expense' && (row.type === 'expense' || row.type === 'sangria')) ||
+        (preferredKind === 'income' && row.type === 'income') ||
+        (preferredKind === 'transfer' && transfer) ||
+        (preferredKind === 'receipt' && Boolean(row.receipt_url))
+      ))
+      // O pedido por um tipo sobe na lista, sem suprimir outras correspondencias.
+      if (isPreferred) score += 24
       if (transfer && row.transfer_direction === 'out') score += 0.1
       const title = transfer ? 'Transferência' : row.description || row.name || row.title || row.person_name || row.lender || cfg.label
       out.push({

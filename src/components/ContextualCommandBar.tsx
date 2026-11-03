@@ -68,7 +68,11 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
   function openShortcut(item: ContextualShortcut) {
     const destination = safeContextualRoute(item)
     if (!destination) return
-    if (item.kind === 'search' && !stageContextualSearchQuery(item.value)) return
+    if (item.kind === 'search') {
+      if (!stageContextualSearchQuery(item.value)) return
+      // A busca aberta por atalho tambem sabe de qual tela veio.
+      stageCommandHubScope(scope, false)
+    }
     vibrate([6])
     router.push(destination)
   }

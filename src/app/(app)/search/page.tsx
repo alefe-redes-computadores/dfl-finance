@@ -43,6 +43,7 @@ import { interpretFinancialInput, smartDraftUrl } from '@/lib/smartFinancialInpu
 import { resolveFinancialNavigationIntent } from '@/lib/financialNavigationIntent'
 import { financialSearchRequestKey, financialSearchPhase } from '@/lib/financialSearchContinuity'
 import FinancialCommandHub from '@/components/FinancialCommandHub'
+import { buildFinancialSearchFacets, financialSearchFacet } from '@/lib/financialSearchFacets'
 import { consumeCommandHubScope, rememberKnownHubRoute, type CommandHubScope } from '@/lib/financialCommandHub'
 
 const money = new Intl.NumberFormat('pt-BR', {
@@ -96,12 +97,8 @@ const filterOptions: Array<{
 ]
 
 function resultFilter(item: GlobalSearchResult): SearchFilter | null {
-  if (item.kind !== 'transaction') return item.kind as SearchFilter
-  const type = String(item.transactionType || '').toLowerCase()
-  if (type === 'income') return 'income'
-  if (type === 'expense' || type === 'sangria') return 'expense'
-  if (type === 'transfer') return 'transfer'
-  return null
+  // Um classificador comum alimenta os filtros antigos e os atalhos R426.
+  return financialSearchFacet(item)
 }
 
 const kindPresentation: Record<
@@ -415,6 +412,12 @@ export default function Page() {
     })
   }, [items, activeFilters, loading, trimmedQuery, resolvedQuery, searchPhase])
 
+  const resultFacets = useMemo(() => searchPhase === 'ready' && !loading
+    ? buildFinancialSearchFacets(items) : [], [items, searchPhase, loading])
+
+  // Ao trocar usuario/contexto, filtros anteriores nao devem causar lista vazia enganosa.
+  useEffect(() => { setActiveFilters([]) }, [user?.id, context])
+
   const activeFilterLabels = useMemo(
     () =>
       activeFilters
@@ -501,6 +504,12 @@ export default function Page() {
     setActiveFilters([])
   }
 
+  const chooseQuickFacet = (facet: SearchFilter | null) => {
+    vibrate([5])
+    setActiveFilters(previous => facet === null || (previous.length === 1 && previous[0] === facet)
+      ? [] : [facet])
+  }
+
   useEffect(() => {
     if (!filtersOpen) return
     const previousOverflow = document.body.style.overflow
@@ -564,6 +573,10 @@ export default function Page() {
               ref={inputRef}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') inputRef.current?.blur()
+                if (event.key === 'Escape') setQuery('')
+              }}
               onFocus={() => setInputFocused(true)}
               onBlur={() => setInputFocused(false)}
               placeholder="Busque ou diga: paguei 48 de gasolina…"
@@ -730,6 +743,26 @@ export default function Page() {
           </section>
         )}
 
+        {searchPhase === 'ready' && resultFacets.length > 1 && !smartDraft && !navigationIntent && (
+          <section aria-label="Refinar resultados desta busca" className="-mx-1 mb-3 overflow-x-auto overscroll-x-contain px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex w-max items-center gap-1.5">
+              <button type="button" onClick={() => chooseQuickFacet(null)} aria-pressed={activeFilters.length === 0}
+                className={`min-h-9 shrink-0 rounded-full border px-3 text-[11px] font-bold transition active:scale-[0.98] ${activeFilters.length === 0 ? 'border-teal-600 bg-teal-600 text-white' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'}`}>
+                Todos · {items.length}
+              </button>
+              {resultFacets.slice(0, 7).map(facet => {
+                const selected = activeFilters.length === 1 && activeFilters[0] === facet.id
+                return (
+                  <button key={facet.id} type="button" onClick={() => chooseQuickFacet(facet.id)} aria-pressed={selected}
+                    className={`min-h-9 shrink-0 rounded-full border px-3 text-[11px] font-bold transition active:scale-[0.98] ${selected ? 'border-teal-600 bg-teal-600 text-white' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'}`}>
+                    {filterOptions.find(option => option.id === facet.id)?.label ?? facet.id} · {facet.count}
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+        )}
+
         {smartDraft || navigationIntent || !trimmedQuery ? null : trimmedQuery.length < 2 ? (
           <div className="mt-10 flex flex-col items-center px-7 text-center">
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[20px] bg-teal-50 text-teal-600 dark:bg-teal-950/40 dark:text-teal-400">
@@ -780,6 +813,12 @@ export default function Page() {
                 ? 'Nenhum resultado corresponde aos filtros selecionados.'
                 : `Nenhum resultado para “${trimmedQuery}”.`}
             </p>
+            {items.length > 0 && activeFilters.length > 0 && (
+              <button type="button" onClick={clearFilters}
+                className="mt-3 min-h-10 rounded-xl bg-teal-600 px-4 text-[12px] font-bold text-white active:scale-[0.98]">
+                Limpar filtros e mostrar resultados
+              </button>
+            )}
           </div>
         ) : (
           <section className="mt-1">
@@ -788,7 +827,7 @@ export default function Page() {
                 Resultados
               </p>
               <p className="text-[11px] font-bold tabular-nums text-slate-400 dark:text-slate-600">
-                {visibleItems.length}
+                {visibleItems.length}{items.length >= 40 ? ' · refine para encontrar mais' : ''}
               </p>
             </div>
 

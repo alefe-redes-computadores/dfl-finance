@@ -25,12 +25,14 @@ export default function FinancialCommandHub({ scope, context, userId }: Props) {
   const [loaded, setLoaded] = useState(false)
   const [loadedFor, setLoadedFor] = useState('')
   const [expanded, setExpanded] = useState(false)
+  const [favoriteFeedback, setFavoriteFeedback] = useState('')
 
   useEffect(() => {
     setFavorites(hubFavorites(userId, context))
     setRecent(hubRecents(userId, context))
     setLoaded(true)
     setLoadedFor(`${userId ?? ''}:${context}`)
+    setFavoriteFeedback('')
   }, [userId, context])
 
   const actions = useMemo(() => suggestedHubActions(scope, favorites, recent), [scope, favorites, recent])
@@ -46,7 +48,9 @@ export default function FinancialCommandHub({ scope, context, userId }: Props) {
   function toggleFavorite(id: string) {
     if (!userId) return
     vibrate([6])
+    const wasFavorite = favorites.includes(id)
     setFavorites(toggleHubFavorite(userId, context, id))
+    setFavoriteFeedback(wasFavorite ? 'Atalho removido dos favoritos' : 'Atalho fixado nos favoritos')
   }
   function clearRecent() {
     if (!userId) return
@@ -103,6 +107,7 @@ export default function FinancialCommandHub({ scope, context, userId }: Props) {
           {expanded ? 'Ver menos ações' : `Ver todas as ${actions.length} ações`}
         </button>
       )}
+      <p role="status" aria-live="polite" className="sr-only">{favoriteFeedback}</p>
       <p className="mt-2.5 text-[10px] leading-4 text-slate-400 dark:text-slate-500">
         Favoritos: somente atalhos. Recentes: somente nesta sessão. Nenhum lançamento é salvo aqui.
       </p>
