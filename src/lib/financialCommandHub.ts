@@ -96,9 +96,16 @@ export function suggestedHubActions(scope: CommandHubScope, favorites: readonly 
     const action = known.get(id)
     if (action && !selected.some(item => item.id === id)) selected.push(action)
   }
+  const contextual = COMMAND_HUB_ACTIONS.filter(item => item.scopes.includes(scope))
+  const belongsToScope = (id: string) => known.get(id)?.scopes.includes(scope) === true
+  // Favoritos pertinentes primeiro; reservar uma vaga para a tela atual.
+  // Ate cinco favoritos continuam acessiveis nas seis posicoes disponiveis.
+  favorites.filter(belongsToScope).forEach(add)
+  contextual.slice(0, 1).forEach(item => add(item.id))
   favorites.forEach(add)
+  recents.filter(belongsToScope).forEach(add)
+  contextual.forEach(item => add(item.id))
   recents.forEach(add)
-  COMMAND_HUB_ACTIONS.filter(item => item.scopes.includes(scope)).forEach(item => add(item.id))
   COMMAND_HUB_ACTIONS.forEach(item => add(item.id))
   return selected.slice(0, 6)
 }

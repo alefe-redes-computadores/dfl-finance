@@ -31,6 +31,7 @@ import { useContext_ } from '@/components/ContextToggle'
 import {
   resolveFinancialCommands,
   searchFinancialData,
+  preferredFinancialSearchKind,
   type FinancialSearchCommand,
   type GlobalSearchResult,
 } from '@/lib/globalSearch'
@@ -43,6 +44,8 @@ import { interpretFinancialInput, smartDraftUrl } from '@/lib/smartFinancialInpu
 import { resolveFinancialNavigationIntent } from '@/lib/financialNavigationIntent'
 import { financialSearchRequestKey, financialSearchPhase } from '@/lib/financialSearchContinuity'
 import FinancialCommandHub from '@/components/FinancialCommandHub'
+import FinancialResultGuide from '@/components/FinancialResultGuide'
+import { buildFinancialResultGuidance } from '@/lib/financialSearchGuidance'
 import { buildFinancialSearchFacets, financialSearchFacet } from '@/lib/financialSearchFacets'
 import { consumeCommandHubScope, rememberKnownHubRoute, type CommandHubScope } from '@/lib/financialCommandHub'
 
@@ -415,6 +418,13 @@ export default function Page() {
   const resultFacets = useMemo(() => searchPhase === 'ready' && !loading
     ? buildFinancialSearchFacets(items) : [], [items, searchPhase, loading])
 
+  // R427: somente dados da consulta resolvida, com contexto validado pela R424.
+  // Nada é sugerido enquanto o teclado estiver ativo ou durante edição de lançamentos.
+  const resultGuidance = useMemo(() => {
+    if (searchPhase !== 'ready' || loading || smartDraft || navigationIntent || !trimmedQuery || inputFocused) return null
+    return buildFinancialResultGuidance(items, resultFacets, preferredFinancialSearchKind(trimmedQuery), activeFilters)
+  }, [searchPhase, loading, smartDraft, navigationIntent, trimmedQuery, inputFocused, items, resultFacets, activeFilters])
+
   // Ao trocar usuario/contexto, filtros anteriores nao devem causar lista vazia enganosa.
   useEffect(() => { setActiveFilters([]) }, [user?.id, context])
 
@@ -741,6 +751,10 @@ export default function Page() {
               ))}
             </div>
           </section>
+        )}
+
+        {resultGuidance && (
+          <FinancialResultGuide guidance={resultGuidance} onRefine={chooseQuickFacet} onOpen={openResult} />
         )}
 
         {searchPhase === 'ready' && resultFacets.length > 1 && !smartDraft && !navigationIntent && (

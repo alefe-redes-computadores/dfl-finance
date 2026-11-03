@@ -43,6 +43,7 @@ export default function FinancialCommandHub({ scope, context, userId }: Props) {
     if (!userId) return
     vibrate([9])
     rememberHubAction(userId, context, action.id)
+    setRecent(hubRecents(userId, context))
     router.push(action.href)
   }
   function toggleFavorite(id: string) {
