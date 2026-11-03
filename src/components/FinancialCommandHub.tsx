@@ -66,7 +66,7 @@ export default function FinancialCommandHub({ scope, context, userId }: Props) {
       <div className="mb-2.5 flex items-start gap-2">
         <Sparkles size={17} className="mt-0.5 shrink-0 text-amber-500" aria-hidden="true" />
         <div className="min-w-0 flex-1">
-          <h2 className="text-[12px] font-extrabold text-slate-900 dark:text-slate-100">Seu centro de comandos</h2>
+          <h2 className="text-[12px] font-extrabold text-slate-900 dark:text-slate-100">DFL Comando</h2>
           <p className="text-[11px] leading-4 text-slate-500 dark:text-slate-400">
             {scope === 'transactions' ? 'Sugestões para o extrato' : scope === 'analysis' ? 'Sugestões para análise' : scope === 'cards' ? 'Sugestões para cartões' : scope === 'home' ? 'Ações para começar' : 'Navegue ou abra uma ação segura'}
           </p>

@@ -44,6 +44,16 @@ export default function FinanceVoiceOrb({ pathname }: { pathname: string }) {
   }, [router, transcript])
   useEffect(() => { if (!eligible || !enabled) { cancel(); setOpen(false) } }, [eligible, enabled, cancel])
 
+  // O dialogo de voz e opcional; Escape/voltar do teclado sempre pode encerrar.
+  useEffect(() => {
+    if (!open) return
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { cancel(); setOpen(false) }
+    }
+    document.addEventListener('keydown', onEscape)
+    return () => document.removeEventListener('keydown', onEscape)
+  }, [open, cancel])
+
   if (!eligible || !enabled) return null
   return (
     <>
@@ -59,9 +69,9 @@ export default function FinanceVoiceOrb({ pathname }: { pathname: string }) {
       {open && (
         <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/70 p-3 pb-[calc(98px+var(--safe-area-bottom))] backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="DFL Comando de voz">
           <button type="button" className="absolute inset-0 cursor-default" aria-label="Fechar comando de voz" onClick={() => { cancel(); setOpen(false) }} />
-          <section className="relative w-full max-w-md rounded-[26px] border border-teal-500/20 bg-slate-900 p-5 text-white shadow-2xl">
+          <section className="relative max-h-[80dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-[26px] border border-teal-500/20 bg-slate-900 p-5 text-white shadow-2xl">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-[14px] font-bold"><Sparkles size={18} className="text-teal-300" /> DFL Voice</div>
+              <div className="flex items-center gap-2 text-[14px] font-bold"><Sparkles size={18} className="text-teal-300" /> DFL Comando</div>
               <button type="button" aria-label="Fechar voz" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10" onClick={() => { cancel(); setOpen(false) }}><X size={18} /></button>
             </div>
             <div className="flex flex-col items-center py-5">

@@ -14,7 +14,7 @@ type Props = {
 /** Apenas apresenta uma acao explicita; jamais navega, filtra ou grava por efeito. */
 export default function FinancialResultGuide({ guidance, onRefine, onOpen }: Props) {
   return (
-    <section aria-label="Orientação contextual dos resultados" className="mb-3 rounded-[18px] border border-amber-300/30 bg-amber-50/55 px-3.5 py-3 dark:border-amber-400/15 dark:bg-slate-900/75">
+    <section aria-label="Orientação contextual dos resultados" className="mb-3 rounded-[18px] border border-amber-300/30 bg-amber-50/55 px-3.5 py-3 shadow-[0_4px_18px_rgba(245,158,11,0.04)] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200 dark:border-amber-400/15 dark:bg-slate-900/75">
       <div className="flex items-start gap-2.5">
         <Sparkles size={17} aria-hidden="true" className="mt-0.5 shrink-0 text-amber-500" />
         <div className="min-w-0 flex-1">

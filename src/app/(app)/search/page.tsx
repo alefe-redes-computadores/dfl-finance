@@ -44,6 +44,7 @@ import { interpretFinancialInput, smartDraftUrl } from '@/lib/smartFinancialInpu
 import { resolveFinancialNavigationIntent } from '@/lib/financialNavigationIntent'
 import { financialSearchRequestKey, financialSearchPhase } from '@/lib/financialSearchContinuity'
 import FinancialCommandHub from '@/components/FinancialCommandHub'
+import { isFinancialCommandOnlyQuery } from '@/lib/financialCommandOnly'
 import FinancialResultGuide from '@/components/FinancialResultGuide'
 import { buildFinancialResultGuidance } from '@/lib/financialSearchGuidance'
 import { buildFinancialSearchFacets, financialSearchFacet } from '@/lib/financialSearchFacets'
@@ -402,6 +403,10 @@ export default function Page() {
     () => navigationIntent || !trimmedQuery ? [] : resolveFinancialCommands(trimmedQuery),
     [trimmedQuery, navigationIntent]
   )
+  // Comando exato ja reconhecido? Nao fazer leitura de tabelas nem exibir estado vazio falso.
+  const commandOnly = useMemo(() =>
+    isFinancialCommandOnlyQuery(trimmedQuery, commands.map(command => command.id)),
+    [trimmedQuery, commands])
 
   const visibleItems = useMemo(() => {
     if (loading || trimmedQuery !== resolvedQuery) return []
@@ -437,7 +442,7 @@ export default function Page() {
   )
 
   useEffect(() => {
-    if (!user?.id || trimmedQuery.length < 2 || smartDraft || navigationIntent) {
+    if (!user?.id || trimmedQuery.length < 2 || smartDraft || navigationIntent || commandOnly) {
       setItems([])
       setResolvedQuery('')
       setResolvedSearchKey('')
@@ -482,7 +487,7 @@ export default function Page() {
       active = false
       clearTimeout(timer)
     }
-  }, [trimmedQuery, user?.id, context, searchAttempt, requestKey, smartDraft, navigationIntent])
+  }, [trimmedQuery, user?.id, context, searchAttempt, requestKey, smartDraft, navigationIntent, commandOnly])
 
   const openResult = (item: GlobalSearchResult) => {
     vibrate([10])
@@ -498,6 +503,7 @@ export default function Page() {
   const clearSearch = () => {
     vibrate([5])
     setQuery('')
+    setHubVoiceEntry(false)
   }
 
   const toggleFilter = (filter: SearchFilter) => {
@@ -555,7 +561,7 @@ export default function Page() {
               Buscar e comandar
             </h1>
             <p className="app-premium-subtitle">
-              Encontre dados ou diga o que você quer fazer.
+              {context === 'dfl' ? 'Empresa' : 'Pessoal'} · Encontre dados ou diga o que quer fazer.
             </p>
           </div>
         </header>
@@ -582,7 +588,7 @@ export default function Page() {
               aria-label="Buscar nas finanças"
               ref={inputRef}
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => { setQuery(event.target.value); setHubVoiceEntry(false) }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') inputRef.current?.blur()
                 if (event.key === 'Escape') setQuery('')
@@ -618,6 +624,7 @@ export default function Page() {
               type="button"
               onClick={() => {
                 vibrate([5])
+                inputRef.current?.blur()
                 setFiltersOpen(true)
               }}
               aria-label="Filtrar busca"
@@ -714,6 +721,7 @@ export default function Page() {
 
         <div className="sr-only" aria-live="polite" aria-atomic="true">
           {navigationIntent ? 'Comando de navegação disponível'
+            : commandOnly ? 'Ação pronta para abrir após confirmação'
             : searchPhase === 'loading' && trimmedQuery.length >= 2 && !smartDraft ? 'Buscando'
             : searchPhase === 'error' ? 'A busca falhou'
             : searchPhase === 'ready' && trimmedQuery.length >= 2
@@ -777,7 +785,7 @@ export default function Page() {
           </section>
         )}
 
-        {smartDraft || navigationIntent || !trimmedQuery ? null : trimmedQuery.length < 2 ? (
+        {smartDraft || navigationIntent || commandOnly || !trimmedQuery ? null : trimmedQuery.length < 2 ? (
           <div className="mt-10 flex flex-col items-center px-7 text-center">
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[20px] bg-teal-50 text-teal-600 dark:bg-teal-950/40 dark:text-teal-400">
               <Search size={24} />
@@ -872,7 +880,7 @@ export default function Page() {
             className="app-overlay absolute inset-0"
           />
 
-          <div className="app-premium-sheet max-h-[86dvh] overflow-y-auto overscroll-contain">
+          <div role="dialog" aria-modal="true" aria-label="Filtros da busca financeira" className="app-premium-sheet max-h-[86dvh] overflow-y-auto overscroll-contain pb-[calc(12px+var(--safe-area-bottom))]">
             <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-slate-200 dark:bg-slate-700" />
 
             <div className="mb-4 flex items-start justify-between gap-3 px-1">

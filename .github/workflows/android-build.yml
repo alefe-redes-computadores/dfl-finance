@@ -82,6 +82,7 @@ jobs:
           node scripts/check-r425-search-month-language.mjs
           node scripts/check-r426-search-360.mjs
           node scripts/check-r427-result-guidance.mjs
+          node scripts/check-r428-premium-closure.mjs
           node scripts/check-v164-finance-premium-forms.mjs
           node scripts/check-v165-daily-ready.mjs
           node scripts/check-v166-default-settings.mjs
