@@ -141,7 +141,7 @@ export default function ContextualInsightCard({ scope }: { scope: InsightScope }
   return (
     <section aria-label="Insight contextual do DFL Finance" className="mb-3">
       <div className="relative overflow-hidden rounded-[19px] border border-amber-300/35 bg-amber-50/65 p-3.5 shadow-[0_5px_22px_rgba(234,179,8,0.06)] dark:border-amber-400/15 dark:bg-slate-900/85 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300">
-        {preparing && !visible ? (
+        {preparing && !activeVisible ? (
           <div role="status" className="flex min-h-[42px] items-center gap-2.5 text-[12px] font-medium text-slate-500 dark:text-slate-400">
             <Sparkles size={17} className="shrink-0 animate-pulse text-amber-500 motion-reduce:animate-none" />
             Conferindo movimentações locais…

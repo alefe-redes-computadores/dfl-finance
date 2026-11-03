@@ -40,7 +40,7 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
     return () => media.removeEventListener?.('change', update)
   }, [])
   useEffect(() => {
-    if (!animate || !shown || !pageActive) return
+    if (!animate || !shown || !pageActive || voiceStatus === 'listening' || voiceStatus === 'processing') return
     const example = config.examples[position]
     const complete = letters >= example.length
     const timer = window.setTimeout(() => {
@@ -48,7 +48,7 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
       else setLetters(current => current + 1)
     }, complete ? 3000 : 63)
     return () => window.clearTimeout(timer)
-  }, [animate, shown, pageActive, letters, position, config])
+  }, [animate, shown, pageActive, letters, position, config, voiceStatus])
 
   useEffect(() => {
     if (!voiceTranscript) return

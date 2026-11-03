@@ -348,6 +348,7 @@ export default function Page() {
   const receivedVoiceRef = useRef(false)
   const [hubScope, setHubScope] = useState<CommandHubScope>('search')
   const [hubVoiceEntry, setHubVoiceEntry] = useState(false)
+  const [inputFocused, setInputFocused] = useState(false)
 
   // Uma transcricao vinda do botao global passa pela memoria de sessao,
   // nunca pela URL e nunca por gravacao automatica.
@@ -369,6 +370,10 @@ export default function Page() {
       setQuery(contextual)
       inputRef.current?.blur()
     } else if (commandSource?.voice) {
+      inputRef.current?.blur()
+    } else if (commandSource) {
+      // R423: ao vir da barra contextual, mostrar os atalhos antes
+      // do teclado Android cobrir as sugestoes.
       inputRef.current?.blur()
     } else {
       inputRef.current?.focus()
@@ -542,6 +547,8 @@ export default function Page() {
               ref={inputRef}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
               placeholder="Busque ou diga: paguei 48 de gasolina…"
               className="h-full min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-slate-900 outline-none placeholder:font-medium placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-600"
             />
@@ -677,7 +684,7 @@ export default function Page() {
           </p>
         )}
 
-        {!trimmedQuery && (
+        {!trimmedQuery && !inputFocused && (
           <FinancialCommandHub scope={hubScope} userId={user?.id ?? null} context={context as 'dfl' | 'personal'} />
         )}
 

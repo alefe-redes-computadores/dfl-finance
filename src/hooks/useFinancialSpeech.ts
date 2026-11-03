@@ -41,6 +41,8 @@ export function useFinancialSpeech() {
     }
     setStatus('idle')
     setNotice('')
+    // R423: cancelar tambem invalida a transcricao que aguardava handoff.
+    setTranscript('')
   }, [])
 
   useEffect(() => () => {

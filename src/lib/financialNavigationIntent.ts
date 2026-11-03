@@ -29,7 +29,7 @@ export function isAllowedFinancialMonth(month: string | null): month is string {
 
 const MENU: ReadonlyArray<{ label: string; href: string; words: RegExp }> = [
   { label: 'Cartões', href: '/cards', words: /\b(cartoes|cartao|faturas?)\b/ },
-  { label: 'Contas', href: '/accounts', words: /\b(contas|conta bancaria|contas bancarias)\b/ },
+  { label: 'Contas', href: '/accounts', words: /\b(contas bancarias|conta bancaria|contas)\b/ },
   { label: 'Análises', href: '/analysis', words: /\b(analise|analises|dashboard|indicadores)\b/ },
   { label: 'Conciliação', href: '/conciliation', words: /\b(conciliacao|inbox|revisao financeira|pendencias?)\b/ },
   { label: 'Planejamento', href: '/planning', words: /\b(planejamento|planejar|plano financeiro)\b/ },
@@ -108,6 +108,15 @@ export function resolveFinancialNavigationIntent(input: string, reference = new 
   const matches = MENU.filter(item => item.words.test(q))
   if (matches.length !== 1) return null
   const matched = matches[0]
+  // R423: nao descartar silenciosamente nome de cartao/conta, data,
+  // contexto ou qualquer outro qualificador. Se nao souber aplicar,
+  // encaminhar a frase para a busca em vez de abrir uma tela generica.
+  const leftover = q.replace(ACTION, ' ')
+    .replace(matched.words, ' ')
+    .replace(/\b(?:para|pra|pro|ao|aos|a|as|o|os|no|na|nos|nas|do|da|dos|das|de|em|meu|minha|meus|minhas|seu|sua|seus|suas|financeiro|financeira|financeiros|financeiras|bancario|bancaria|bancarios|bancarias)\b/g, ' ')
+    .replace(/[\s,.-]+/g, ' ')
+    .trim()
+  if (leftover) return null
   // Permitir frases simples de navegacao, mas nunca inserir texto arbitrario em URLs.
   if (/\b(?:excluir|apagar|pagar|transferir|alterar|editar|baixar|criar|registrar|deletar)\b/.test(q)) return null
   return { kind: 'navigate', title: `Abrir ${matched.label}`, description: 'Ir para a área correspondente. Nenhum dado financeiro será alterado.', href: matched.href }
