@@ -13,7 +13,7 @@ export type ContextualCommandConfig = {
 export const CONTEXTUAL_COMMAND: Record<ContextualCommandScope, ContextualCommandConfig> = {
   home: {
     eyebrow: 'DFL Comando',
-    examples: ['Paguei 48 reais de gasolina', 'Nova receita', 'Ver pendências'],
+    examples: ['Nova despesa', 'Novo cartão', 'Criar meta', 'Cadastrar conta', 'Nova receita', 'Nova assinatura', 'Novo orçamento', 'Adicionar contato', 'Ver pendências', 'Abrir planejamento', 'Novo empréstimo', 'Ver cartões'],
     shortcuts: [
       { label: 'Nova despesa', kind: 'route', value: '/transactions/new?type=expense' },
       { label: 'Pendências', kind: 'route', value: '/conciliation' },
@@ -21,7 +21,7 @@ export const CONTEXTUAL_COMMAND: Record<ContextualCommandScope, ContextualComman
   },
   transactions: {
     eyebrow: 'Comando do extrato',
-    examples: ['Buscar mercado', 'Transferir entre contas', 'Abrir conciliação'],
+    examples: ['Nova despesa', 'Transferir entre contas', 'Buscar mercado', 'Nova receita', 'Abrir conciliação', 'Ver comprovantes', 'Novo cartão', 'Cadastrar conta', 'Nova assinatura', 'Abrir planejamento', 'Criar meta', 'Ver cartões'],
     shortcuts: [
       { label: 'Buscar mercado', kind: 'search', value: 'mercado' },
       { label: 'Transferir', kind: 'route', value: '/transactions?action=transfer' },
@@ -29,7 +29,7 @@ export const CONTEXTUAL_COMMAND: Record<ContextualCommandScope, ContextualComman
   },
   analysis: {
     eyebrow: 'Comando de análises',
-    examples: ['Abrir planejamento', 'Ver comprovantes', 'Buscar novembro'],
+    examples: ['Abrir planejamento', 'Criar meta', 'Novo orçamento', 'Ver comprovantes', 'Nova assinatura', 'Novo empréstimo', 'Ver cartões', 'Abrir conciliação', 'Nova despesa', 'Nova receita', 'Novo financiamento', 'Cadastrar conta'],
     shortcuts: [
       { label: 'Planejamento', kind: 'route', value: '/projections' },
       { label: 'Relatórios', kind: 'route', value: '/reports' },
@@ -37,7 +37,7 @@ export const CONTEXTUAL_COMMAND: Record<ContextualCommandScope, ContextualComman
   },
   cards: {
     eyebrow: 'Comando de cartões',
-    examples: ['Buscar Nubank', 'Nova despesa', 'Ver comprovantes'],
+    examples: ['Novo cartão', 'Ver cartões', 'Buscar Nubank', 'Cadastrar conta', 'Ver comprovantes', 'Nova despesa', 'Abrir planejamento', 'Criar meta', 'Nova receita', 'Transferir entre contas', 'Novo orçamento', 'Nova assinatura'],
     shortcuts: [
       { label: 'Buscar Nubank', kind: 'search', value: 'Nubank' },
       { label: 'Comprovantes', kind: 'route', value: '/receipts' },

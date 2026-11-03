@@ -1,7 +1,7 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowUpRight, Mic, MicOff, Search, Sparkles } from 'lucide-react'
+import { ArrowUpRight, Mic, MicOff, RefreshCcw, Search, Sparkles } from 'lucide-react'
 import { CONTEXTUAL_COMMAND, safeContextualRoute, type ContextualCommandScope, type ContextualShortcut } from '@/lib/contextualCommand'
 import { stageContextualSearchQuery } from '@/lib/contextualSearchHandoff'
 import { stageCommandHubScope } from '@/lib/financialCommandHub'
@@ -21,6 +21,24 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
   const [position, setPosition] = useState(0)
   const [letters, setLetters] = useState(0)
   const [pageActive, setPageActive] = useState(true)
+  const exampleScopeRef = useRef('')
+  // R429: cada nova abertura inicia em outro trio, sem salvar frases do usuario.
+  useEffect(() => {
+    if (exampleScopeRef.current === scope) return
+    exampleScopeRef.current = scope
+    const total = config.examples.length
+    if (!total) return
+    const key = `dfl.finance.command.examples.r429:${scope}`
+    let offset = 0
+    try {
+      const raw = window.sessionStorage.getItem(key)
+      const saved = raw === null ? 0 : Number(raw)
+      offset = Number.isSafeInteger(saved) && saved >= 0 ? saved % total : 0
+      window.sessionStorage.setItem(key, String((offset + 3) % total))
+    } catch { /* Navegacao segue funcional sem storage. */ }
+    setPosition(offset)
+    setLetters(0)
+  }, [scope, config.examples.length])
   useEffect(() => {
     const onVisibility = () => setPageActive(document.visibilityState !== 'hidden')
     onVisibility()
@@ -96,6 +114,14 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
                 {animate && shown && <span className="dfl-command-caret" aria-hidden="true">|</span>}
               </span>
               <ArrowUpRight size={15} className="shrink-0 text-slate-400" aria-hidden="true" />
+            </button>
+            <button type="button" onClick={() => {
+              vibrate([4])
+              setLetters(0)
+              setPosition(current => (current + 1) % config.examples.length)
+            }} aria-label="Mostrar outro exemplo do DFL Comando"
+              className="flex h-9 w-8 shrink-0 items-center justify-center rounded-xl text-slate-400 transition active:scale-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 dark:text-slate-500">
+              <RefreshCcw size={14} aria-hidden="true" />
             </button>
             <button type="button" onClick={openVoice}
               aria-label={voiceStatus === 'listening' ? 'Parar comando de voz' : 'Falar com DFL Comando'}

@@ -45,6 +45,7 @@ import { resolveFinancialNavigationIntent } from '@/lib/financialNavigationInten
 import { financialSearchRequestKey, financialSearchPhase } from '@/lib/financialSearchContinuity'
 import FinancialCommandHub from '@/components/FinancialCommandHub'
 import { isFinancialCommandOnlyQuery } from '@/lib/financialCommandOnly'
+import { resolveExtendedFinancialCommands, suggestFinancialRecovery, financialStarterExamples } from '@/lib/financialIntentExpansion'
 import FinancialResultGuide from '@/components/FinancialResultGuide'
 import { buildFinancialResultGuidance } from '@/lib/financialSearchGuidance'
 import { buildFinancialSearchFacets, financialSearchFacet } from '@/lib/financialSearchFacets'
@@ -353,6 +354,22 @@ export default function Page() {
   const [hubScope, setHubScope] = useState<CommandHubScope>('search')
   const [hubVoiceEntry, setHubVoiceEntry] = useState(false)
   const [inputFocused, setInputFocused] = useState(false)
+  const [starterOffset, setStarterOffset] = useState(0)
+  const starterScopeRef = useRef('')
+  useEffect(() => {
+    if (starterScopeRef.current === hubScope) return
+    starterScopeRef.current = hubScope
+    const key = `dfl.finance.command.starters.r429:${hubScope}`
+    let offset = 0
+    try {
+      const raw = window.sessionStorage.getItem(key)
+      const saved = raw === null ? 0 : Number(raw)
+      offset = Number.isSafeInteger(saved) && saved >= 0 ? saved % 12 : 0
+      window.sessionStorage.setItem(key, String((offset + 3) % 12))
+    } catch { /* Preferencias efemeras sao opcionais. */ }
+    setStarterOffset(offset)
+  }, [hubScope])
+  const starterExamples = useMemo(() => financialStarterExamples(hubScope, starterOffset), [hubScope, starterOffset])
 
   // Uma transcricao vinda do botao global passa pela memoria de sessao,
   // nunca pela URL e nunca por gravacao automatica.
@@ -399,14 +416,17 @@ export default function Page() {
   const smartDraft = useMemo(() => interpretFinancialInput(trimmedQuery), [trimmedQuery])
   const navigationIntent = useMemo(() => resolveFinancialNavigationIntent(trimmedQuery), [trimmedQuery])
 
-  const commands = useMemo(
-    () => navigationIntent || !trimmedQuery ? [] : resolveFinancialCommands(trimmedQuery),
-    [trimmedQuery, navigationIntent]
-  )
-  // Comando exato ja reconhecido? Nao fazer leitura de tabelas nem exibir estado vazio falso.
+  const extendedCommands = useMemo(() => navigationIntent || !trimmedQuery
+    ? [] : resolveExtendedFinancialCommands(trimmedQuery), [trimmedQuery, navigationIntent])
+  const commands = useMemo(() => navigationIntent || !trimmedQuery ? []
+    : [...extendedCommands, ...resolveFinancialCommands(trimmedQuery)].slice(0, 3),
+    [trimmedQuery, navigationIntent, extendedCommands])
+  // R429: cadastrar entidades existentes e comando exato dispensam consulta a tabelas.
+  // Mantem o reconhecedor R428 para as intencoes legadas.
   const commandOnly = useMemo(() =>
-    isFinancialCommandOnlyQuery(trimmedQuery, commands.map(command => command.id)),
-    [trimmedQuery, commands])
+    isFinancialCommandOnlyQuery(trimmedQuery, commands.map(command => command.id)) || extendedCommands.length > 0,
+    [trimmedQuery, commands, extendedCommands])
+  const recoveryActions = useMemo(() => suggestFinancialRecovery(trimmedQuery, hubScope), [trimmedQuery, hubScope])
 
   const visibleItems = useMemo(() => {
     if (loading || trimmedQuery !== resolvedQuery) return []
@@ -739,6 +759,27 @@ export default function Page() {
           <FinancialCommandHub scope={hubScope} userId={user?.id ?? null} context={context as 'dfl' | 'personal'} />
         )}
 
+        {!trimmedQuery && !inputFocused && (
+          <section aria-label="Ideias para experimentar" className="mb-4 rounded-[19px] border border-slate-200/70 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200">Experimente dizer...</p>
+              <button type="button" onClick={() => { vibrate([4]); setStarterOffset(value => (value + 3) % 12) }}
+                className="min-h-8 rounded-lg px-2 text-[10px] font-bold text-teal-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 dark:text-teal-300">
+                Outras ideias
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {starterExamples.map(example => (
+                <button key={example} type="button" onClick={() => { vibrate([5]); setQuery(example); setHubVoiceEntry(false); inputRef.current?.blur() }}
+                  className="min-h-9 rounded-full border border-teal-600/15 bg-teal-50/70 px-3 py-1.5 text-[11px] font-semibold text-teal-800 transition active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 dark:border-teal-400/15 dark:bg-teal-950/25 dark:text-teal-300">
+                  {example}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">Toque para preencher a busca. Nenhuma ação é executada automaticamente.</p>
+          </section>
+        )}
+
         {commands.length > 0 && (
           <section className="mt-1 mb-4">
             <div className="mb-2 flex items-center justify-between px-1">
@@ -823,25 +864,46 @@ export default function Page() {
             Buscando…
           </div>
         ) : visibleItems.length === 0 ? (
-          <div className="mt-10 flex flex-col items-center px-7 text-center">
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[20px] bg-slate-100 text-slate-400 dark:bg-slate-900 dark:text-slate-600">
-              <Search size={24} />
+          <section aria-label="Orientacao para busca sem resultados" className="mt-4 rounded-[22px] border border-slate-200/70 bg-white/80 px-4 py-5 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="flex items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400">
+                <Search size={20} aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[14px] font-extrabold text-slate-900 dark:text-slate-100">
+                  {items.length > 0 && activeFilters.length > 0 ? 'Vamos ajustar os filtros' : 'Ainda não encontrei um registro'}
+                </h2>
+                <p className="mt-1 text-[11.5px] leading-[1.6] text-slate-500 dark:text-slate-400">
+                  {items.length > 0 && activeFilters.length > 0
+                    ? 'Existem resultados na consulta, mas nenhum com os filtros atuais.'
+                    : `A pesquisa por “${trimmedQuery}” não retornou registros locais. Você pode tentar outra frase ou abrir uma área relacionada.`}
+                </p>
+              </div>
             </div>
-            <p className="text-[15px] font-extrabold text-slate-800 dark:text-slate-200">
-              Nada por aqui
-            </p>
-            <p className="mt-1.5 text-[12px] text-slate-500">
-              {items.length > 0 && activeFilters.length > 0
-                ? 'Nenhum resultado corresponde aos filtros selecionados.'
-                : `Nenhum resultado para “${trimmedQuery}”.`}
-            </p>
-            {items.length > 0 && activeFilters.length > 0 && (
+            {items.length > 0 && activeFilters.length > 0 ? (
               <button type="button" onClick={clearFilters}
-                className="mt-3 min-h-10 rounded-xl bg-teal-600 px-4 text-[12px] font-bold text-white active:scale-[0.98]">
+                className="mt-3 min-h-10 rounded-xl bg-teal-600 px-4 text-[12px] font-bold text-white transition active:scale-[0.98]">
                 Limpar filtros e mostrar resultados
               </button>
+            ) : (
+              <div className="mt-4">
+                <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wider text-amber-700 dark:text-amber-300">Caminhos que podem ajudar</p>
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  {recoveryActions.map(action => (
+                    <button key={action.id} type="button" onClick={() => { vibrate([8]); router.push(action.href) }}
+                      className="flex min-h-[55px] items-center gap-2.5 rounded-[14px] border border-slate-200/70 bg-slate-50/70 px-3 text-left transition active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 dark:border-slate-700/70 dark:bg-slate-800/60">
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[12px] font-extrabold text-slate-800 dark:text-slate-100">{action.title}</span>
+                        <span className="mt-0.5 block truncate text-[10px] text-slate-500 dark:text-slate-400">{action.detail}</span>
+                      </span>
+                      <ChevronRight size={15} className="shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2.5 text-[10px] text-slate-400 dark:text-slate-500">Sugestões de navegação, não resultados encontrados. Dados não são alterados.</p>
+              </div>
             )}
-          </div>
+          </section>
         ) : (
           <section className="mt-1">
             <div className="mb-2.5 flex items-center justify-between px-1">
