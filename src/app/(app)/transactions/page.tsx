@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic'
 import React, { useDeferredValue, useEffect, useState, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ContextualCommandBar from '@/components/ContextualCommandBar'
+import { isAllowedFinancialMonth } from '@/lib/financialNavigationIntent'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   Search, ChevronLeft, ChevronRight, ReceiptText, Loader2,
@@ -566,6 +567,12 @@ export default function TransactionsPage() {
   useEffect(() => {
     const filter = searchParams.get('filter')
     const kind = searchParams.get('kind')
+    const month = searchParams.get('month')
+    if (isAllowedFinancialMonth(month)) {
+      const [year, monthNumber] = month.split('-').map(Number)
+      setCurrentDate(current => format(current, 'yyyy-MM') === month
+        ? current : new Date(year, monthNumber - 1, 15, 12))
+    }
 
     if (
       filter === 'all' ||

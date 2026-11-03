@@ -40,6 +40,7 @@ import { consumeFinancialVoiceTranscript } from '@/lib/voiceHandoff'
 import { consumeContextualSearchQuery } from '@/lib/contextualSearchHandoff'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { interpretFinancialInput, smartDraftUrl } from '@/lib/smartFinancialInput'
+import { resolveFinancialNavigationIntent } from '@/lib/financialNavigationIntent'
 
 const money = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -373,10 +374,11 @@ export default function Page() {
 
   const trimmedQuery = query.trim()
   const smartDraft = useMemo(() => interpretFinancialInput(trimmedQuery), [trimmedQuery])
+  const navigationIntent = useMemo(() => resolveFinancialNavigationIntent(trimmedQuery), [trimmedQuery])
 
   const commands = useMemo(
-    () => resolveFinancialCommands(trimmedQuery),
-    [trimmedQuery]
+    () => navigationIntent ? [] : resolveFinancialCommands(trimmedQuery),
+    [trimmedQuery, navigationIntent]
   )
 
   const visibleItems = useMemo(() => {
@@ -397,7 +399,7 @@ export default function Page() {
   )
 
   useEffect(() => {
-    if (!user?.id || trimmedQuery.length < 2 || smartDraft) {
+    if (!user?.id || trimmedQuery.length < 2 || smartDraft || navigationIntent) {
       setItems([])
       setLoading(false)
       setSearchError(false)
@@ -430,7 +432,7 @@ export default function Page() {
       active = false
       clearTimeout(timer)
     }
-  }, [trimmedQuery, user?.id, context, searchAttempt, smartDraft])
+  }, [trimmedQuery, user?.id, context, searchAttempt, smartDraft, navigationIntent])
 
   const openResult = (item: GlobalSearchResult) => {
     vibrate([10])
@@ -599,6 +601,20 @@ export default function Page() {
           </p>
         )}
 
+        {!smartDraft && navigationIntent && (
+          <section aria-label="Navegacao financeira reconhecida" className="mb-4 rounded-[22px] border border-amber-400/25 bg-white p-3.5 shadow-sm dark:border-amber-400/20 dark:bg-slate-900/90">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">Comando de navegação entendido</span>
+              <span className="text-[10px] font-semibold text-slate-400">Sem alterações financeiras</span>
+            </div>
+            <p className="text-[13px] leading-5 text-slate-500 dark:text-slate-400">{navigationIntent.description}</p>
+            <button type="button" onClick={() => { vibrate([8]); router.push(navigationIntent.href) }}
+              className="mt-3 flex min-h-11 w-full items-center justify-between rounded-[15px] bg-teal-600 px-3.5 py-2 text-left text-[13px] font-bold text-white shadow-sm transition active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 dark:bg-teal-700">
+              <span>{navigationIntent.title}</span><ChevronRight size={18} aria-hidden="true" />
+            </button>
+          </section>
+        )}
+
         {smartDraft && (
           <section aria-label="Previa de lancamento inteligente" className="mb-4 rounded-[23px] border border-teal-500/25 bg-white p-4 shadow-sm dark:bg-slate-800/90">
             <div className="mb-3 flex items-center justify-between gap-2">
@@ -634,7 +650,7 @@ export default function Page() {
         )}
 
         <div className="sr-only" aria-live="polite" aria-atomic="true">
-          {trimmedQuery.length >= 2 && !loading
+          {navigationIntent ? 'Comando de navegação disponível' : trimmedQuery.length >= 2 && !loading
             ? `${visibleItems.length} ${visibleItems.length === 1 ? 'resultado encontrado' : 'resultados encontrados'}`
             : loading ? 'Buscando' : ''}
         </div>
@@ -661,7 +677,7 @@ export default function Page() {
           </section>
         )}
 
-        {smartDraft ? null : trimmedQuery.length < 2 ? (
+        {smartDraft || navigationIntent ? null : trimmedQuery.length < 2 ? (
           <div className="mt-10 flex flex-col items-center px-7 text-center">
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[20px] bg-teal-50 text-teal-600 dark:bg-teal-950/40 dark:text-teal-400">
               <Search size={24} />
