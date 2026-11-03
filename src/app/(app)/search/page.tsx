@@ -47,6 +47,8 @@ import FinancialCommandHub from '@/components/FinancialCommandHub'
 import { isFinancialCommandOnlyQuery } from '@/lib/financialCommandOnly'
 import { interpretFinancialReadOnlyQuestion } from '@/lib/financialReadOnlyQuestions'
 import { interpretFinancialQuestion360 } from '@/lib/financialQuestion360'
+import { interpretScopedFinancialQuestion } from '@/lib/financialScopedQuestions'
+import FinancialScopedAnswer from '@/components/FinancialScopedAnswer'
 import FinancialQuestion360Answer from '@/components/FinancialQuestion360Answer'
 import FinancialReadOnlyAnswer from '@/components/FinancialReadOnlyAnswer'
 import { stageAssistantQuestionHandoff } from '@/lib/assistantChatHandoff'
@@ -422,15 +424,18 @@ export default function Page() {
   const searchPhase = financialSearchPhase(requestKey, resolvedSearchKey, failedSearchKey, loading)
   const smartDraft = useMemo(() => interpretFinancialInput(trimmedQuery), [trimmedQuery])
   const navigationIntent = useMemo(() => resolveFinancialNavigationIntent(trimmedQuery), [trimmedQuery])
-  // R430: consultas com calculo verificavel ficam locais; interpretacao aberta pertence ao Gemini.
-  const readOnlyIntent = useMemo(() => smartDraft || navigationIntent || !trimmedQuery ? null
-    : interpretFinancialReadOnlyQuestion(trimmedQuery), [trimmedQuery, smartDraft, navigationIntent])
+  // R433: entidades nomeadas e janelas especificas sem consultar IA.
+  const scopedIntent = useMemo(() => smartDraft || navigationIntent || !trimmedQuery ? null
+    : interpretScopedFinancialQuestion(trimmedQuery), [trimmedQuery, smartDraft, navigationIntent])
+  // R430: consultas mensais simples mantidas, R433 evita confundir conta com categoria.
+  const readOnlyIntent = useMemo(() => smartDraft || navigationIntent || scopedIntent || !trimmedQuery ? null
+    : interpretFinancialReadOnlyQuestion(trimmedQuery), [trimmedQuery, smartDraft, navigationIntent, scopedIntent])
 
   // R432: consultas financeiras verificaveis sem competir com o Gemini.
   // O motor R430 tem prioridade; consultas abertas nunca produzem totais presumidos.
-  const question360 = useMemo(() => smartDraft || navigationIntent || readOnlyIntent || !trimmedQuery
+  const question360 = useMemo(() => smartDraft || navigationIntent || scopedIntent || readOnlyIntent || !trimmedQuery
     ? null : interpretFinancialQuestion360(trimmedQuery),
-    [trimmedQuery, smartDraft, navigationIntent, readOnlyIntent])
+    [trimmedQuery, smartDraft, navigationIntent, scopedIntent, readOnlyIntent])
 
   const extendedCommands = useMemo(() => navigationIntent || !trimmedQuery
     ? [] : resolveExtendedFinancialCommands(trimmedQuery), [trimmedQuery, navigationIntent])
@@ -442,9 +447,9 @@ export default function Page() {
   const commandOnly = useMemo(() =>
     isFinancialCommandOnlyQuery(trimmedQuery, commands.map(command => command.id)) || extendedCommands.length > 0,
     [trimmedQuery, commands, extendedCommands])
-  const helpIntent = useMemo(() => smartDraft || navigationIntent || commandOnly || readOnlyIntent || question360
+  const helpIntent = useMemo(() => smartDraft || navigationIntent || commandOnly || scopedIntent || readOnlyIntent || question360
     ? null : resolveFinancialHelp(trimmedQuery),
-    [trimmedQuery, smartDraft, navigationIntent, commandOnly, readOnlyIntent, question360])
+    [trimmedQuery, smartDraft, navigationIntent, commandOnly, scopedIntent, readOnlyIntent, question360])
   const recoveryActions = useMemo(() => suggestFinancialRecovery(trimmedQuery, hubScope), [trimmedQuery, hubScope])
 
   const visibleItems = useMemo(() => {
@@ -466,9 +471,9 @@ export default function Page() {
   // Nada é sugerido enquanto o teclado estiver ativo ou durante edição de lançamentos.
   const resultGuidance = useMemo(() => {
     if (searchPhase !== 'ready' || loading || smartDraft || navigationIntent || !trimmedQuery || inputFocused) return null
-    if (helpIntent || question360) return null
+    if (helpIntent || question360 || scopedIntent) return null
     return buildFinancialResultGuidance(items, resultFacets, preferredFinancialSearchKind(trimmedQuery), activeFilters)
-  }, [searchPhase, loading, smartDraft, navigationIntent, helpIntent, question360, trimmedQuery, inputFocused, items, resultFacets, activeFilters])
+  }, [searchPhase, loading, smartDraft, navigationIntent, helpIntent, question360, scopedIntent, trimmedQuery, inputFocused, items, resultFacets, activeFilters])
 
   // Ao trocar usuario/contexto, filtros anteriores nao devem causar lista vazia enganosa.
   useEffect(() => { setActiveFilters([]) }, [user?.id, context])
@@ -520,6 +525,16 @@ export default function Page() {
       setSearchError(false)
       return
     }
+    if (scopedIntent) {
+      // R433: soma seletiva usando indices locais de usuario, contexto e data.
+      setItems([])
+      setResolvedQuery('')
+      setResolvedSearchKey('')
+      setFailedSearchKey('')
+      setLoading(false)
+      setSearchError(false)
+      return
+    }
 
     let active = true
 
@@ -557,7 +572,7 @@ export default function Page() {
       clearTimeout(timer)
     }
   // R428 baseline dependency tail: navigationIntent, commandOnly])
-  }, [trimmedQuery, user?.id, context, searchAttempt, requestKey, smartDraft, navigationIntent, commandOnly, readOnlyIntent, helpIntent, question360])
+  }, [trimmedQuery, user?.id, context, searchAttempt, requestKey, smartDraft, navigationIntent, commandOnly, readOnlyIntent, helpIntent, question360, scopedIntent])
 
   const openResult = (item: GlobalSearchResult) => {
     vibrate([10])
@@ -803,7 +818,7 @@ export default function Page() {
         )}
 
         <div className="sr-only" aria-live="polite" aria-atomic="true">
-          {question360 ? 'Consulta financeira local disponível' : navigationIntent ? 'Comando de navegação disponível'
+          {scopedIntent ? 'Consulta financeira combinada disponível' : question360 ? 'Consulta financeira local disponível' : navigationIntent ? 'Comando de navegação disponível'
             : commandOnly ? 'Ação pronta para abrir após confirmação'
             : searchPhase === 'loading' && trimmedQuery.length >= 2 && !smartDraft ? 'Buscando'
             : searchPhase === 'error' ? 'A busca falhou'
@@ -869,6 +884,11 @@ export default function Page() {
           <p role="status" className="mb-3 rounded-xl border border-amber-500/25 bg-amber-50 px-3 py-2 text-[11px] text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">{geminiHandoffError}</p>
         )}
 
+        {scopedIntent && !smartDraft && !navigationIntent && !commandOnly && (
+          <FinancialScopedAnswer question={scopedIntent} userId={user?.id ?? null}
+            context={context as 'dfl' | 'personal'} onTalk={continueWithGemini} />
+        )}
+
         {readOnlyIntent && !smartDraft && !navigationIntent && !commandOnly && (
           <FinancialReadOnlyAnswer question={readOnlyIntent} userId={user?.id ?? null}
             context={context as 'dfl' | 'personal'} onTalk={continueWithGemini}
@@ -891,7 +911,7 @@ export default function Page() {
           <FinancialResultGuide guidance={resultGuidance} onRefine={chooseQuickFacet} onOpen={openResult} />
         )}
 
-        {searchPhase === 'ready' && resultFacets.length > 1 && !smartDraft && !navigationIntent && !helpIntent && (
+        {searchPhase === 'ready' && resultFacets.length > 1 && !smartDraft && !navigationIntent && !helpIntent && !scopedIntent && (
           <section aria-label="Refinar resultados desta busca" className="-mx-1 mb-3 overflow-x-auto overscroll-x-contain px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="flex w-max items-center gap-1.5">
               <button type="button" onClick={() => chooseQuickFacet(null)} aria-pressed={activeFilters.length === 0}
@@ -911,7 +931,7 @@ export default function Page() {
           </section>
         )}
 
-        {helpIntent || readOnlyIntent || question360 ? null : smartDraft || navigationIntent || commandOnly || !trimmedQuery ? null : trimmedQuery.length < 2 ? (
+        {scopedIntent ? null : helpIntent || readOnlyIntent || question360 ? null : smartDraft || navigationIntent || commandOnly || !trimmedQuery ? null : trimmedQuery.length < 2 ? (
           <div className="mt-10 flex flex-col items-center px-7 text-center">
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[20px] bg-teal-50 text-teal-600 dark:bg-teal-950/40 dark:text-teal-400">
               <Search size={24} />

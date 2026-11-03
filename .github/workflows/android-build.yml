@@ -87,6 +87,7 @@ jobs:
           node scripts/check-r430-hybrid-finance.mjs
           node scripts/check-r431-final-command-help.mjs
           node scripts/check-r432-financial-360.mjs
+          node scripts/check-r433-scoped-finance.mjs
           node scripts/check-v164-finance-premium-forms.mjs
           node scripts/check-v165-daily-ready.mjs
           node scripts/check-v166-default-settings.mjs
