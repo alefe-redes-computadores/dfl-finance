@@ -1,17 +1,20 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowUpRight, Mic, Search, Sparkles } from 'lucide-react'
+import { ArrowUpRight, Mic, MicOff, Search, Sparkles } from 'lucide-react'
 import { CONTEXTUAL_COMMAND, safeContextualRoute, type ContextualCommandScope, type ContextualShortcut } from '@/lib/contextualCommand'
 import { stageContextualSearchQuery } from '@/lib/contextualSearchHandoff'
 import { stageCommandHubScope } from '@/lib/financialCommandHub'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import { useFinancialSpeech } from '@/hooks/useFinancialSpeech'
+import { stageFinancialVoiceTranscript } from '@/lib/voiceHandoff'
 import ContextualInsightCard from './ContextualInsightCard'
 
 /** Entrada de intencao por contexto. Voz e lancamentos continuam nos fluxos existentes. */
 export default function ContextualCommandBar({ scope }: { scope: ContextualCommandScope }) {
   const router = useRouter()
   const { vibrate } = useHapticFeedback()
+  const { status: voiceStatus, notice: voiceNotice, transcript: voiceTranscript, start: startVoice, cancel: cancelVoice } = useFinancialSpeech()
   const config = CONTEXTUAL_COMMAND[scope]
   const [shown, setShown] = useState(false)
   const [animate, setAnimate] = useState(false)
@@ -47,8 +50,21 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
     return () => window.clearTimeout(timer)
   }, [animate, shown, pageActive, letters, position, config])
 
+  useEffect(() => {
+    if (!voiceTranscript) return
+    if (!stageFinancialVoiceTranscript(voiceTranscript)) return
+    stageCommandHubScope(scope, true)
+    router.push('/search?voice=1')
+  }, [voiceTranscript, scope, router])
+
   function openSearch() { stageCommandHubScope(scope, false); vibrate([6]); router.push('/search') }
-  function openVoice() { stageCommandHubScope(scope, true); vibrate([6]); router.push('/search') }
+  function openVoice() {
+    vibrate([6])
+    if (voiceStatus === 'listening') { cancelVoice(); return }
+    if (voiceStatus === 'processing') return
+    // Acesso ao microfone somente pelo clique explicito, nao ao montar a pagina.
+    void startVoice()
+  }
   function openShortcut(item: ContextualShortcut) {
     const destination = safeContextualRoute(item)
     if (!destination) return
@@ -60,7 +76,7 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
   return (
     <>
     <div className={`mb-3 w-full transition-[opacity,transform] duration-300 motion-reduce:transition-none ${shown ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0'}`}>
-      <div className="dfl-command-frame">
+      <div className={`dfl-command-frame ${pageActive ? '' : 'dfl-command-frame-paused'}`}>
         <div className="dfl-command-shell">
           <div className="mb-1 flex items-center gap-1.5 px-0.5">
             <Sparkles size={13} className="text-amber-500" aria-hidden="true" />
@@ -77,11 +93,20 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
               </span>
               <ArrowUpRight size={15} className="shrink-0 text-slate-400" aria-hidden="true" />
             </button>
-            <button type="button" onClick={openVoice} aria-label="Abrir busca com reconhecimento de voz"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-600 transition active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 dark:bg-teal-950/50 dark:text-teal-300">
-              <Mic size={17} aria-hidden="true" />
+            <button type="button" onClick={openVoice}
+              aria-label={voiceStatus === 'listening' ? 'Parar comando de voz' : 'Falar com DFL Comando'}
+              aria-pressed={voiceStatus === 'listening'}
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 ${voiceStatus === 'listening' ? 'bg-rose-500 text-white motion-safe:animate-pulse' : 'bg-teal-50 text-teal-600 dark:bg-teal-950/50 dark:text-teal-300'}`}>
+              {voiceStatus === 'listening' ? <MicOff size={17} aria-hidden="true" /> : <Mic size={17} aria-hidden="true" />}
             </button>
           </div>
+          {voiceNotice && (
+            <div role="status" aria-live="polite" className="mt-1.5 flex items-center gap-2 rounded-xl bg-teal-50/75 px-2.5 py-2 text-[11px] text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              <span className="min-w-0 flex-1">{voiceNotice}</span>
+              <button type="button" onClick={() => { cancelVoice(); openSearch() }}
+                className="min-h-9 shrink-0 rounded-lg px-2 font-semibold text-teal-700 underline underline-offset-2 dark:text-teal-300">Digitar</button>
+            </div>
+          )}
           <div className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Atalhos contextuais">
             {config.shortcuts.map(shortcut => (
               <button key={shortcut.label} type="button" onClick={() => openShortcut(shortcut)}

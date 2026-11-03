@@ -337,6 +337,7 @@ export default function Page() {
 
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<GlobalSearchResult[]>([])
+  const [resolvedQuery, setResolvedQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [searchError, setSearchError] = useState(false)
   const [searchAttempt, setSearchAttempt] = useState(0)
@@ -393,13 +394,14 @@ export default function Page() {
   )
 
   const visibleItems = useMemo(() => {
+    if (loading || trimmedQuery !== resolvedQuery) return []
     if (activeFilters.length === 0) return items
     const selected = new Set(activeFilters)
     return items.filter((item) => {
       const filter = resultFilter(item)
       return filter ? selected.has(filter) : false
     })
-  }, [items, activeFilters])
+  }, [items, activeFilters, loading, trimmedQuery, resolvedQuery])
 
   const activeFilterLabels = useMemo(
     () =>
@@ -412,6 +414,7 @@ export default function Page() {
   useEffect(() => {
     if (!user?.id || trimmedQuery.length < 2 || smartDraft || navigationIntent) {
       setItems([])
+      setResolvedQuery('')
       setLoading(false)
       setSearchError(false)
       return
@@ -428,10 +431,11 @@ export default function Page() {
           context as 'dfl' | 'personal',
           trimmedQuery
         )
-        if (active) setItems(result)
+        if (active) { setItems(result); setResolvedQuery(trimmedQuery) }
       } catch {
         if (active) {
           setItems([])
+          setResolvedQuery('')
           setSearchError(true)
         }
       } finally {

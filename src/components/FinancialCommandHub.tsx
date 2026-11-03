@@ -24,6 +24,7 @@ export default function FinancialCommandHub({ scope, context, userId }: Props) {
   const [recent, setRecent] = useState<string[]>([])
   const [loaded, setLoaded] = useState(false)
   const [loadedFor, setLoadedFor] = useState('')
+  const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     setFavorites(hubFavorites(userId, context))
@@ -33,6 +34,8 @@ export default function FinancialCommandHub({ scope, context, userId }: Props) {
   }, [userId, context])
 
   const actions = useMemo(() => suggestedHubActions(scope, favorites, recent), [scope, favorites, recent])
+  const visibleActions = expanded ? actions : actions.slice(0, 3)
+  useEffect(() => { setExpanded(false) }, [scope, context, userId])
 
   function launch(action: CommandHubAction) {
     if (!userId) return
@@ -70,8 +73,8 @@ export default function FinancialCommandHub({ scope, context, userId }: Props) {
           </button>
         )}
       </div>
-      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-        {actions.map(action => {
+      <div id="dfl-hub-action-list" className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+        {visibleActions.map(action => {
           const favorite = favorites.includes(action.id)
           const wasRecent = recent.includes(action.id)
           return (
@@ -93,6 +96,13 @@ export default function FinancialCommandHub({ scope, context, userId }: Props) {
           )
         })}
       </div>
+      {actions.length > 3 && (
+        <button type="button" onClick={() => setExpanded(value => !value)} aria-expanded={expanded}
+          aria-controls="dfl-hub-action-list"
+          className="mt-2 flex min-h-10 w-full items-center justify-center rounded-xl border border-slate-200/70 px-3 text-[11px] font-bold text-teal-700 transition-colors hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 dark:border-slate-700 dark:text-teal-300 dark:hover:bg-slate-800">
+          {expanded ? 'Ver menos ações' : `Ver todas as ${actions.length} ações`}
+        </button>
+      )}
       <p className="mt-2.5 text-[10px] leading-4 text-slate-400 dark:text-slate-500">
         Favoritos: somente atalhos. Recentes: somente nesta sessão. Nenhum lançamento é salvo aqui.
       </p>

@@ -637,6 +637,7 @@ input[data-premium-input="true"]:focus-visible {
   animation: dfl-command-trail 7s linear infinite;
   pointer-events: none;
 }
+.dfl-command-frame-paused::before { animation-play-state: paused; }
 .dfl-command-shell {
   position: relative;
   z-index: 1;
