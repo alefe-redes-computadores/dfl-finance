@@ -17,6 +17,13 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
   const [animate, setAnimate] = useState(false)
   const [position, setPosition] = useState(0)
   const [letters, setLetters] = useState(0)
+  const [pageActive, setPageActive] = useState(true)
+  useEffect(() => {
+    const onVisibility = () => setPageActive(document.visibilityState !== 'hidden')
+    onVisibility()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [])
 
   useEffect(() => {
     const handle = window.setTimeout(() => setShown(true), 300)
@@ -30,7 +37,7 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
     return () => media.removeEventListener?.('change', update)
   }, [])
   useEffect(() => {
-    if (!animate || !shown) return
+    if (!animate || !shown || !pageActive) return
     const example = config.examples[position]
     const complete = letters >= example.length
     const timer = window.setTimeout(() => {
@@ -38,7 +45,7 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
       else setLetters(current => current + 1)
     }, complete ? 3000 : 63)
     return () => window.clearTimeout(timer)
-  }, [animate, shown, letters, position, config])
+  }, [animate, shown, pageActive, letters, position, config])
 
   function openSearch() { stageCommandHubScope(scope, false); vibrate([6]); router.push('/search') }
   function openVoice() { stageCommandHubScope(scope, true); vibrate([6]); router.push('/search') }
