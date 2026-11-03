@@ -98,7 +98,7 @@ const STARTERS: Record<Scope, readonly string[]> = {
   transactions: ['Nova despesa', 'Transferir entre contas', 'Nova receita', 'Buscar mercado', 'Abrir conciliação', 'Ver comprovantes', 'Novo cartão', 'Cadastrar conta', 'Nova assinatura', 'Abrir planejamento', 'Ver cartões', 'Criar meta'],
   analysis: ['Abrir planejamento', 'Criar meta', 'Novo orçamento', 'Ver comprovantes', 'Nova assinatura', 'Novo empréstimo', 'Ver cartões', 'Abrir conciliação', 'Nova despesa', 'Nova receita', 'Novo financiamento', 'Cadastrar conta'],
   cards: ['Novo cartão', 'Ver cartões', 'Buscar Nubank', 'Cadastrar conta', 'Ver comprovantes', 'Nova despesa', 'Abrir planejamento', 'Criar meta', 'Nova receita', 'Transferir entre contas', 'Novo orçamento', 'Nova assinatura'],
-  search: ['Quanto gastei hoje?', 'Nova despesa', 'Quanto recebi no ano passado?', 'Novo cartão', 'Quanto tenho para receber?', 'Quanto gastei nos últimos 30 dias?', 'Faturas em aberto', 'Criar meta', 'Quanto gastei esta semana?', 'Compare despesas de outubro com novembro', 'Ver comprovantes', 'Abrir planejamento'],
+  search: ['Novo cartão', 'Nova despesa', 'Ver cartões', 'Quanto gastei hoje?', 'Quanto tenho para receber?', 'Quanto gastei nos últimos 30 dias?', 'Quanto recebi no ano passado?', 'Faturas em aberto', 'Quanto gastei esta semana?', 'Compare despesas de outubro com novembro', 'Criar meta', 'Abrir planejamento'],
 }
 export function financialStarterExamples(scope: Scope, offset: number): string[] {
   const pool = STARTERS[scope] ?? STARTERS.search

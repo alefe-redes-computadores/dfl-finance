@@ -55,6 +55,7 @@ import { stageAssistantQuestionHandoff } from '@/lib/assistantChatHandoff'
 import { resolveFinancialHelp } from '@/lib/financialCommandHelp'
 import FinancialCommandHelp from '@/components/FinancialCommandHelp'
 import { resolveExtendedFinancialCommands, suggestFinancialRecovery, financialStarterExamples } from '@/lib/financialIntentExpansion'
+import { resolveFinancialDemoIntent } from '@/lib/financialDemoIntents'
 import FinancialResultGuide from '@/components/FinancialResultGuide'
 import { buildFinancialResultGuidance } from '@/lib/financialSearchGuidance'
 import { buildFinancialSearchFacets, financialSearchFacet } from '@/lib/financialSearchFacets'
@@ -439,14 +440,19 @@ export default function Page() {
 
   const extendedCommands = useMemo(() => navigationIntent || !trimmedQuery
     ? [] : resolveExtendedFinancialCommands(trimmedQuery), [trimmedQuery, navigationIntent])
+  // R434: complementa apenas pedidos explicitos de cadastro nao reconhecidos pela R429.
+  // Nenhum dado nomeado na frase e transferido silenciosamente ao formulario.
+  const demoIntent = useMemo(() => smartDraft || navigationIntent || scopedIntent || readOnlyIntent || question360 || !trimmedQuery || extendedCommands.length
+    ? null : resolveFinancialDemoIntent(trimmedQuery),
+    [trimmedQuery, smartDraft, navigationIntent, scopedIntent, readOnlyIntent, question360, extendedCommands])
   const commands = useMemo(() => navigationIntent || !trimmedQuery ? []
-    : [...extendedCommands, ...resolveFinancialCommands(trimmedQuery)].slice(0, 3),
-    [trimmedQuery, navigationIntent, extendedCommands])
+    : [...extendedCommands, ...(demoIntent ? [demoIntent] : []), ...resolveFinancialCommands(trimmedQuery)].slice(0, 3),
+    [trimmedQuery, navigationIntent, extendedCommands, demoIntent])
   // R429: cadastrar entidades existentes e comando exato dispensam consulta a tabelas.
   // Mantem o reconhecedor R428 para as intencoes legadas.
   const commandOnly = useMemo(() =>
-    isFinancialCommandOnlyQuery(trimmedQuery, commands.map(command => command.id)) || extendedCommands.length > 0,
-    [trimmedQuery, commands, extendedCommands])
+    isFinancialCommandOnlyQuery(trimmedQuery, commands.map(command => command.id)) || extendedCommands.length > 0 || !!demoIntent,
+    [trimmedQuery, commands, extendedCommands, demoIntent])
   const helpIntent = useMemo(() => smartDraft || navigationIntent || commandOnly || scopedIntent || readOnlyIntent || question360
     ? null : resolveFinancialHelp(trimmedQuery),
     [trimmedQuery, smartDraft, navigationIntent, commandOnly, scopedIntent, readOnlyIntent, question360])
@@ -838,9 +844,9 @@ export default function Page() {
         )}
 
         {!trimmedQuery && !inputFocused && (
-          <section aria-label="Ideias para experimentar" className="mb-4 rounded-[19px] border border-slate-200/70 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+          <section aria-label="Ideias para experimentar" className="mb-4 rounded-[23px] border border-teal-500/15 bg-white/90 p-3.5 shadow-[0_8px_28px_rgba(13,148,136,0.06)] dark:border-teal-400/15 dark:bg-slate-900/90">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200">Experimente dizer...</p>
+              <p className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200">Experimente um comando de verdade</p>
               <button type="button" onClick={() => { vibrate([4]); setStarterOffset(value => (value + 3) % 12) }}
                 className="min-h-8 rounded-lg px-2 text-[10px] font-bold text-teal-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 dark:text-teal-300">
                 Outras ideias
@@ -854,7 +860,7 @@ export default function Page() {
                 </button>
               ))}
             </div>
-            <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">Toque para preencher a busca. Nenhuma ação é executada automaticamente.</p>
+            <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">Toque para experimentar. Cadastros abrem formulários para revisão; consultas mostram apenas dados disponíveis. Nenhuma ação é salva automaticamente.</p>
           </section>
         )}
 
@@ -865,7 +871,7 @@ export default function Page() {
                 {trimmedQuery ? 'Ações entendidas' : 'Ações rápidas'}
               </p>
               <p className="text-[9.5px] font-semibold text-slate-400">
-                toque para executar
+                toque para abrir e revisar
               </p>
             </div>
             <div className="app-premium-card space-y-0.5 p-1.5">
@@ -976,12 +982,12 @@ export default function Page() {
               </span>
               <div className="min-w-0 flex-1">
                 <h2 className="text-[14px] font-extrabold text-slate-900 dark:text-slate-100">
-                  {items.length > 0 && activeFilters.length > 0 ? 'Vamos ajustar os filtros' : 'Ainda não encontrei um registro'}
+                  {items.length > 0 && activeFilters.length > 0 ? 'Vamos ajustar os filtros' : 'Não encontrei registros para esta frase'}
                 </h2>
                 <p className="mt-1 text-[11.5px] leading-[1.6] text-slate-500 dark:text-slate-400">
                   {items.length > 0 && activeFilters.length > 0
                     ? 'Existem resultados na consulta, mas nenhum com os filtros atuais.'
-                    : `A pesquisa por “${trimmedQuery}” não retornou registros locais. Você pode tentar outra frase ou abrir uma área relacionada.`}
+                    : `A pesquisa por “${trimmedQuery}” não retornou registros locais. Experimente um cadastro como “novo cartão”, escolha uma área abaixo ou continue com o Gemini.`}
                 </p>
               </div>
             </div>
@@ -1038,7 +1044,7 @@ export default function Page() {
 
         <div className="mt-8 flex items-center justify-center gap-2 text-[10px] font-semibold text-slate-400 dark:text-slate-700">
           <PiggyBank size={13} />
-          Busca e comandos locais e privados
+          DFL Comando · dados locais · ações sempre revisadas
         </div>
       </div>
 
