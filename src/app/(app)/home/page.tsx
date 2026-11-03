@@ -9,6 +9,7 @@ import { homeOperationalAction } from '@/lib/homeOperationalAction'
 import { resolveKnownCommitments } from '@/lib/financialCommitments'
 import { useEffect, useState, useCallback, useRef, lazy, Suspense, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import ContextualCommandBar from '@/components/ContextualCommandBar'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { db } from '@/lib/db'
@@ -2522,20 +2523,7 @@ function HomeContent() {
       </div>
 
       <section aria-label="DFL Comando financeiro" className="mb-3.5">
-        <button
-          type="button"
-          onClick={() => { vibrate([8]); router.push('/search') }}
-          className="flex min-h-[58px] w-full items-center gap-3 rounded-[19px] border border-teal-500/20 bg-white px-3.5 py-2.5 text-left shadow-sm transition active:scale-[0.99] dark:border-teal-700/25 dark:bg-slate-800/90"
-        >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300">
-            <Sparkles size={19} aria-hidden="true" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[12px] font-extrabold text-slate-800 dark:text-slate-100">DFL Comando</span>
-            <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400">Busque, fale ou lance com o DFL Voice</span>
-          </span>
-          <ChevronRight size={18} className="shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-        </button>
+        <ContextualCommandBar scope="home" />
       </section>
 
       {!isDataLoading && syncAttempted && isOnline && !isSyncing && !hasSyncFailure && accounts.length === 0 && localTransactions.length === 0 && (

@@ -37,6 +37,7 @@ import {
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useFinancialSpeech } from '@/hooks/useFinancialSpeech'
 import { consumeFinancialVoiceTranscript } from '@/lib/voiceHandoff'
+import { consumeContextualSearchQuery } from '@/lib/contextualSearchHandoff'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { interpretFinancialInput, smartDraftUrl } from '@/lib/smartFinancialInput'
 
@@ -347,9 +348,14 @@ export default function Page() {
   useEffect(() => {
     if (receivedVoiceRef.current) return
     const incoming = consumeFinancialVoiceTranscript()
+    const contextual = consumeContextualSearchQuery()
     if (incoming) {
       receivedVoiceRef.current = true
       setQuery(incoming)
+      inputRef.current?.blur()
+    } else if (contextual) {
+      receivedVoiceRef.current = true
+      setQuery(contextual)
       inputRef.current?.blur()
     } else {
       inputRef.current?.focus()
@@ -496,7 +502,7 @@ export default function Page() {
         </header>
 
         <div className="sticky top-0 z-20 -mx-1 bg-slate-50/95 px-1 pb-3 backdrop-blur-xl dark:bg-slate-950/95">
-          <div className="app-premium-search">
+          <div className="app-premium-search dfl-command-search">
             {loading ? (
               <LoaderCircle
                 size={19}

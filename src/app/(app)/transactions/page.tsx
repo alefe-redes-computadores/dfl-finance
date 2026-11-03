@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic'
 
 import React, { useDeferredValue, useEffect, useState, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import ContextualCommandBar from '@/components/ContextualCommandBar'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   Search, ChevronLeft, ChevronRight, ReceiptText, Loader2,
@@ -1390,6 +1391,8 @@ export default function TransactionsPage() {
           <div className="mb-2.5">
             <ContextToggle />
           </div>
+
+          <ContextualCommandBar scope="transactions" />
 
           <div className="mb-2.5 flex h-11 items-center gap-2 rounded-[15px] border border-gray-200/80 bg-white px-3 shadow-sm transition-all focus-within:border-teal-500/50 focus-within:ring-2 focus-within:ring-teal-500/10 dark:border-slate-700 dark:bg-slate-800">
             <Search size={17} className="shrink-0 text-gray-400" />

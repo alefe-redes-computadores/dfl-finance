@@ -5,6 +5,7 @@ import SelectField from '@/components/SelectField'
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
+import ContextualCommandBar from '@/components/ContextualCommandBar'
 import {
   ChevronLeft,
   ChevronRight,
@@ -824,6 +825,8 @@ function AnalysisContent() {
               </button>
             </div>
           </div>
+
+          <ContextualCommandBar scope="analysis" />
 
           <div className="grid grid-cols-1 gap-2 mb-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-3">
             <div className="min-w-0 w-full rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/70 dark:bg-slate-900/30 px-2 py-2 overflow-hidden">

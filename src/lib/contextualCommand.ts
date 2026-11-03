@@ -1,0 +1,57 @@
+/** R417 — UI contextual deterministica. Sem consultas, saldos inventados ou gravacoes. */
+export type ContextualCommandScope = 'home' | 'transactions' | 'analysis' | 'cards'
+export type ContextualShortcut = {
+  label: string
+  kind: 'route' | 'search'
+  value: string
+}
+export type ContextualCommandConfig = {
+  eyebrow: string
+  examples: readonly string[]
+  shortcuts: readonly ContextualShortcut[]
+}
+export const CONTEXTUAL_COMMAND: Record<ContextualCommandScope, ContextualCommandConfig> = {
+  home: {
+    eyebrow: 'DFL Comando',
+    examples: ['Paguei 48 reais de gasolina', 'Nova receita', 'Ver pendências'],
+    shortcuts: [
+      { label: 'Nova despesa', kind: 'route', value: '/transactions/new?type=expense' },
+      { label: 'Pendências', kind: 'route', value: '/conciliation' },
+    ],
+  },
+  transactions: {
+    eyebrow: 'Comando do extrato',
+    examples: ['Buscar mercado', 'Transferir entre contas', 'Abrir conciliação'],
+    shortcuts: [
+      { label: 'Buscar mercado', kind: 'search', value: 'mercado' },
+      { label: 'Transferir', kind: 'route', value: '/transactions?action=transfer' },
+    ],
+  },
+  analysis: {
+    eyebrow: 'Comando de análises',
+    examples: ['Abrir planejamento', 'Ver comprovantes', 'Buscar novembro'],
+    shortcuts: [
+      { label: 'Planejamento', kind: 'route', value: '/projections' },
+      { label: 'Relatórios', kind: 'route', value: '/reports' },
+    ],
+  },
+  cards: {
+    eyebrow: 'Comando de cartões',
+    examples: ['Buscar Nubank', 'Nova despesa', 'Ver comprovantes'],
+    shortcuts: [
+      { label: 'Buscar Nubank', kind: 'search', value: 'Nubank' },
+      { label: 'Comprovantes', kind: 'route', value: '/receipts' },
+    ],
+  },
+}
+const ALLOWED = new Set([
+  '/transactions/new?type=expense',
+  '/transactions?action=transfer',
+  '/conciliation',
+  '/projections',
+  '/reports',
+  '/receipts',
+])
+export function safeContextualRoute(shortcut: ContextualShortcut): string | null {
+  return shortcut.kind === 'search' ? '/search' : ALLOWED.has(shortcut.value) ? shortcut.value : null
+}

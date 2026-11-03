@@ -3,6 +3,7 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import ContextualCommandBar from '@/components/ContextualCommandBar'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft,
@@ -491,6 +492,8 @@ export default function CardsPage() {
               </button>
             </div>
           </div>
+
+          <ContextualCommandBar scope="cards" />
 
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">

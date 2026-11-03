@@ -616,3 +616,41 @@ input[data-premium-input="true"]:focus-visible {
     box-shadow: 0 0 0 3px rgb(239 68 68 / 0.10);
   }
 }
+
+
+/* R417 — trilha luminosa sutil, apenas decorativa. */
+.dfl-command-frame {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 21px;
+  padding: 1.5px;
+  background: linear-gradient(120deg, rgba(13,148,136,.40), rgba(245,158,11,.38));
+  box-shadow: 0 5px 22px rgba(245,158,11,.06);
+}
+.dfl-command-frame::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: -160%;
+  background: conic-gradient(from 90deg, transparent 0deg, transparent 270deg, rgba(251,191,36,.94) 302deg, rgba(255,255,255,.90) 316deg, transparent 338deg);
+  animation: dfl-command-trail 7s linear infinite;
+  pointer-events: none;
+}
+.dfl-command-shell {
+  position: relative;
+  z-index: 1;
+  border-radius: 19.5px;
+  background: rgba(255,255,255,.985);
+  padding: 10px 12px 9px;
+}
+.dark .dfl-command-shell { background: #172033; }
+.dfl-command-caret { color: #d97706; animation: dfl-command-blink 1s steps(2) infinite; }
+.dfl-command-search:focus-within {
+  box-shadow: 0 0 0 1px rgba(245,158,11,.48), 0 0 20px rgba(245,158,11,.12);
+}
+@keyframes dfl-command-trail { to { transform: rotate(360deg); } }
+@keyframes dfl-command-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .dfl-command-frame::before, .dfl-command-caret { animation: none !important; }
+}
