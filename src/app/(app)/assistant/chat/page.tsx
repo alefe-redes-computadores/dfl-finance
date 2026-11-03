@@ -40,6 +40,7 @@ import { useLocalData } from '@/hooks/useLocalData'
 import { useUserSettings } from '@/hooks/useUserSettings'
 import { addToSyncQueue, db } from '@/lib/db'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { consumeAssistantQuestionHandoff } from '@/lib/assistantChatHandoff'
 import {
   buildFinancialIntelligence,
   buildFinancialSuggestedQuestions,
@@ -59,7 +60,6 @@ interface Message {
   created_at: string
   type?: 'text' | 'insight' | 'suggestion'
 }
-
 function AssistantChatContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -333,6 +333,17 @@ function AssistantChatContent() {
   }, [
     searchParams,
   ])
+
+  // Recebe somente perguntas transferidas explicitamente pelo DFL Comando.
+  // A frase fica editavel; nunca dispara envio automatico nem substitui link ?q.
+  useEffect(() => {
+    if (!user?.id) return
+    const incoming = consumeAssistantQuestionHandoff(user.id, effectiveContext)
+    if (incoming && !searchParams.get('q')) {
+      seededQueryRef.current = incoming
+      setInput(incoming)
+    }
+  }, [user?.id, effectiveContext, searchParams])
 
   const persistMessage = async (
     payload: Record<string, any>

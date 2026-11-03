@@ -45,6 +45,11 @@ import { resolveFinancialNavigationIntent } from '@/lib/financialNavigationInten
 import { financialSearchRequestKey, financialSearchPhase } from '@/lib/financialSearchContinuity'
 import FinancialCommandHub from '@/components/FinancialCommandHub'
 import { isFinancialCommandOnlyQuery } from '@/lib/financialCommandOnly'
+import { interpretFinancialReadOnlyQuestion } from '@/lib/financialReadOnlyQuestions'
+import FinancialReadOnlyAnswer from '@/components/FinancialReadOnlyAnswer'
+import { stageAssistantQuestionHandoff } from '@/lib/assistantChatHandoff'
+import { resolveFinancialHelp } from '@/lib/financialCommandHelp'
+import FinancialCommandHelp from '@/components/FinancialCommandHelp'
 import { resolveExtendedFinancialCommands, suggestFinancialRecovery, financialStarterExamples } from '@/lib/financialIntentExpansion'
 import FinancialResultGuide from '@/components/FinancialResultGuide'
 import { buildFinancialResultGuidance } from '@/lib/financialSearchGuidance'
@@ -68,7 +73,6 @@ const formatDate = (value?: string) => {
   if (Number.isNaN(date.getTime())) return String(value).slice(0, 10)
   return dateFormatter.format(date).replace('.', '')
 }
-
 
 type SearchFilter =
   | 'income'
@@ -354,6 +358,7 @@ export default function Page() {
   const [hubScope, setHubScope] = useState<CommandHubScope>('search')
   const [hubVoiceEntry, setHubVoiceEntry] = useState(false)
   const [inputFocused, setInputFocused] = useState(false)
+  const [geminiHandoffError, setGeminiHandoffError] = useState('')
   const [starterOffset, setStarterOffset] = useState(0)
   const starterScopeRef = useRef('')
   useEffect(() => {
@@ -415,6 +420,9 @@ export default function Page() {
   const searchPhase = financialSearchPhase(requestKey, resolvedSearchKey, failedSearchKey, loading)
   const smartDraft = useMemo(() => interpretFinancialInput(trimmedQuery), [trimmedQuery])
   const navigationIntent = useMemo(() => resolveFinancialNavigationIntent(trimmedQuery), [trimmedQuery])
+  // R430: consultas com calculo verificavel ficam locais; interpretacao aberta pertence ao Gemini.
+  const readOnlyIntent = useMemo(() => smartDraft || navigationIntent || !trimmedQuery ? null
+    : interpretFinancialReadOnlyQuestion(trimmedQuery), [trimmedQuery, smartDraft, navigationIntent])
 
   const extendedCommands = useMemo(() => navigationIntent || !trimmedQuery
     ? [] : resolveExtendedFinancialCommands(trimmedQuery), [trimmedQuery, navigationIntent])
@@ -426,6 +434,9 @@ export default function Page() {
   const commandOnly = useMemo(() =>
     isFinancialCommandOnlyQuery(trimmedQuery, commands.map(command => command.id)) || extendedCommands.length > 0,
     [trimmedQuery, commands, extendedCommands])
+  const helpIntent = useMemo(() => smartDraft || navigationIntent || commandOnly || readOnlyIntent
+    ? null : resolveFinancialHelp(trimmedQuery),
+    [trimmedQuery, smartDraft, navigationIntent, commandOnly, readOnlyIntent])
   const recoveryActions = useMemo(() => suggestFinancialRecovery(trimmedQuery, hubScope), [trimmedQuery, hubScope])
 
   const visibleItems = useMemo(() => {
@@ -447,8 +458,9 @@ export default function Page() {
   // Nada é sugerido enquanto o teclado estiver ativo ou durante edição de lançamentos.
   const resultGuidance = useMemo(() => {
     if (searchPhase !== 'ready' || loading || smartDraft || navigationIntent || !trimmedQuery || inputFocused) return null
+    if (helpIntent) return null
     return buildFinancialResultGuidance(items, resultFacets, preferredFinancialSearchKind(trimmedQuery), activeFilters)
-  }, [searchPhase, loading, smartDraft, navigationIntent, trimmedQuery, inputFocused, items, resultFacets, activeFilters])
+  }, [searchPhase, loading, smartDraft, navigationIntent, helpIntent, trimmedQuery, inputFocused, items, resultFacets, activeFilters])
 
   // Ao trocar usuario/contexto, filtros anteriores nao devem causar lista vazia enganosa.
   useEffect(() => { setActiveFilters([]) }, [user?.id, context])
@@ -463,6 +475,25 @@ export default function Page() {
 
   useEffect(() => {
     if (!user?.id || trimmedQuery.length < 2 || smartDraft || navigationIntent || commandOnly) {
+      setItems([])
+      setResolvedQuery('')
+      setResolvedSearchKey('')
+      setFailedSearchKey('')
+      setLoading(false)
+      setSearchError(false)
+      return
+    }
+    if (helpIntent) {
+      setItems([])
+      setResolvedQuery('')
+      setResolvedSearchKey('')
+      setFailedSearchKey('')
+      setLoading(false)
+      setSearchError(false)
+      return
+    }
+    if (readOnlyIntent) {
+      // Perguntas analiticas usam o indice local exclusivo, sem varredura da Busca 360.
       setItems([])
       setResolvedQuery('')
       setResolvedSearchKey('')
@@ -507,7 +538,8 @@ export default function Page() {
       active = false
       clearTimeout(timer)
     }
-  }, [trimmedQuery, user?.id, context, searchAttempt, requestKey, smartDraft, navigationIntent, commandOnly])
+  // R428 baseline dependency tail: navigationIntent, commandOnly])
+  }, [trimmedQuery, user?.id, context, searchAttempt, requestKey, smartDraft, navigationIntent, commandOnly, readOnlyIntent, helpIntent])
 
   const openResult = (item: GlobalSearchResult) => {
     vibrate([10])
@@ -518,6 +550,19 @@ export default function Page() {
     vibrate([10])
     rememberKnownHubRoute(user?.id ?? null, context, command.href)
     router.push(command.href)
+  }
+
+  // R430: nao envia pergunta ao provedor nem coloca dados privados na URL.
+  // O usuario revisa o texto no chat existente e toca em Enviar quando quiser.
+  const continueWithGemini = () => {
+    if (!stageAssistantQuestionHandoff(user?.id, context as 'dfl' | 'personal', trimmedQuery)) {
+      setGeminiHandoffError('Não consegui preparar a pergunta para o chat. Abra o Assistente para digitá-la diretamente.')
+      return
+    }
+    setGeminiHandoffError('')
+    vibrate([8])
+    inputRef.current?.blur()
+    router.push('/assistant/chat')
   }
 
   const clearSearch = () => {
@@ -802,11 +847,28 @@ export default function Page() {
           </section>
         )}
 
+        {geminiHandoffError && (
+          <p role="status" className="mb-3 rounded-xl border border-amber-500/25 bg-amber-50 px-3 py-2 text-[11px] text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">{geminiHandoffError}</p>
+        )}
+
+        {readOnlyIntent && !smartDraft && !navigationIntent && !commandOnly && (
+          <FinancialReadOnlyAnswer question={readOnlyIntent} userId={user?.id ?? null}
+            context={context as 'dfl' | 'personal'} onTalk={continueWithGemini}
+            onView={() => { vibrate([6]); router.push(`/transactions?month=${readOnlyIntent.month}&filter=${readOnlyIntent.kind === 'income' ? 'income' : readOnlyIntent.kind === 'flow' ? 'all' : 'expense'}`) }} />
+        )}
+
+        {helpIntent && (
+          <FinancialCommandHelp topic={helpIntent}
+            onExample={(value) => { vibrate([5]); setQuery(value); setHubVoiceEntry(false); inputRef.current?.blur() }}
+            onOpen={(href) => { vibrate([8]); rememberKnownHubRoute(user?.id ?? null, context, href); router.push(href) }}
+            onTalk={continueWithGemini} />
+        )}
+
         {resultGuidance && (
           <FinancialResultGuide guidance={resultGuidance} onRefine={chooseQuickFacet} onOpen={openResult} />
         )}
 
-        {searchPhase === 'ready' && resultFacets.length > 1 && !smartDraft && !navigationIntent && (
+        {searchPhase === 'ready' && resultFacets.length > 1 && !smartDraft && !navigationIntent && !helpIntent && (
           <section aria-label="Refinar resultados desta busca" className="-mx-1 mb-3 overflow-x-auto overscroll-x-contain px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="flex w-max items-center gap-1.5">
               <button type="button" onClick={() => chooseQuickFacet(null)} aria-pressed={activeFilters.length === 0}
@@ -826,7 +888,7 @@ export default function Page() {
           </section>
         )}
 
-        {smartDraft || navigationIntent || commandOnly || !trimmedQuery ? null : trimmedQuery.length < 2 ? (
+        {helpIntent || readOnlyIntent ? null : smartDraft || navigationIntent || commandOnly || !trimmedQuery ? null : trimmedQuery.length < 2 ? (
           <div className="mt-10 flex flex-col items-center px-7 text-center">
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[20px] bg-teal-50 text-teal-600 dark:bg-teal-950/40 dark:text-teal-400">
               <Search size={24} />
@@ -900,7 +962,11 @@ export default function Page() {
                     </button>
                   ))}
                 </div>
-                <p className="mt-2.5 text-[10px] text-slate-400 dark:text-slate-500">Sugestões de navegação, não resultados encontrados. Dados não são alterados.</p>
+                <button type="button" onClick={continueWithGemini}
+                  className="mt-3 flex min-h-11 w-full items-center justify-between gap-2 rounded-[14px] border border-teal-500/25 bg-teal-50 px-3.5 text-left text-[12px] font-bold text-teal-800 transition active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 dark:border-teal-500/20 dark:bg-teal-950/35 dark:text-teal-200">
+                  <span>Conversar com Gemini sobre esta pergunta</span><ChevronRight size={16} aria-hidden="true" />
+                </button>
+                <p className="mt-2.5 text-[10px] leading-4 text-slate-400 dark:text-slate-500">Sugestões de navegação, não resultados encontrados. O envio ao Gemini ocorre só no chat, após sua confirmação, incluindo o contexto estruturado do Assistente. Dados não são alterados.</p>
               </div>
             )}
           </section>
