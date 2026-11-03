@@ -41,6 +41,7 @@ import { consumeContextualSearchQuery } from '@/lib/contextualSearchHandoff'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { interpretFinancialInput, smartDraftUrl } from '@/lib/smartFinancialInput'
 import { resolveFinancialNavigationIntent } from '@/lib/financialNavigationIntent'
+import { financialSearchRequestKey, financialSearchPhase } from '@/lib/financialSearchContinuity'
 import FinancialCommandHub from '@/components/FinancialCommandHub'
 import { consumeCommandHubScope, rememberKnownHubRoute, type CommandHubScope } from '@/lib/financialCommandHub'
 
@@ -338,6 +339,8 @@ export default function Page() {
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<GlobalSearchResult[]>([])
   const [resolvedQuery, setResolvedQuery] = useState('')
+  const [resolvedSearchKey, setResolvedSearchKey] = useState('')
+  const [failedSearchKey, setFailedSearchKey] = useState('')
   const [loading, setLoading] = useState(false)
   const [searchError, setSearchError] = useState(false)
   const [searchAttempt, setSearchAttempt] = useState(0)
@@ -390,6 +393,8 @@ export default function Page() {
   }
 
   const trimmedQuery = query.trim()
+  const requestKey = financialSearchRequestKey(user?.id, context as 'dfl' | 'personal', trimmedQuery, searchAttempt)
+  const searchPhase = financialSearchPhase(requestKey, resolvedSearchKey, failedSearchKey, loading)
   const smartDraft = useMemo(() => interpretFinancialInput(trimmedQuery), [trimmedQuery])
   const navigationIntent = useMemo(() => resolveFinancialNavigationIntent(trimmedQuery), [trimmedQuery])
 
@@ -400,13 +405,15 @@ export default function Page() {
 
   const visibleItems = useMemo(() => {
     if (loading || trimmedQuery !== resolvedQuery) return []
+    // R424: nao mostrar resultado de outra conta/contexto nem do retry anterior.
+    if (searchPhase !== 'ready') return []
     if (activeFilters.length === 0) return items
     const selected = new Set(activeFilters)
     return items.filter((item) => {
       const filter = resultFilter(item)
       return filter ? selected.has(filter) : false
     })
-  }, [items, activeFilters, loading, trimmedQuery, resolvedQuery])
+  }, [items, activeFilters, loading, trimmedQuery, resolvedQuery, searchPhase])
 
   const activeFilterLabels = useMemo(
     () =>
@@ -420,6 +427,8 @@ export default function Page() {
     if (!user?.id || trimmedQuery.length < 2 || smartDraft || navigationIntent) {
       setItems([])
       setResolvedQuery('')
+      setResolvedSearchKey('')
+      setFailedSearchKey('')
       setLoading(false)
       setSearchError(false)
       return
@@ -430,17 +439,25 @@ export default function Page() {
     const timer = setTimeout(async () => {
       setLoading(true)
       setSearchError(false)
+      setFailedSearchKey('')
       try {
         const result = await searchFinancialData(
           user.id,
           context as 'dfl' | 'personal',
           trimmedQuery
         )
-        if (active) { setItems(result); setResolvedQuery(trimmedQuery) }
+        if (active) {
+          setItems(result)
+          setResolvedQuery(trimmedQuery)
+          setResolvedSearchKey(requestKey)
+          setFailedSearchKey('')
+        }
       } catch {
         if (active) {
           setItems([])
           setResolvedQuery('')
+          setResolvedSearchKey('')
+          setFailedSearchKey(requestKey)
           setSearchError(true)
         }
       } finally {
@@ -452,7 +469,7 @@ export default function Page() {
       active = false
       clearTimeout(timer)
     }
-  }, [trimmedQuery, user?.id, context, searchAttempt, smartDraft, navigationIntent])
+  }, [trimmedQuery, user?.id, context, searchAttempt, requestKey, smartDraft, navigationIntent])
 
   const openResult = (item: GlobalSearchResult) => {
     vibrate([10])
@@ -673,9 +690,12 @@ export default function Page() {
         )}
 
         <div className="sr-only" aria-live="polite" aria-atomic="true">
-          {navigationIntent ? 'Comando de navegação disponível' : trimmedQuery.length >= 2 && !loading
-            ? `${visibleItems.length} ${visibleItems.length === 1 ? 'resultado encontrado' : 'resultados encontrados'}`
-            : loading ? 'Buscando' : ''}
+          {navigationIntent ? 'Comando de navegação disponível'
+            : searchPhase === 'loading' && trimmedQuery.length >= 2 && !smartDraft ? 'Buscando'
+            : searchPhase === 'error' ? 'A busca falhou'
+            : searchPhase === 'ready' && trimmedQuery.length >= 2
+              ? `${visibleItems.length} ${visibleItems.length === 1 ? 'resultado encontrado' : 'resultados encontrados'}`
+            : ''}
         </div>
 
         {hubVoiceEntry && !trimmedQuery && (
@@ -723,7 +743,7 @@ export default function Page() {
               “nova despesa”, “pendências” e “comprovantes”. Seus dados continuam locais e privados.
             </p>
           </div>
-        ) : searchError ? (
+        ) : searchError && searchPhase === 'error' ? (
           <div className="mt-10 flex flex-col items-center px-7 text-center" role="alert">
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[20px] bg-amber-500/10 text-amber-500">
               <Search size={24} />
@@ -742,7 +762,7 @@ export default function Page() {
               Tentar novamente
             </button>
           </div>
-        ) : loading && items.length === 0 ? (
+        ) : searchPhase === 'loading' ? (
           <div className="mt-10 flex items-center justify-center gap-2 text-sm font-semibold text-slate-400">
             <LoaderCircle size={17} className="animate-spin" />
             Buscando…
