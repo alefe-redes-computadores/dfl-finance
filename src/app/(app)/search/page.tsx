@@ -91,6 +91,10 @@ type SearchFilter =
   | 'subscription'
   | 'goal'
   | 'category'
+  | 'tag'
+  | 'budget'
+  | 'contact'
+  | 'invoice'
 
 const filterOptions: Array<{
   id: SearchFilter
@@ -108,6 +112,10 @@ const filterOptions: Array<{
   { id: 'subscription', label: 'Assinaturas', icon: Repeat2 },
   { id: 'goal', label: 'Metas', icon: Target },
   { id: 'category', label: 'Categorias', icon: Tags },
+  { id: 'tag', label: 'Tags', icon: Tags },
+  { id: 'budget', label: 'Orçamentos', icon: PiggyBank },
+  { id: 'contact', label: 'Contatos', icon: UserRound },
+  { id: 'invoice', label: 'Faturas', icon: CreditCard },
 ]
 
 function resultFilter(item: GlobalSearchResult): SearchFilter | null {
@@ -167,6 +175,10 @@ const kindPresentation: Record<
     shell: 'bg-slate-100 dark:bg-slate-800',
     iconClass: 'text-slate-600 dark:text-slate-300',
   },
+  tag: { label: 'Tag', icon: Tags, shell: 'bg-sky-50 dark:bg-sky-950/35', iconClass: 'text-sky-600 dark:text-sky-300' },
+  budget: { label: 'Orçamento', icon: PiggyBank, shell: 'bg-indigo-50 dark:bg-indigo-950/35', iconClass: 'text-indigo-600 dark:text-indigo-300' },
+  contact: { label: 'Contato', icon: UserRound, shell: 'bg-teal-50 dark:bg-teal-950/35', iconClass: 'text-teal-600 dark:text-teal-300' },
+  invoice: { label: 'Fatura', icon: CreditCard, shell: 'bg-fuchsia-50 dark:bg-fuchsia-950/35', iconClass: 'text-fuchsia-600 dark:text-fuchsia-300' },
 }
 
 function SearchCommandRow({
@@ -254,7 +266,7 @@ function SearchResultRow({
   }
 
   const iconStyle =
-    item.categoryColor && (isTransaction || item.kind === 'category')
+    item.categoryColor && (isTransaction || item.kind === 'category' || item.kind === 'tag')
       ? {
           color: item.categoryColor,
           backgroundColor: `${item.categoryColor}16`,
@@ -262,12 +274,12 @@ function SearchResultRow({
       : undefined
 
   const shellClass =
-    item.categoryColor && (isTransaction || item.kind === 'category')
+    item.categoryColor && (isTransaction || item.kind === 'category' || item.kind === 'tag')
       ? ''
       : presentation?.shell || 'bg-slate-100 dark:bg-slate-800'
 
   const iconClass =
-    item.categoryColor && (isTransaction || item.kind === 'category')
+    item.categoryColor && (isTransaction || item.kind === 'category' || item.kind === 'tag')
       ? ''
       : presentation?.iconClass || 'text-slate-600 dark:text-slate-300'
 
@@ -946,8 +958,8 @@ export default function Page() {
               Seu Command Center financeiro
             </p>
             <p className="mt-1.5 max-w-xs text-[12px] leading-5 text-slate-500 dark:text-slate-500">
-              Busque valores, meses, contas e transações ou use comandos como
-              “nova despesa”, “pendências” e “comprovantes”. Seus dados continuam locais e privados.
+              Pesquise metas, financiamentos, contas, categorias, tags, contatos e lançamentos
+              pelo nome. Cadastros e ações continuam protegidos por revisão.
             </p>
           </div>
         ) : searchError && searchPhase === 'error' ? (

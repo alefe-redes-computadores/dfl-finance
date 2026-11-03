@@ -319,6 +319,12 @@ export function preferredFinancialSearchKind(query: string): string | null {
     ['subscription', /\b(assinaturas?|recorrencias?)\b/],
     ['goal', /\b(metas?|objetivos?)\b/],
     ['category', /\b(categorias?)\b/],
+    ['tag', /\b(tags?|etiquetas?|marcadores?)\b/],
+    ['budget', /\b(orcamentos?|limites? de gastos?)\b/],
+    ['contact', /\b(contatos?|clientes?|fornecedores?)\b/],
+    ['financing', /\b(financiamentos?)\b/],
+    ['loan', /\b(emprestimos?)\b/],
+    ['invoice', /\b(faturas?)\b/],
     ['receipt', /\b(comprovantes?|recibos?|anexos?)\b/],
   ]
   for (const [kind, words] of choices) if (words.test(q)) candidates.push(kind)
@@ -339,6 +345,60 @@ function searchableTokens(query: string, intent: DateIntent | null) {
   return entity.length ? entity : withoutAction
 }
 
+/** R435 — reconhecimento de entidades existentes. Nao cria nem altera registros. */
+export type FinancialEntityQuery = { kind: string; qualifier: string }
+const ENTITY_PREFIXES: ReadonlyArray<{ kind: string; prefix: RegExp }> = [
+  { kind: 'debt', prefix: /^(?:valores? a receber|contas? a receber|dividas? a receber|devedores?|dividas?)\b/ },
+  { kind: 'invoice', prefix: /^faturas?\b/ },
+  { kind: 'tag', prefix: /^(?:tags?|etiquetas?|marcadores?)\b/ },
+  { kind: 'budget', prefix: /^(?:orcamentos?|limites? de gastos?)\b/ },
+  { kind: 'financing', prefix: /^financiamentos?\b/ },
+  { kind: 'loan', prefix: /^emprestimos?\b/ },
+  { kind: 'subscription', prefix: /^(?:assinaturas?|recorrencias?)\b/ },
+  { kind: 'contact', prefix: /^(?:contatos?|clientes?|fornecedores?)\b/ },
+  { kind: 'goal', prefix: /^(?:metas?|objetivos?)\b/ },
+  { kind: 'category', prefix: /^categorias?\b/ },
+  { kind: 'account', prefix: /^(?:contas? bancarias?|contas?)\b/ },
+  { kind: 'card', prefix: /^(?:cartoes?|cartao)\b/ },
+  { kind: 'receipt', prefix: /^(?:comprovantes?|recibos?|anexos?)\b/ },
+  { kind: 'expense', prefix: /^(?:despesas?|gastos?|pagamentos?)\b/ },
+  { kind: 'income', prefix: /^(?:receitas?|entradas?|recebimentos?)\b/ },
+  { kind: 'transfer', prefix: /^transferencias?\b/ },
+]
+/** Uma palavra de dominio so define tipo; um nome adicional continua pesquisavel. */
+export function parseFinancialEntityQuery(input: string): FinancialEntityQuery | null {
+  let q = norm(input).replace(/[?!.,;:]+$/g, '').trim()
+  q = q.replace(LOOKUP_ACTION, '').trim()
+    .replace(/^(?:(?:por favor|meu|minha|meus|minhas|os|as|o|a|um|uma)\s+)+/, '')
+  const matched = ENTITY_PREFIXES.map(spec => ({ spec, match: q.match(spec.prefix) }))
+    .find(entry => entry.match !== null)
+  if (!matched || !matched.match) return null
+  const qualifier = q.slice(matched.match[0].length).trim()
+    .replace(/^(?:(?:do|da|dos|das|de|no|na|nos|nas|em|sobre|com|chamado|chamada)\s+)*/, '')
+    .replace(/[?!.,;:]+$/g, '').trim()
+  // Nunca decidir um tipo quando a frase pede explicitamente dois dominios.
+  if (/^(?:e|ou)\s/.test(qualifier) || /\s+(?:e|ou)\s+(?:conta|cartao|meta|financiamento|categoria|tag|orcamento|contato)\b/.test(qualifier)) return null
+  return { kind: matched.spec.kind, qualifier }
+}
+
+/** Um tipo de resultado pode ter mais de uma fonte, sem misturar montantes. */
+function financialKindMatches(kind: string, row: any, requested: string): boolean {
+  if (requested === 'receipt') return kind === 'transaction' && !!row.receipt_url
+  if (kind === 'transaction') {
+    if (requested === 'expense') return row.type === 'expense' || row.type === 'sangria'
+    if (requested === 'income') return row.type === 'income'
+    if (requested === 'transfer') return row.type === 'transfer' || !!row.transfer_group_id
+  }
+  return kind === requested
+}
+/** Meses em nomes de metas/orcamentos nao sao datas implicitas. */
+function financialEntityDateIntent(query: string, entity: FinancialEntityQuery | null): DateIntent | null {
+  if (!entity || ['expense', 'income', 'transfer', 'invoice', 'receipt'].includes(entity.kind)) return parseDateIntent(query)
+  const q = norm(query)
+  if (!/\b(?:em|no|na|durante|mes|ano)\s+(?:janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|20\d{2}|\d{1,2}\/\d{2,4})\b/.test(q)) return null
+  return parseDateIntent(query)
+}
+
 export async function searchFinancialData(
   userId: string,
   context: 'dfl' | 'personal',
@@ -347,21 +407,41 @@ export async function searchFinancialData(
 ): Promise<GlobalSearchResult[]> {
   const term = norm(query)
   if (term.length < 2) return []
-  const dateIntent = parseDateIntent(query)
-  const tokens = searchableTokens(query, dateIntent)
-  // Comando sem entidade nem periodo nao precisa abrir dez tabelas do IndexedDB.
-  if (!dateIntent && tokens.length === 0) return []
-  const preferredKind = preferredFinancialSearchKind(query)
+  const entity = parseFinancialEntityQuery(query)
+  const dateIntent = financialEntityDateIntent(query, entity)
+  const tokens = searchableTokens(entity ? entity.qualifier : query, dateIntent)
+  // R435: 'metas' lista metas; 'meta viagem' consulta o nome sem exigir 'meta' nele.
+  // Comando vazio continua sem abrir qualquer tabela do IndexedDB.
+  if (!entity) {
+    if (!dateIntent && tokens.length === 0) return []
+  }
+  const preferredKind = preferredFinancialSearchKind(query) ?? entity?.kind ?? null
 
   const names = [
     'transactions', 'accounts', 'credit_cards', 'debts', 'loans',
     'financings', 'subscriptions', 'goals', 'categories',
   ] as const
 
-  const [rows, contacts] = await Promise.all([
+  // Cada tabela consulta exclusivamente o usuario/contexto atual. Faturas nao possuem
+  // indice composto; filtramos contexto apos indice user_id sem varrer outras contas.
+  const moreNames = ['tags', 'budgets', 'credit_invoices'] as const
+  const [rows, contacts, moreRows] = await Promise.all([
     Promise.all(names.map((name) => (db as any)[name].where('[user_id+context]').equals([userId, context]).toArray())),
     db.contacts.where('[user_id+context]').equals([userId, context]).toArray(),
+    Promise.all(moreNames.map(async name => {
+      const table = (db as any)[name]
+      if (!table || typeof table.where !== 'function') return [] as any[]
+      if (name === 'credit_invoices') return table.where('user_id').equals(userId)
+        .and((item: any) => item.context === context).toArray()
+      return table.where('[user_id+context]').equals([userId, context]).toArray()
+    })),
   ])
+  const everyName: string[] = [...names, 'contacts', ...moreNames]
+  const everyRows: any[][] = [...rows, contacts, ...moreRows]
+  const tags = moreRows[0]
+  const cards = rows[names.indexOf('credit_cards')]
+  const tagMap = new Map(tags.map((tag: any) => [tag.id, tag]))
+  const cardMap = new Map(cards.map((card: any) => [card.id, card]))
 
   const categories = rows[names.indexOf('categories')]
   const accounts = rows[names.indexOf('accounts')]
@@ -380,29 +460,43 @@ export async function searchFinancialData(
     subscriptions: { kind: 'subscription', label: 'Recorrência', base: '/subscriptions/details?id=' },
     goals: { kind: 'goal', label: 'Meta', base: '/goals/details?id=' },
     categories: { kind: 'category', label: 'Categoria', base: '/categories' },
+    tags: { kind: 'tag', label: 'Tag', base: '/tags' },
+    budgets: { kind: 'budget', label: 'Orçamento', base: '/budgets/details?id=' },
+    contacts: { kind: 'contact', label: 'Contato', base: '/contacts/details?id=' },
+    credit_invoices: { kind: 'invoice', label: 'Fatura', base: '/cards/details?id=' },
   }
 
-  names.forEach((name, index) => {
-    rows[index].forEach((row: any) => {
-      const category: any = name === 'transactions' && row.category_id ? categoryMap.get(row.category_id) : undefined
-      const account: any = name === 'transactions' && row.account_id ? accountMap.get(row.account_id) : undefined
-      const contact: any = name === 'transactions' && row.contact_id ? contactMap.get(row.contact_id) : undefined
-      const date = row.date || row.due_date || row.next_due_date
-      if (dateIntent && !civilDate(date)) return
-      if (dateIntent && date && (String(date).slice(0, 10) < dateIntent.start || String(date).slice(0, 10) > dateIntent.end)) return
-      if (dateIntent && !date) return
+  everyName.forEach((name, index) => {
+    everyRows[index].forEach((row: any) => {
+      const category: any = row.category_id ? categoryMap.get(row.category_id) : undefined
+      const account: any = row.account_id ? accountMap.get(row.account_id) : undefined
+      const contact: any = row.contact_id ? contactMap.get(row.contact_id) : undefined
+      const card: any = row.credit_card_id ? cardMap.get(row.credit_card_id) : undefined
+      const relatedTags = name === 'transactions' && Array.isArray(row.tag_ids)
+        ? row.tag_ids.map((id: string) => tagMap.get(id)).filter(Boolean) : []
+      const date = row.date || row.due_date || row.next_due_date || row.deadline
+      const dates = name === 'credit_invoices' ? [row.due_date, row.start_date, row.end_date] : [date]
+      if (dateIntent && !dates.some(value => civilDate(value) && String(value).slice(0, 10) >= dateIntent.start && String(value).slice(0, 10) <= dateIntent.end)) return
+      const cfg = config[name]
+      if (entity && tokens.length === 0 && !financialKindMatches(cfg.kind, row, entity.kind)) return
 
       const fields = [
         row.description, row.name, row.title, row.person_name, row.lender, row.notes,
+        row.asset, row.asset_type, row.company, row.position, row.phone, row.email,
+        row.brand, row.flag, row.institution, row.last_four, row.billing_cycle, row.category,
         category?.name, account?.name, account?.bank, account?.bank_name, account?.bank_slug, row.bank, row.bank_slug,
-        contact?.name, contact?.person_name,
+        contact?.name, contact?.person_name, card?.name, card?.institution,
+        ...relatedTags.map((tag: any) => tag.name),
         row.receipt_url ? 'comprovante anexo recibo' : '',
-        ...moneyTokens(row.amount), ...moneyTokens(row.balance),
+        ...moneyTokens(row.amount), ...moneyTokens(row.balance), ...moneyTokens(row.target_amount),
+        ...moneyTokens(row.saved_amount), ...moneyTokens(row.installment_amount),
+        ...moneyTokens(row.installment_value), ...moneyTokens(row.limit_amount),
         ...moneyTokens(row.total_amount), ...moneyTokens(row.remaining_amount),
+        ...moneyTokens(row.paid_amount),
       ].map(norm).filter(Boolean)
       const haystack = fields.join(' ')
       if (tokens.length && !tokens.every((token) => fuzzyTokenMatch(token, haystack))) return
-      if (!tokens.length && !dateIntent) return
+      if (!tokens.length && !dateIntent && !entity) return
 
       let score = 0
       const fuzzyCount = tokens.filter(token => !exactTokenMatch(token, haystack)).length
@@ -416,7 +510,6 @@ export async function searchFinancialData(
       if (dateIntent) score += 4
       if (row.receipt_url && tokens.some((t) => ['comprovante','anexo','recibo'].includes(t))) score += 5
 
-      const cfg = config[name]
       const transfer = name === 'transactions' && (row.type === 'transfer' || row.transfer_group_id)
       const isPreferred = preferredKind === cfg.kind || (cfg.kind === 'transaction' && (
         (preferredKind === 'expense' && (row.type === 'expense' || row.type === 'sangria')) ||
@@ -426,20 +519,32 @@ export async function searchFinancialData(
       ))
       // O pedido por um tipo sobe na lista, sem suprimir outras correspondencias.
       if (isPreferred) score += 24
+      if (entity && financialKindMatches(cfg.kind, row, entity.kind)) score += 36
       if (transfer && row.transfer_direction === 'out') score += 0.1
-      const title = transfer ? 'Transferência' : row.description || row.name || row.title || row.person_name || row.lender || cfg.label
+      const title = name === 'credit_invoices'
+        ? `${card?.name || 'Cartão'} · Fatura`
+        : transfer ? 'Transferência' : row.description || row.name || row.title || row.person_name || row.lender || cfg.label
       out.push({
         id: row.id,
         kind: cfg.kind,
         title,
-        subtitle: name === 'transactions' && account?.name ? `${cfg.label} • ${account.name}` : cfg.label,
-        href: name === 'categories' ? cfg.base : `${cfg.base}${encodeURIComponent(row.id)}`,
-        amount: numberOrUndefined(row.amount ?? row.balance ?? row.total_amount ?? row.remaining_amount),
+        subtitle: name === 'transactions' && account?.name ? `${cfg.label} • ${account.name}`
+          : name === 'budgets' && category?.name ? `Orçamento • ${category.name}`
+          : name === 'credit_invoices' ? `Fatura • ${row.status === 'paid' ? 'Paga' : 'Em aberto'}`
+          : name === 'goals' ? 'Meta • valor-alvo'
+          : name === 'financings' ? 'Financiamento • valor contratado'
+          : cfg.label,
+        href: name === 'categories' || name === 'tags' ? cfg.base
+          : name === 'credit_invoices' ? (card ? `${cfg.base}${encodeURIComponent(row.credit_card_id)}` : '/cards')
+          : `${cfg.base}${encodeURIComponent(row.id)}`,
+        amount: name === 'credit_invoices'
+          ? numberOrUndefined(Math.max(0, Number(row.total_amount || 0) - Number(row.paid_amount || 0)))
+          : numberOrUndefined(row.amount ?? row.balance ?? row.total_amount ?? row.remaining_amount ?? row.target_amount),
         date,
         transactionType: transfer ? 'transfer' : name === 'transactions' ? row.type : undefined,
         categoryName: category?.name,
         categoryIcon: name === 'categories' ? row.icon : category?.icon,
-        categoryColor: name === 'categories' ? row.color : category?.color,
+        categoryColor: name === 'categories' || name === 'tags' ? row.color : category?.color,
         hasAttachment: name === 'transactions' ? Boolean(row.receipt_url) : false,
         status: row.status,
         _score: score, _fuzzy: fuzzyCount, _group: transfer ? row.transfer_group_id : undefined,

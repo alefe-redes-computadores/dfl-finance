@@ -11,6 +11,7 @@ const NAMES: Partial<Record<FinancialSearchFacetId, string>> = {
   account: 'contas', card: 'cartões', debt: 'valores a receber',
   loan: 'empréstimos', financing: 'financiamentos',
   subscription: 'assinaturas', goal: 'metas', category: 'categorias',
+  tag: 'tags', budget: 'orçamentos', contact: 'contatos', invoice: 'faturas',
 }
 
 const DETAIL_PATHS: Record<string, string> = {
@@ -18,6 +19,7 @@ const DETAIL_PATHS: Record<string, string> = {
   card: '/cards/details?id=', debt: '/debts/details?id=',
   loan: '/loans/details?id=', financing: '/financings/details?id=',
   subscription: '/subscriptions/details?id=', goal: '/goals/details?id=',
+  budget: '/budgets/details?id=', contact: '/contacts/details?id=',
 }
 
 /** Nao usa URL arbitraria, resultados remotos, dados agregados ou saldo. */

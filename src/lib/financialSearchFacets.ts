@@ -8,11 +8,13 @@ import type { GlobalSearchResult } from '@/lib/globalSearch'
 export type FinancialSearchFacetId =
   | 'income' | 'expense' | 'transfer' | 'account' | 'card'
   | 'debt' | 'loan' | 'financing' | 'subscription' | 'goal' | 'category'
+  | 'tag' | 'budget' | 'contact' | 'invoice'
 export type FinancialSearchFacet = { id: FinancialSearchFacetId; count: number }
 
 const ORDER: readonly FinancialSearchFacetId[] = [
   'expense', 'income', 'transfer', 'account', 'card', 'debt',
-  'loan', 'financing', 'subscription', 'goal', 'category'
+  'loan', 'financing', 'subscription', 'goal', 'category',
+  'tag', 'budget', 'contact', 'invoice'
 ]
 
 /** Classificação única para chip e filtro avançado; registros desconhecidos ficam sem faceta. */

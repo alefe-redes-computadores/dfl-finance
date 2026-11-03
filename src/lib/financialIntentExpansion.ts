@@ -65,6 +65,7 @@ const recoveryCatalog: readonly RecoveryAction[] = [
   { id: 'view-planning', title: 'Ver planejamento', detail: 'Acompanhar compromissos', href: '/planning' },
   { id: 'view-analysis', title: 'Ver análises', detail: 'Explorar indicadores', href: '/analysis' },
   { id: 'view-categories', title: 'Ver categorias', detail: 'Organizar classificações', href: '/categories' },
+  { id: 'view-tags', title: 'Ver tags', detail: 'Gerenciar etiquetas existentes', href: '/tags' },
 ]
 const byId = new Map(recoveryCatalog.map(action => [action.id, action]))
 function actions(ids: readonly string[]): RecoveryAction[] {
@@ -74,6 +75,8 @@ function actions(ids: readonly string[]): RecoveryAction[] {
 /** Sugere apenas rotas verificadas. Nunca diz que houve correspondência de dados. */
 export function suggestFinancialRecovery(query: string, scope: Scope = 'search'): RecoveryAction[] {
   const q = fold(query)
+  if (/tags?|etiqueta|marcador/.test(q)) return actions(['view-tags', 'view-categories', 'view-transactions'])
+  if (/categoria/.test(q)) return actions(['view-categories', 'view-transactions', 'view-budgets'])
   if (/cart[aã]o|cartoes|fatura/.test(q)) return actions(['view-cards', 'new-card', 'view-receipts'])
   if (/conta|banco|saldo/.test(q)) return actions(['view-accounts', 'new-account', 'view-transactions'])
   if (/meta|objetivo/.test(q)) return actions(['view-goals', 'new-goal', 'view-planning'])
