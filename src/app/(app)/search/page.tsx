@@ -41,6 +41,8 @@ import { consumeContextualSearchQuery } from '@/lib/contextualSearchHandoff'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { interpretFinancialInput, smartDraftUrl } from '@/lib/smartFinancialInput'
 import { resolveFinancialNavigationIntent } from '@/lib/financialNavigationIntent'
+import FinancialCommandHub from '@/components/FinancialCommandHub'
+import { consumeCommandHubScope, rememberKnownHubRoute, type CommandHubScope } from '@/lib/financialCommandHub'
 
 const money = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -343,11 +345,18 @@ export default function Page() {
   const { status: voiceStatus, notice: voiceNotice, transcript, start: startVoice, cancel: cancelVoice } = useFinancialSpeech()
   const inputRef = useRef<HTMLInputElement | null>(null)
   const receivedVoiceRef = useRef(false)
+  const [hubScope, setHubScope] = useState<CommandHubScope>('search')
+  const [hubVoiceEntry, setHubVoiceEntry] = useState(false)
 
   // Uma transcricao vinda do botao global passa pela memoria de sessao,
   // nunca pela URL e nunca por gravacao automatica.
   useEffect(() => {
     if (receivedVoiceRef.current) return
+    const commandSource = consumeCommandHubScope()
+    if (commandSource) {
+      setHubScope(commandSource.scope)
+      setHubVoiceEntry(commandSource.voice)
+    }
     const incoming = consumeFinancialVoiceTranscript()
     const contextual = consumeContextualSearchQuery()
     if (incoming) {
@@ -357,6 +366,8 @@ export default function Page() {
     } else if (contextual) {
       receivedVoiceRef.current = true
       setQuery(contextual)
+      inputRef.current?.blur()
+    } else if (commandSource?.voice) {
       inputRef.current?.blur()
     } else {
       inputRef.current?.focus()
@@ -377,7 +388,7 @@ export default function Page() {
   const navigationIntent = useMemo(() => resolveFinancialNavigationIntent(trimmedQuery), [trimmedQuery])
 
   const commands = useMemo(
-    () => navigationIntent ? [] : resolveFinancialCommands(trimmedQuery),
+    () => navigationIntent || !trimmedQuery ? [] : resolveFinancialCommands(trimmedQuery),
     [trimmedQuery, navigationIntent]
   )
 
@@ -441,6 +452,7 @@ export default function Page() {
 
   const openCommand = (command: FinancialSearchCommand) => {
     vibrate([10])
+    rememberKnownHubRoute(user?.id ?? null, context, command.href)
     router.push(command.href)
   }
 
@@ -608,7 +620,7 @@ export default function Page() {
               <span className="text-[10px] font-semibold text-slate-400">Sem alterações financeiras</span>
             </div>
             <p className="text-[13px] leading-5 text-slate-500 dark:text-slate-400">{navigationIntent.description}</p>
-            <button type="button" onClick={() => { vibrate([8]); router.push(navigationIntent.href) }}
+            <button type="button" onClick={() => { vibrate([8]); rememberKnownHubRoute(user?.id ?? null, context, navigationIntent.href); router.push(navigationIntent.href) }}
               className="mt-3 flex min-h-11 w-full items-center justify-between rounded-[15px] bg-teal-600 px-3.5 py-2 text-left text-[13px] font-bold text-white shadow-sm transition active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 dark:bg-teal-700">
               <span>{navigationIntent.title}</span><ChevronRight size={18} aria-hidden="true" />
             </button>
@@ -655,6 +667,16 @@ export default function Page() {
             : loading ? 'Buscando' : ''}
         </div>
 
+        {hubVoiceEntry && !trimmedQuery && (
+          <p role="status" className="mb-3 rounded-[14px] border border-teal-500/20 bg-teal-50/60 px-3 py-2 text-[11px] font-medium text-teal-800 dark:bg-teal-950/30 dark:text-teal-300">
+            Modo voz pronto: toque no microfone da barra para falar.
+          </p>
+        )}
+
+        {!trimmedQuery && (
+          <FinancialCommandHub scope={hubScope} userId={user?.id ?? null} context={context as 'dfl' | 'personal'} />
+        )}
+
         {commands.length > 0 && (
           <section className="mt-1 mb-4">
             <div className="mb-2 flex items-center justify-between px-1">
@@ -677,7 +699,7 @@ export default function Page() {
           </section>
         )}
 
-        {smartDraft || navigationIntent ? null : trimmedQuery.length < 2 ? (
+        {smartDraft || navigationIntent || !trimmedQuery ? null : trimmedQuery.length < 2 ? (
           <div className="mt-10 flex flex-col items-center px-7 text-center">
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[20px] bg-teal-50 text-teal-600 dark:bg-teal-950/40 dark:text-teal-400">
               <Search size={24} />

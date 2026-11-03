@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowUpRight, Mic, Search, Sparkles } from 'lucide-react'
 import { CONTEXTUAL_COMMAND, safeContextualRoute, type ContextualCommandScope, type ContextualShortcut } from '@/lib/contextualCommand'
 import { stageContextualSearchQuery } from '@/lib/contextualSearchHandoff'
+import { stageCommandHubScope } from '@/lib/financialCommandHub'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import ContextualInsightCard from './ContextualInsightCard'
 
@@ -39,8 +40,8 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
     return () => window.clearTimeout(timer)
   }, [animate, shown, letters, position, config])
 
-  function openSearch() { vibrate([6]); router.push('/search') }
-  function openVoice() { vibrate([6]); router.push('/search') }
+  function openSearch() { stageCommandHubScope(scope, false); vibrate([6]); router.push('/search') }
+  function openVoice() { stageCommandHubScope(scope, true); vibrate([6]); router.push('/search') }
   function openShortcut(item: ContextualShortcut) {
     const destination = safeContextualRoute(item)
     if (!destination) return
