@@ -5,6 +5,7 @@ import { ArrowUpRight, Mic, Search, Sparkles } from 'lucide-react'
 import { CONTEXTUAL_COMMAND, safeContextualRoute, type ContextualCommandScope, type ContextualShortcut } from '@/lib/contextualCommand'
 import { stageContextualSearchQuery } from '@/lib/contextualSearchHandoff'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import ContextualInsightCard from './ContextualInsightCard'
 
 /** Entrada de intencao por contexto. Voz e lancamentos continuam nos fluxos existentes. */
 export default function ContextualCommandBar({ scope }: { scope: ContextualCommandScope }) {
@@ -49,6 +50,7 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
   }
 
   return (
+    <>
     <div className={`mb-3 w-full transition-[opacity,transform] duration-300 motion-reduce:transition-none ${shown ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0'}`}>
       <div className="dfl-command-frame">
         <div className="dfl-command-shell">
@@ -83,5 +85,7 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
         </div>
       </div>
     </div>
+    <ContextualInsightCard scope={scope} />
+    </>
   )
 }
