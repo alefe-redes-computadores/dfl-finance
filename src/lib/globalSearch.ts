@@ -399,6 +399,36 @@ function financialEntityDateIntent(query: string, entity: FinancialEntityQuery |
   return parseDateIntent(query)
 }
 
+/** R436-R2: escopo de leitura por tipo, sem deixar buscas livres incompletas. */
+const FINANCIAL_ENTITY_READS: Readonly<Record<string, readonly string[]>> = {
+  account: ['accounts'],
+  card: ['credit_cards'],
+  category: ['categories'],
+  contact: ['contacts'],
+  tag: ['tags'],
+  goal: ['goals', 'categories'],
+  budget: ['budgets', 'categories'],
+  financing: ['financings'],
+  loan: ['loans'],
+  subscription: ['subscriptions'],
+  debt: ['debts', 'contacts', 'categories', 'accounts'],
+  invoice: ['credit_invoices', 'credit_cards'],
+  receipt: ['transactions', 'accounts', 'categories', 'contacts', 'tags'],
+  expense: ['transactions', 'accounts', 'categories', 'contacts', 'tags'],
+  income: ['transactions', 'accounts', 'categories', 'contacts', 'tags'],
+  transfer: ['transactions', 'accounts', 'categories', 'contacts', 'tags'],
+}
+/**
+ * Tipos sem nome adicional consultam so as tabelas necessarias.
+ * Consultas com nome, conta, periodo ou livres mantem a cobertura completa.
+ * Null significa consulta sem restricao de tabelas, nunca ausência de dados.
+ */
+export function financialEntityReadSet(entity: FinancialEntityQuery | null): ReadonlySet<string> | null {
+  if (!entity || entity.qualifier) return null
+  const tables = FINANCIAL_ENTITY_READS[entity.kind]
+  return tables ? new Set(tables) : null
+}
+
 export async function searchFinancialData(
   userId: string,
   context: 'dfl' | 'personal',
@@ -416,6 +446,8 @@ export async function searchFinancialData(
     if (!dateIntent && tokens.length === 0) return []
   }
   const preferredKind = preferredFinancialSearchKind(query) ?? entity?.kind ?? null
+  const readSet = financialEntityReadSet(entity)
+  const shouldRead = (name: string) => readSet === null || readSet.has(name)
 
   const names = [
     'transactions', 'accounts', 'credit_cards', 'debts', 'loans',
@@ -426,9 +458,14 @@ export async function searchFinancialData(
   // indice composto; filtramos contexto apos indice user_id sem varrer outras contas.
   const moreNames = ['tags', 'budgets', 'credit_invoices'] as const
   const [rows, contacts, moreRows] = await Promise.all([
-    Promise.all(names.map((name) => (db as any)[name].where('[user_id+context]').equals([userId, context]).toArray())),
-    db.contacts.where('[user_id+context]').equals([userId, context]).toArray(),
+    Promise.all(names.map((name) => shouldRead(name)
+      ? (db as any)[name].where('[user_id+context]').equals([userId, context]).toArray()
+      : Promise.resolve([] as any[]))),
+    shouldRead('contacts')
+      ? db.contacts.where('[user_id+context]').equals([userId, context]).toArray()
+      : Promise.resolve([] as any[]),
     Promise.all(moreNames.map(async name => {
+      if (!shouldRead(name)) return [] as any[]
       const table = (db as any)[name]
       if (!table || typeof table.where !== 'function') return [] as any[]
       if (name === 'credit_invoices') return table.where('user_id').equals(userId)
