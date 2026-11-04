@@ -712,6 +712,7 @@ export default function MorePage() {
           </summary>
           <div className="px-2 pb-2">
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 space-y-1">
+            <MenuItem iconName="store" label="Gestão comercial" href="/commercial" badge="OFF" colorClass="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
             <MenuItem iconName="wallet" label="Contas" href="/accounts" colorClass="text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30" />
             <MenuItem iconName="credit-card" label="Cartões de Crédito" href="/cards" colorClass="text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30" />
             <MenuItem iconName="tags" label="Categorias" href="/categories" colorClass="text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/30" />

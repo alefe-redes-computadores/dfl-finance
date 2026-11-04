@@ -1,0 +1,15 @@
+import fs from 'node:fs'
+import assert from 'node:assert/strict'
+const file=process.argv[2] || new URL('./schema.sql',import.meta.url)
+const s=fs.readFileSync(file,'utf8')
+for(const t of ['sales','receipts','allocations','events']) assert.match(s,new RegExp(`create table if not exists public\\.dfl_commercial_${t}\\b`))
+for(const t of ['sales','receipts','allocations','events']) assert.match(s,new RegExp(`alter table public\\.dfl_commercial_${t} enable row level security`))
+assert.match(s,/revoke all on public\.dfl_commercial_sales/)
+assert.match(s,/dfl_commercial_allocate\(/)
+assert.match(s,/dfl_commercial_reverse_allocation\(/)
+assert.match(s,/used_sale\+p_amount>s\.payable_cents/)
+assert.match(s,/used_receipt\+p_amount>r\.amount_cents/)
+assert.match(s,/perform 1 from public\.dfl_commercial_sales where id=a\.sale_id/)
+assert.match(s,/perform 1 from public\.dfl_commercial_receipts where id=a\.receipt_id/)
+assert.match(s,/grant execute on function public\.dfl_commercial_allocate/)
+console.log('R443: 14 contratos estruturais OK (não substituem testes PostgreSQL).')
