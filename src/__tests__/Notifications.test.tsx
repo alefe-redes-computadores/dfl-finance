@@ -1,22 +1,17 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { ContextProvider } from '@/components/ContextToggle'
 
-// Mock do supabase
-const mockSupabase = {
-  from: jest.fn().mockReturnThis(),
-  select: jest.fn().mockReturnThis(),
-  eq: jest.fn().mockReturnThis(),
-  gte: jest.fn().mockReturnThis(),
-  lte: jest.fn().mockReturnThis(),
-  in: jest.fn().mockReturnThis(),
-  order: jest.fn().mockReturnThis(),
-  match: jest.fn().mockReturnThis(),
-  single: jest.fn().mockResolvedValue({ data: null, error: null }),
-}
+let mockLocalRows: any[] = []
 
-jest.mock('@/lib/supabase', () => ({
-  supabase: mockSupabase
+// Notifications are local-first.  Mock the repository boundary instead of an
+// obsolete Supabase query chain that this page no longer calls.
+jest.mock('@/hooks/useLocalData', () => ({
+  useLocalData: () => ({ data: mockLocalRows, reload: jest.fn().mockResolvedValue(undefined) }),
 }))
+jest.mock('@/hooks/useSafeDb', () => ({
+  useSafeDb: () => ({ safeDelete: jest.fn(), safeUpdate: jest.fn() }),
+}))
+jest.mock('@/hooks/useAdmin', () => ({ useIsAdmin: () => ({ isAdmin: false, loading: false }) }))
 
 // Mock do useAuth
 jest.mock('@/lib/hooks/useAuth', () => ({
@@ -48,17 +43,7 @@ describe('NotificationsPage', () => {
   })
 
   it('deve exibir mensagem de "Tudo sob controle" quando não há notificações', async () => {
-    // Mock dos dados vazios
-    mockSupabase.from.mockImplementation((table: string) => ({
-      select: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockReturnThis(),
-      gte: jest.fn().mockReturnThis(),
-      lte: jest.fn().mockReturnThis(),
-      in: jest.fn().mockReturnThis(),
-      order: jest.fn().mockReturnThis(),
-      match: jest.fn().mockReturnThis(),
-      single: jest.fn().mockResolvedValue({ data: [], error: null }),
-    }))
+    mockLocalRows = []
 
     render(
       <ContextProvider>
@@ -67,34 +52,12 @@ describe('NotificationsPage', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('Tudo sob controle!')).toBeInTheDocument()
+      expect(screen.getByText('Nenhuma notificação')).toBeInTheDocument()
     })
   })
 
-  it('deve gerar notificação de fatura vencida', async () => {
-    // Mock de cartão de crédito com fatura vencida
-    mockSupabase.from.mockImplementation((table: string) => {
-      if (table === 'credit_cards') {
-        return {
-          select: jest.fn().mockReturnThis(),
-          match: jest.fn().mockReturnThis(),
-          order: jest.fn().mockResolvedValue({
-            data: [{ id: 'card-1', name: 'Nubank', due_day: 1, closing_day: 25 }],
-            error: null
-          })
-        }
-      }
-      return {
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        gte: jest.fn().mockReturnThis(),
-        lte: jest.fn().mockReturnThis(),
-        in: jest.fn().mockReturnThis(),
-        order: jest.fn().mockReturnThis(),
-        match: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: [], error: null }),
-      }
-    })
+  it('deve exibir uma notificação local pendente', async () => {
+    mockLocalRows = [{ id: 'invoice-1', title: 'Fatura vencida', message: 'Nubank', is_read: false, created_at: '2026-07-01T12:00:00Z', type: 'warning' }]
 
     render(
       <ContextProvider>
@@ -103,7 +66,7 @@ describe('NotificationsPage', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText(/Fatura vencida/)).toBeInTheDocument()
+      expect(screen.getByText('Fatura vencida')).toBeInTheDocument()
     })
   })
 })

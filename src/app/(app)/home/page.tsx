@@ -114,6 +114,7 @@ function HomeContent() {
   const [currentDate, setCurrentDate] = useState(new Date())
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
+  const isCurrentMonth = format(currentDate, 'yyyy-MM') === format(new Date(), 'yyyy-MM')
   const greeting = getGreeting()
   const firstName = (user?.user_metadata?.name || 'Visitante').split(' ')[0]
 
@@ -2463,7 +2464,7 @@ function HomeContent() {
   }
 
   return (
-    <div ref={containerRef} className="relative mx-auto min-h-[100dvh] w-full max-w-2xl bg-gray-50 px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-3 font-sans transition-colors duration-300 dark:bg-slate-900">
+    <div ref={containerRef} className="relative mx-auto min-h-[100dvh] w-full max-w-2xl bg-gray-50 px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-3 font-sans transition-colors duration-300 sm:px-4 dark:bg-slate-900">
       {undoToast && (
         <UndoToast
           message={undoToast.message}
@@ -2506,7 +2507,7 @@ function HomeContent() {
                 )}
               </div>
             ) : (
-              <div className="w-10 h-10 animate-pulse bg-gray-200 dark:bg-slate-700 rounded-full" />
+              <div aria-hidden="true" className="w-10 h-10 animate-pulse motion-reduce:animate-none bg-gray-200 dark:bg-slate-700 rounded-full" />
             )}
 
             {notificationsEnabled && (
@@ -2514,7 +2515,13 @@ function HomeContent() {
             )}
           </div>
 
-          <div role="group" aria-label="Selecionar mês da Home" className="flex min-w-0 items-center gap-1 rounded-full border border-gray-200/70 bg-white/90 px-1.5 py-1 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/90">
+          {!isCurrentMonth && (
+            <button type="button" onClick={() => { setCurrentDate(new Date()); vibrate(10) }}
+              className="min-h-9 rounded-full border border-teal-200 bg-teal-50 px-3 text-[11px] font-bold text-teal-700 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300">
+              Voltar ao mês atual
+            </button>
+          )}
+          <div role="group" aria-label="Selecionar mês da Home" className="flex min-w-0 max-w-full items-center gap-1 rounded-full border border-gray-200/70 bg-white/90 px-1.5 py-1 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/90">
             <button type="button" aria-label="Mês anterior" onClick={() => { setCurrentDate(previous => subMonths(previous, 1)); vibrate(10) }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-teal-500 active:scale-95 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-gray-200 motion-reduce:transition-none"><ChevronLeft size={16} aria-hidden="true" /></button>
             <span aria-live="polite" className="min-w-[105px] max-w-[150px] truncate text-center text-[11px] font-bold uppercase tracking-[0.10em] text-gray-700 dark:text-gray-200">{monthLabel}</span>
             <button type="button" aria-label="Próximo mês" onClick={() => { setCurrentDate(previous => addMonths(previous, 1)); vibrate(10) }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-teal-500 active:scale-95 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-gray-200 motion-reduce:transition-none"><ChevronRight size={16} aria-hidden="true" /></button>

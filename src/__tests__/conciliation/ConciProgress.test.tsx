@@ -13,8 +13,9 @@ describe('ConciProgress', () => {
       />
     )
 
-    expect(screen.getByText('3 de 10')).toBeInTheDocument()
-    expect(screen.getByText('✅ 2 • ❌ 1')).toBeInTheDocument()
+    expect(screen.getByText('de 10')).toBeInTheDocument()
+    expect(screen.getByText('2 conciliadas')).toBeInTheDocument()
+    expect(screen.getByText('1 adiadas')).toBeInTheDocument()
   })
 
   it('deve mostrar zero quando não há transações', () => {
@@ -27,8 +28,9 @@ describe('ConciProgress', () => {
       />
     )
 
-    expect(screen.getByText('0 de 0')).toBeInTheDocument()
-    expect(screen.getByText('✅ 0 • ❌ 0')).toBeInTheDocument()
+    expect(screen.getByText('de 0')).toBeInTheDocument()
+    expect(screen.getByText('0 conciliadas')).toBeInTheDocument()
+    expect(screen.getByText('0 adiadas')).toBeInTheDocument()
   })
 
   it('deve mostrar apenas aprovados quando não há rejeitados', () => {
@@ -41,7 +43,8 @@ describe('ConciProgress', () => {
       />
     )
 
-    expect(screen.getByText('5 de 5')).toBeInTheDocument()
-    expect(screen.getByText('✅ 5 • ❌ 0')).toBeInTheDocument()
+    expect(screen.getByText('de 5')).toBeInTheDocument()
+    expect(screen.getByText('5 conciliadas')).toBeInTheDocument()
+    expect(screen.getByText('0 adiadas')).toBeInTheDocument()
   })
 })

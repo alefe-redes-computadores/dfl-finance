@@ -61,14 +61,13 @@ describe('NewTransactionPage', () => {
 
   it('deve renderizar o título correto para despesa', () => {
     render(<NewTransactionPage />)
-    expect(screen.getByText('Nova Despesa')).toBeInTheDocument()
+    expect(screen.getByText('Nova despesa')).toBeInTheDocument()
   })
 
   it('deve exibir o botão de salvar (ícone de check)', () => {
     render(<NewTransactionPage />)
     // O botão tem um ícone Check, podemos buscar pelo papel ou pela classe
-    const saveButton = document.querySelector('button[class*="fixed bottom-8"]')
-    expect(saveButton).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Marcar como (pago|pendente)/ })).toBeInTheDocument()
   })
 
   it('deve exibir o input de valor com placeholder "0,00"', () => {
@@ -79,17 +78,17 @@ describe('NewTransactionPage', () => {
 
   it('deve exibir os botões de QR Code e anexo', () => {
     render(<NewTransactionPage />)
-    const qrButton = screen.getByRole('button', { name: /QrCode/i })
-    const attachButton = screen.getByRole('button', { name: /Camera/i })
+    const qrButton = screen.getByRole('button', { name: 'Ler QR Code' })
+    const attachButton = screen.getByRole('button', { name: 'Adicionar comprovante' })
     expect(qrButton).toBeInTheDocument()
     expect(attachButton).toBeInTheDocument()
   })
 
-  it('deve mostrar "Mais detalhes" ao clicar no botão', () => {
+  it('deve mostrar opções avançadas sem expor input nativo de data', () => {
     render(<NewTransactionPage />)
-    const detailsButton = screen.getByText('Mais detalhes')
+    const detailsButton = screen.getByText('Mais opções')
     fireEvent.click(detailsButton)
     // Verifica se o campo de data aparece (está dentro da seção de detalhes)
-    expect(screen.getByDisplayValue(/^\d{4}-\d{2}-\d{2}$/)).toBeInTheDocument()
+    expect(screen.getByText('Data')).toBeInTheDocument()
   })
 })

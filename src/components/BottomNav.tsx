@@ -120,7 +120,7 @@ export default function BottomNav() {
               aria-label="Abrir atalhos da Home"
               aria-expanded={isOpen}
               aria-controls="dfl-home-quick-actions"
-              className="fixed bottom-[calc(92px+var(--safe-area-bottom))] left-4 z-[60] flex h-10 items-center gap-1.5 rounded-full border border-teal-600/20 bg-slate-900 px-3.5 text-[11px] font-semibold text-white shadow-lg shadow-slate-900/20 transition active:scale-95 dark:border-slate-600 dark:bg-slate-700"
+              className="fixed bottom-[calc(92px+var(--safe-area-bottom))] left-4 z-[60] flex min-h-11 items-center gap-1.5 rounded-full border border-teal-600/20 bg-slate-900 px-3.5 text-[11px] font-semibold text-white shadow-lg shadow-slate-900/20 transition active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500 motion-reduce:transition-none dark:border-slate-600 dark:bg-slate-700"
             >
               <Zap size={15} aria-hidden="true" />
               Atalhos
@@ -136,12 +136,13 @@ export default function BottomNav() {
 
       <div
         id="dfl-home-quick-actions"
-        className={`fixed bottom-[calc(76px+var(--safe-area-bottom))] left-4 right-4 z-[60] mx-auto max-w-md origin-bottom transition-all duration-200 motion-reduce:transition-none motion-reduce:transform-none ${
+        className={`fixed bottom-[calc(76px+var(--safe-area-bottom))] left-3 right-3 z-[60] mx-auto max-w-md origin-bottom transition-all duration-200 motion-reduce:transition-none motion-reduce:transform-none ${
           isOpen
             ? 'translate-y-0 scale-100 opacity-100 pointer-events-auto'
             : 'translate-y-3 scale-[0.97] opacity-0 pointer-events-none'
         }`}
         aria-hidden={!isOpen}
+        {...(!isOpen ? { inert: true } : {})}
       >
         <div className="app-nav-quick-panel">
           <div className="grid grid-cols-3 gap-1">
@@ -358,7 +359,7 @@ export default function BottomNav() {
               <button
                 type="button"
                 onClick={handleCentralAction}
-                className="relative flex h-[56px] w-[56px] items-center justify-center rounded-full bg-teal-700 text-white shadow-[0_7px_22px_rgba(15,118,110,0.30)] transition-all duration-200 active:scale-[0.92] dark:bg-teal-600"
+                className="relative flex h-[56px] w-[56px] items-center justify-center rounded-full bg-teal-700 text-white shadow-[0_7px_22px_rgba(15,118,110,0.30)] transition-all duration-200 active:scale-[0.92] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 motion-reduce:transition-none dark:bg-teal-600"
                 aria-label="Nova transação completa"
                 aria-expanded={false}
               >

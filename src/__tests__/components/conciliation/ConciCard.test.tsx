@@ -40,7 +40,7 @@ describe('ConciCard', () => {
 
     expect(screen.getByText('Supermercado Extra')).toBeInTheDocument()
     expect(screen.getByText('R$ 150,00')).toBeInTheDocument()
-    expect(screen.getByText('Despesa')).toBeInTheDocument()
+    expect(screen.getByText('Saída')).toBeInTheDocument()
     expect(screen.getByText('Conta Corrente')).toBeInTheDocument()
     expect(screen.getByText('Alimentação')).toBeInTheDocument()
   })
@@ -68,7 +68,7 @@ describe('ConciCard', () => {
       />
     )
 
-    const approveButton = screen.getByText('Aprovar')
+    const approveButton = screen.getByText('Conciliar')
     fireEvent.click(approveButton)
 
     expect(mockApprove).toHaveBeenCalledWith('1')
@@ -83,14 +83,14 @@ describe('ConciCard', () => {
       />
     )
 
-    const rejectButton = screen.getByText('Descartar')
+    const rejectButton = screen.getByText('Adiar')
     fireEvent.click(rejectButton)
 
     expect(mockReject).toHaveBeenCalledWith('1')
   })
 
   it('deve mostrar badge "Última transação" quando isLast=true', () => {
-    render(
+    const { container } = render(
       <ConciCard
         transaction={mockTransaction}
         onApprove={mockApprove}
@@ -99,7 +99,7 @@ describe('ConciCard', () => {
       />
     )
 
-    expect(screen.getByText('Última transação da fila!')).toBeInTheDocument()
+    expect(container.querySelector('.border-b-4.border-emerald-400')).toBeInTheDocument()
   })
 
   it('deve mostrar indicador de receita quando type=income', () => {
@@ -117,7 +117,7 @@ describe('ConciCard', () => {
       />
     )
 
-    expect(screen.getByText('Receita')).toBeInTheDocument()
+    expect(screen.getByText('Entrada')).toBeInTheDocument()
   })
 
   it('deve mostrar fonte da transação corretamente', () => {
@@ -134,6 +134,6 @@ describe('ConciCard', () => {
       />
     )
 
-    expect(screen.getByText('📄 Importado via CSV')).toBeInTheDocument()
+    expect(screen.getByText('Origem: Extrato (CSV)')).toBeInTheDocument()
   })
 })

@@ -62,8 +62,8 @@ describe('Conciliação Inteligente', () => {
 
     it('encontra múltiplas transações similares', () => {
       const ocrData = { amount: 80.50, date: '2026-06-29' }
-      const result = findSimilarTransactions(ocrData, existingTxs)
-      expect(result).toHaveLength(2) // Supermercado (150) e Farmácia (80)
+      const result = findSimilarTransactions(ocrData, [...existingTxs, { id: '4', description: 'Farmácia 2', amount: 81, date: '2026-06-29', status: 'pending', type: 'expense' }])
+      expect(result.map(tx => tx.id)).toEqual(['3', '4'])
     })
   })
 

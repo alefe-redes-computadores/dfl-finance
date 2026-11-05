@@ -1,5 +1,6 @@
 // src/components/ModalFinancing.tsx
 'use client'
+import PremiumDateField from '@/components/PremiumDateField'
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -264,15 +265,7 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
               <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
                 1º vencimento
               </label>
-              <div className="flex items-center gap-2 rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 focus-within:ring-2 focus-within:ring-teal-500/20">
-                <Calendar size={16} className="text-gray-400 dark:text-gray-500 shrink-0" />
-                <input
-                  type="date"
-                  value={nextDueDate}
-                  onChange={e => setNextDueDate(e.target.value)}
-                  className="bg-transparent text-[14px] font-semibold text-gray-800 dark:text-gray-200 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 w-full"
-                />
-              </div>
+              <PremiumDateField label="Próximo vencimento do financiamento" value={nextDueDate} onChange={setNextDueDate} />
             </div>
           </div>
 

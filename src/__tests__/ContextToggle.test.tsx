@@ -2,6 +2,13 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import ContextToggle from '@/components/ContextToggle'
 
+jest.mock('@/lib/supabase', () => ({
+  supabase: { auth: {
+    getSession: jest.fn().mockResolvedValue({ data: { session: null } }),
+    onAuthStateChange: jest.fn(() => ({ data: { subscription: { unsubscribe: jest.fn() } } })),
+  } },
+}))
+
 // 🔥 Componente de teste que usa o hook
 function TestComponent() {
   const { appMode, effectiveContext } = useContext_()
@@ -34,8 +41,8 @@ describe('🧪 TESTE DE UI — ContextToggle', () => {
     )
 
     // Verifica se os botões PJ e PF estão visíveis
-    const pjButton = screen.getByText('PJ')
-    const pfButton = screen.getByText('PF')
+    const pjButton = screen.getByText('Empresa')
+    const pfButton = screen.getByText('Pessoal')
     
     expect(pjButton).toBeInTheDocument()
     expect(pfButton).toBeInTheDocument()
@@ -58,8 +65,8 @@ describe('🧪 TESTE DE UI — ContextToggle', () => {
     )
 
     // Verifica que os botões NÃO estão presentes
-    expect(screen.queryByText('PJ')).not.toBeInTheDocument()
-    expect(screen.queryByText('PF')).not.toBeInTheDocument()
+    expect(screen.queryByText('Empresa')).not.toBeInTheDocument()
+    expect(screen.queryByText('Pessoal')).not.toBeInTheDocument()
     
     // Verifica que o effectiveContext é 'personal'
     expect(screen.getByTestId('app-mode')).toHaveTextContent('personal_only')
@@ -83,14 +90,14 @@ describe('🧪 TESTE DE UI — ContextToggle', () => {
     expect(screen.getByTestId('effective-context')).toHaveTextContent('dfl')
 
     // Clica no botão PF
-    const pfButton = screen.getByText('PF')
+    const pfButton = screen.getByText('Pessoal')
     fireEvent.click(pfButton)
 
     // Deve mudar para 'personal'
     expect(screen.getByTestId('effective-context')).toHaveTextContent('personal')
 
     // Clica no botão PJ
-    const pjButton = screen.getByText('PJ')
+    const pjButton = screen.getByText('Empresa')
     fireEvent.click(pjButton)
 
     // Deve voltar para 'dfl'
@@ -111,17 +118,18 @@ describe('🧪 TESTE DE UI — ContextToggle', () => {
     )
 
     // O seletor NÃO aparece
-    expect(screen.queryByText('PJ')).not.toBeInTheDocument()
-    expect(screen.queryByText('PF')).not.toBeInTheDocument()
+    expect(screen.queryByText('Empresa')).not.toBeInTheDocument()
+    expect(screen.queryByText('Pessoal')).not.toBeInTheDocument()
     
     // O effectiveContext é forçado para 'personal'
     expect(screen.getByTestId('effective-context')).toHaveTextContent('personal')
   })
 
   // ============================================================
-  // TESTE 5: Persistência do contexto no localStorage
+  // TESTE 5: alternância permanece restrita à memória da sessão. O modo é
+  // persistido; o contexto não deve vazar entre perfis/dispositivos.
   // ============================================================
-  test('💾 Contexto é salvo no localStorage ao alternar', () => {
+  test('💾 Contexto não é persistido no localStorage ao alternar', () => {
     localStorage.setItem('dfl_app_mode', 'full')
     localStorage.setItem('dfl_context', 'dfl')
 
@@ -132,11 +140,11 @@ describe('🧪 TESTE DE UI — ContextToggle', () => {
     )
 
     // Clica no PF
-    const pfButton = screen.getByText('PF')
+    const pfButton = screen.getByText('Pessoal')
     fireEvent.click(pfButton)
 
     // Verifica se o localStorage foi atualizado
-    expect(localStorage.getItem('dfl_context')).toBe('personal')
+    expect(localStorage.getItem('dfl_context')).toBe('dfl')
     
     // Verifica se o effectiveContext mudou
     expect(screen.getByTestId('effective-context')).toHaveTextContent('personal')

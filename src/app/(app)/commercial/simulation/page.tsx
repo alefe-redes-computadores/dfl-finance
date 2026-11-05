@@ -6,6 +6,7 @@ import { ArrowLeft, Calculator, ShieldCheck, AlertTriangle, RotateCcw, ArrowRigh
 import { calculateSettlement, formatCents, parseMoneyBR, parsePercentBR } from '@/lib/commercialSettlement'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import MoneyInput from '@/components/MoneyInput'
 
 type Scenario = {
   gross: string
@@ -78,9 +79,22 @@ export default function CommercialSimulationPage() {
         <span className="flex items-center justify-between text-xs font-semibold text-slate-500">
           <span>{f.label}</span><span>{f.hint}</span>
         </span>
-        <input inputMode="decimal" className={input} value={value[f.key]}
-          onChange={e => setValue({ ...value, [f.key]: e.target.value })}
-          aria-label={f.label} />
+        {f.hint === 'R$' ? (
+          <div className={`${input} flex items-center gap-2 focus-within:border-teal-500`}>
+            <span className="shrink-0 text-sm font-bold text-slate-500" aria-hidden="true">R$</span>
+            <MoneyInput
+              value={Number(value[f.key].replace(/\./g, '').replace(',', '.')) || 0}
+              allowNegative={f.key === 'adjustments'}
+              ariaLabel={f.label}
+              className="min-w-0 w-full bg-transparent text-base text-inherit"
+              onChange={(_, formatted) => setValue({ ...value, [f.key]: formatted })}
+            />
+          </div>
+        ) : (
+          <input inputMode="decimal" className={input} value={value[f.key]}
+            onChange={e => setValue({ ...value, [f.key]: e.target.value })}
+            aria-label={`${f.label} em porcentagem`} />
+        )}
       </label>
     ))
   }

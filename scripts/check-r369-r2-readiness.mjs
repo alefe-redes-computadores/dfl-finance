@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import crypto from 'node:crypto';
+import ts from 'typescript';
+const src=fs.readFileSync('supabase/functions/whatsapp-webhook/index.r369-r2-one-shot-off.ts','utf8');
+const sql=fs.readFileSync('docs/sql-candidates/r369-r2-v2-single-use-rollout-OFF-CANDIDATE.sql','utf8');
+const r366=fs.readFileSync('docs/sql-candidates/r366-v2-canary-strict-immutable-CANDIDATE.sql','utf8');
+let total=0;const test=(name,fn)=>{fn();total++;console.log('OK: '+name)};
+test('webhook candidato TypeScript valido',()=>assert.deepEqual((ts.transpileModule(src,{fileName:'r369.ts',reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).diagnostics||[]).map(x=>x.messageText),[]));
+test('V2 liberada apenas atraves da RPC SQL inicialmente OFF',()=>{assert.match(src,/const v2Requested=true;/);assert.match(src,/const canaryDecision=await r369RolloutDecision\(phone,u.user_id\);/);assert.doesNotMatch(src,/const canaryDecision=r357CanaryDecision/)});
+test('bot SQL read-only e fail-closed',()=>{assert.match(src,/db.rpc\('dfl_bot_v2_rollout_decision'/);assert.match(src,/DFL_R369_ROLLOUT_GATE_UNAVAILABLE/);assert.match(src,/DFL_R369_ROLLOUT_INVALID_DECISION/)});
+test('SQL R367 visivel no codigo para impedir acesso ao ledger',()=>assert.match(src,/const r361CanarySqlVisibility=true;/));
+test('nenhum env antigo abre o canario',()=>assert.doesNotMatch(src,/DFL_BOT_ATOMIC_V2_ENABLED/));
+test('backend nasce inequivocamente desligado',()=>{assert.match(sql,/insert into public.dfl_bot_v2_rollout_gate \(singleton,enabled\) values \(true,false\)/);assert.match(sql,/not found then raise exception 'DFL_R369_GATE_MISSING'/)});
+test('gate da identidade passa por service_role',()=>assert.match(sql,/if auth.role\(\) is distinct from 'service_role'/));
+test('webhook nao pode escrever no gate',()=>{assert.match(sql,/revoke all on public.dfl_bot_v2_rollout_gate from public,anon,authenticated,service_role/);assert.match(sql,/grant execute on function public.dfl_bot_v2_rollout_decision\(text,uuid\) to service_role/)});
+test('TTL limitado a dez minutos',()=>{assert.match(sql,/interval '10 minutes'/);assert.match(sql,/DFL_R369_INVALID_TTL_OR_BINDING/)});
+test('tabela nao permite mais de uma linha',()=>assert.match(sql,/singleton boolean primary key default true check \(singleton\)/));
+test('marcador consome autorizacao atomicamente sob lock',()=>{assert.match(sql,/where singleton=true for update/);assert.match(sql,/create trigger dfl_bot_v2_rollout_consume_once_trg before insert/)});
+test('FK de gate para marcador e diferida',()=>assert.match(sql,/deferrable initially deferred/));
+test('R369 R2: INSERT inicial OFF so apos TODOS os DDL; FK diferida sem trigger pendente',()=>{
+ const seed='insert into public.dfl_bot_v2_rollout_gate (singleton,enabled) values (true,false);';
+ assert.equal(sql.split(seed).length,2,'exatamente um seed inicial');
+ const at=sql.indexOf(seed);
+ assert.ok(at>sql.lastIndexOf('create trigger '),'seed deve ser APOS o ultimo CREATE TRIGGER');
+ assert.doesNotMatch(sql.slice(at),/\b(?:alter|create|drop)\s+(?:table|trigger|function|index)\b/i,
+   'nao pode haver DDL apos INSERT com FK deferrable na mesma transacao');
+ assert.match(sql.slice(at),/\bcommit;/i);
+});
+test('rearm proibido depois do primeiro consumo',()=>assert.match(sql,/DFL_R369_REARM_FORBIDDEN/));
+test('historia de ativacao nao armazena telefone completo',()=>{assert.match(sql,/right\(new.canary_phone,4\)/);assert.match(sql,/DFL_R369_AUDIT_IMMUTABLE/)});
+test('ledger R366 continua totalmente imutavel',()=>assert.match(r366,/R366: TUDO na transacao canario e imutavel/));
+test('rotas de pendencias continuam checando marcador',()=>{for(const state of ['PENDING_PICK','PENDING_CONFIRM','PENDING_EDIT','TX_SETTLE']){const from=src.indexOf('if(s?.step==="'+state+'")');assert.ok(from>0);assert.match(src.slice(from,from+1450),/r361IsProtectedCanary|atomic_snapshot/);}});
+test('webhook preserva bloqueio de sessao consumida',()=>{assert.match(src,/r362\.canary\.consumed_session_restricted/);assert.match(src,/DFL_R361_CONSUMED_SESSION_ARCHIVE_REQUIRED/)});
+test('SQL candidato nao inclui escrita em saldo ou contas',()=>{assert.doesNotMatch(sql,/\b(?:update|insert into|delete from)\s+public\.(?:accounts|transactions)\b/i);assert.doesNotMatch(sql,/\bdrop\s+table\b/i)});
+test('fingerprints disponiveis para auditoria',()=>{assert.ok(crypto.createHash('sha256').update(sql).digest('hex'));assert.ok(crypto.createHash('sha256').update(src).digest('hex'))});
+console.log(`R369 R2: ${total} contratos de seguranca e integração aprovados (testes DB PGlite separados).`);

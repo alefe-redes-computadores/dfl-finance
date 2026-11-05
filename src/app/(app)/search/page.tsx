@@ -744,7 +744,9 @@ export default function Page() {
                 setFiltersOpen(true)
               }}
               aria-label="Filtrar busca"
-              className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] transition active:scale-90 ${
+              aria-expanded={filtersOpen}
+              aria-controls="dfl-search-filters-sheet"
+              className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] transition active:scale-90 ${
                 activeFilters.length
                   ? 'bg-teal-600 text-white shadow-sm shadow-teal-600/20'
                   : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
@@ -1069,7 +1071,7 @@ export default function Page() {
             className="app-overlay absolute inset-0"
           />
 
-          <div role="dialog" aria-modal="true" aria-label="Filtros da busca financeira" className="app-premium-sheet max-h-[86dvh] overflow-y-auto overscroll-contain pb-[calc(12px+var(--safe-area-bottom))]">
+          <div id="dfl-search-filters-sheet" role="dialog" aria-modal="true" aria-label="Filtros da busca financeira" className="app-premium-sheet max-h-[86dvh] overflow-y-auto overscroll-contain pb-[calc(12px+var(--safe-area-bottom))]">
             <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-slate-200 dark:bg-slate-700" />
 
             <div className="mb-4 flex items-start justify-between gap-3 px-1">
@@ -1102,6 +1104,7 @@ export default function Page() {
                   <button
                     key={option.id}
                     type="button"
+                    aria-pressed={selected}
                     onClick={() => toggleFilter(option.id)}
                     className={`flex min-h-[54px] items-center gap-3 rounded-[18px] border px-3.5 text-left transition active:scale-[0.98] ${
                       selected

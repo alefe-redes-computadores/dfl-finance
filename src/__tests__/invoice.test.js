@@ -1,15 +1,15 @@
 async function createInvoiceForTransaction({ creditCardId, amount, date }) {
   if (!creditCardId) return null
   
-  const txDate = new Date(date)
+  const txDate = new Date(date + 'T12:00:00Z')
   const closingDay = 10
-  let closingDate = new Date(txDate.getFullYear(), txDate.getMonth(), closingDay)
+  let closingDate = new Date(Date.UTC(txDate.getUTCFullYear(), txDate.getUTCMonth(), closingDay))
   if (txDate > closingDate) {
-    closingDate = new Date(txDate.getFullYear(), txDate.getMonth() + 1, closingDay)
+    closingDate = new Date(Date.UTC(txDate.getUTCFullYear(), txDate.getUTCMonth() + 1, closingDay))
   }
   
   const dueDate = new Date(closingDate)
-  dueDate.setDate(15)
+  dueDate.setUTCDate(15)
 
   return {
     id: 'mock-invoice-id',

@@ -11,6 +11,8 @@ import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { resolveTransferPair, transferRevision, correctTransferMovement, cancelTransferMovement, type TransferRevision } from '@/lib/transferMovementOperations'
 import MoneyInput from '@/components/MoneyInput'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import SelectField from '@/components/SelectField'
+import PremiumDateField from '@/components/PremiumDateField'
 
 const money = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const fieldClass = 'h-12 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white'
@@ -61,9 +63,9 @@ export default function TransferMovementDetails({ transactionId }: { transaction
     <section className="rounded-3xl bg-white p-5 dark:bg-slate-900">
       <ArrowRightLeft className="mb-3 text-blue-500"/><p className="text-sm text-gray-500 dark:text-gray-400">Um movimento entre duas contas. A correção preserva as duas pernas e não cria receita ou despesa.</p>
       {!data ? <p className="mt-4 text-sm text-gray-400">Carregando movimento…</p> : data.error ? <p role="alert" className="mt-4 text-sm text-amber-600">{data.error}</p> : draft && <div className="mt-5 space-y-4">
-        {(['from', 'to'] as const).map(key => <label key={key} className="block text-xs font-semibold text-gray-500">{key === 'from' ? 'Origem' : 'Destino'}<select disabled={busy} className={`${fieldClass} mt-1`} value={draft[key]} onChange={event => setDraft({ ...draft, [key]: event.target.value })}>{choices.map(account => <option key={account.id} value={account.id}>{account.name} · {account.context === 'personal' ? 'Pessoal' : 'Empresa'}</option>)}</select></label>)}
+        {(['from', 'to'] as const).map(key => <label key={key} className="block text-xs font-semibold text-gray-500">{key === 'from' ? 'Origem' : 'Destino'}<SelectField disabled={busy} title={key === 'from' ? 'Conta de origem' : 'Conta de destino'} value={draft[key]} onChange={value => setDraft({ ...draft, [key]: value })} options={choices.map(account => ({value:account.id,label:`${account.name} · ${account.context === 'personal' ? 'Pessoal' : 'Empresa'}`}))} /></label>)}
         <label className="block text-xs font-semibold text-gray-500">Valor<MoneyInput disabled={busy} value={draft.amount} onChange={amount => setDraft({ ...draft, amount })} className={`${fieldClass} mt-1`}/></label>
-        <label className="block text-xs font-semibold text-gray-500">Data<input disabled={busy} type="date" className={`${fieldClass} mt-1`} value={draft.date} onChange={event => setDraft({ ...draft, date: event.target.value })}/></label>
+        <label className="block text-xs font-semibold text-gray-500">Data<PremiumDateField disabled={busy} label="Data da transferência" value={draft.date} onChange={value => setDraft({ ...draft, date: value })} /></label>
         <label className="block text-xs font-semibold text-gray-500">Descrição<input disabled={busy} className={`${fieldClass} mt-1`} value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })}/></label>
         <button type="button" disabled={busy || draft.amount <= 0 || draft.from === draft.to || !draft.date} onClick={() => setConfirm('save')} className="h-12 w-full rounded-2xl bg-teal-700 font-bold text-white disabled:opacity-50">Revisar correção</button>
         <button type="button" disabled={busy} onClick={() => setConfirm('cancel')} className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-red-200 text-sm font-semibold text-red-500 disabled:opacity-50 dark:border-red-900"><Trash2 size={16}/>Cancelar movimento inteiro</button>

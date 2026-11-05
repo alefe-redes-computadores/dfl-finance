@@ -1,69 +1,42 @@
-// src/__tests__/integration/conciliation-flow.test.tsx
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import ConciliationPage from '@/app/(app)/conciliation/page'
-import { useConciQueue } from '@/hooks/useConciQueue'
 
-jest.mock('@/hooks/useConciQueue')
-jest.mock('@/contexts/ToastContext', () => ({
-  useToast: () => ({
-    showToast: jest.fn(),
+const mockConciliatePendingTransaction = jest.fn().mockResolvedValue({ alreadyDone: false })
+const mockToday = new Date().toLocaleDateString('en-CA')
+
+jest.mock('dexie-react-hooks', () => ({
+  useLiveQuery: () => ({
+    transactions: [{ id: 'pending-1', user_id: 'user-1', context: 'dfl', description: 'Teste 1', amount: 100, type: 'expense', status: 'pending', date: mockToday, account_id: 'account-1', source: 'whatsapp', affects_balance: false }],
+    accounts: [{ id: 'account-1', name: 'Conta principal', user_id: 'user-1', context: 'dfl' }], categories: [],
   }),
 }))
+jest.mock('@/lib/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'user-1' } }) }))
+jest.mock('@/components/ContextToggle', () => ({ useContext_: () => ({ context: 'dfl', appMode: 'full' }) }))
+jest.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: jest.fn() }) }))
+jest.mock('@/hooks/useHapticFeedback', () => ({ useHapticFeedback: () => ({ light: jest.fn(), success: jest.fn(), error: jest.fn() }) }))
+jest.mock('@/lib/conciliationOperations', () => ({ conciliatePendingTransaction: (...args: unknown[]) => mockConciliatePendingTransaction(...args), saveConciliationReview: jest.fn() }))
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }))
 
 describe('Fluxo de Conciliação', () => {
-  const mockQueue = {
-    queue: [
-      { id: '1', date: '2026-07-01', description: 'Teste 1', amount: 100, type: 'expense', status: 'pending' },
-      { id: '2', date: '2026-07-02', description: 'Teste 2', amount: 200, type: 'income', status: 'pending' },
-    ],
-    current: { id: '1', date: '2026-07-01', description: 'Teste 1', amount: 100, type: 'expense', status: 'pending' },
-    currentIndex: 0,
-    total: 2,
-    approved: 0,
-    rejected: 0,
-    isComplete: false,
-    approve: jest.fn(),
-    reject: jest.fn(),
-    reset: jest.fn(),
-    clear: jest.fn(),
-    getStats: jest.fn(() => ({ approved: 0, rejected: 0, pending: 2 })),
-  }
+  beforeEach(() => mockConciliatePendingTransaction.mockClear())
 
-  beforeEach(() => {
-    jest.clearAllMocks()
-    ;(useConciQueue as jest.Mock).mockReturnValue(mockQueue)
-  })
-
-  it('deve renderizar a página de conciliação', () => {
+  it('renderiza a Inbox financeira e a transação pendente atual', () => {
     render(<ConciliationPage />)
-    expect(screen.getByText('Conciliação')).toBeInTheDocument()
-  })
-
-  it('deve mostrar o card da transação atual', () => {
-    render(<ConciliationPage />)
+    expect(screen.getByText('Inbox financeira')).toBeInTheDocument()
     expect(screen.getByText('Teste 1')).toBeInTheDocument()
-    expect(screen.getByText('R$ 100,00')).toBeInTheDocument()
+    expect(screen.getAllByText(/100,00/).length).toBeGreaterThan(0)
   })
 
-  it('deve chamar approve ao clicar no botão Aprovar', async () => {
+  it('concilia uma pendência com conta através da operação atômica atual', async () => {
     render(<ConciliationPage />)
-    
-    const approveButton = screen.getByText('Aprovar')
-    fireEvent.click(approveButton)
-
-    await waitFor(() => {
-      expect(mockQueue.approve).toHaveBeenCalled()
-    })
+    fireEvent.click(screen.getByRole('button', { name: /Conciliar/ }))
+    await waitFor(() => expect(mockConciliatePendingTransaction).toHaveBeenCalledWith('user-1', 'pending-1'))
   })
 
-  it('deve chamar reject ao clicar no botão Descartar', async () => {
+  it('abre revisão sem efetivar saldo quando o usuário escolhe revisar', () => {
     render(<ConciliationPage />)
-    
-    const rejectButton = screen.getByText('Descartar')
-    fireEvent.click(rejectButton)
-
-    await waitFor(() => {
-      expect(mockQueue.reject).toHaveBeenCalled()
-    })
+    fireEvent.click(screen.getByRole('button', { name: /^Revisar$/ }))
+    expect(screen.getByText('Revisar pendência')).toBeInTheDocument()
+    expect(mockConciliatePendingTransaction).not.toHaveBeenCalled()
   })
 })

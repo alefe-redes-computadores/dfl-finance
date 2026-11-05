@@ -28,11 +28,11 @@ export default function EmptyState({
 
   return (
     <div
-      className="app-empty-region rounded-[24px] px-4 py-7"
+      className="app-empty-region flex flex-col items-center rounded-[24px] px-4 py-7 text-center"
       role="status"
       aria-live="polite"
     >
-      <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-[19px] border border-slate-200 bg-white text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+      <div className="mb-3 flex h-14 w-14 shrink-0 items-center justify-center rounded-[19px] border border-slate-200 bg-white text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
         <Icon size={24} strokeWidth={1.7} aria-hidden="true" />
       </div>
 

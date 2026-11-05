@@ -6,6 +6,7 @@ import { localISODate } from '@/lib/civilDate'
 import { useEffect, useState } from 'react'
 import { CalendarDays, HandCoins, Loader2, Percent, User, X } from 'lucide-react'
 import MoneyInput from '@/components/MoneyInput'
+import PremiumDateField from '@/components/PremiumDateField'
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { useSafeDb } from '@/hooks/useSafeDb'
@@ -174,11 +175,11 @@ export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmpres
             <div className="grid grid-cols-2 gap-3">
               <label>
                 <span className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold text-gray-500 dark:text-gray-400"><CalendarDays size={13} />Data</span>
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-12 w-full rounded-[16px] border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 px-3 text-[13px] font-semibold text-gray-900 dark:text-white outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0" />
+                <PremiumDateField label="Data do empréstimo" value={date} onChange={setDate} />
               </label>
               <label>
                 <span className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold text-gray-500 dark:text-gray-400"><CalendarDays size={13} />Vencimento</span>
-                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-12 w-full rounded-[16px] border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 px-3 text-[13px] font-semibold text-gray-900 dark:text-white outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0" />
+                <PremiumDateField label="Vencimento do empréstimo" value={dueDate} onChange={setDueDate} />
               </label>
             </div>
             <label className="block">

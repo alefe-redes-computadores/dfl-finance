@@ -17,26 +17,39 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
+
   async function handleEmail() {
+    if (loading || isProcessing) return
     setLoading(true)
     setError('')
-    
+
     try {
-      const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password })
-      
-      if (signInErr) {
-        const { error: signUpErr } = await supabase.auth.signUp({ email, password })
-        if (signUpErr) {
-          setError('E-mail ou senha inválidos.')
-          setLoading(false) 
-        } else {
-          router.replace('/home')
-        }
-      } else {
-        router.replace('/home')
+      const normalizedEmail = email.trim().toLowerCase()
+      if (!normalizedEmail || !password) {
+        setError('Informe seu e-mail e sua senha.')
+        return
       }
-    } catch (err) {
-      setError('Ocorreu um erro inesperado.')
+      if (authMode === 'register') {
+        const { data, error: signUpErr } = await supabase.auth.signUp({ email: normalizedEmail, password })
+        if (signUpErr) {
+          setError(signUpErr.message || 'Não foi possível criar a conta.')
+        } else if (data.session) {
+          router.replace('/home')
+        } else {
+          setError('Cadastro recebido. Verifique seu e-mail para confirmar a conta antes de entrar.')
+        }
+        return
+      }
+      const { error: signInErr } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password })
+      if (signInErr) {
+        setError('Não foi possível entrar. Confira o e-mail e a senha ou use Criar conta.')
+        return
+      }
+      router.replace('/home')
+    } catch {
+      setError('Não foi possível conectar. Verifique sua conexão e tente novamente.')
+    } finally {
       setLoading(false)
     }
   }
@@ -145,10 +158,19 @@ export default function LoginPage() {
             >
               {loading ? <Loader2 className="animate-spin" size={20} /> : (
                 <>
-                  Entrar na conta
+                  {authMode === 'login' ? 'Entrar na conta' : 'Criar conta'}
                   <ArrowRight size={18} />
                 </>
               )}
+            </button>
+
+            <button
+              type="button"
+              disabled={loading || isProcessing}
+              onClick={() => { setAuthMode(mode => mode === 'login' ? 'register' : 'login'); setError('') }}
+              className="w-full rounded-2xl px-3 py-2 text-sm font-semibold text-teal-700 underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 disabled:opacity-50 dark:text-teal-300"
+            >
+              {authMode === 'login' ? 'Primeiro acesso? Criar conta' : 'Já tenho conta. Entrar'}
             </button>
 
             <div className="flex items-center gap-3 py-3">

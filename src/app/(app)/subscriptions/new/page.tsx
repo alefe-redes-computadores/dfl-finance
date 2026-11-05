@@ -1,5 +1,6 @@
 // src/app/(app)/subscriptions/new/page.tsx
 'use client'
+import PremiumDateField from '@/components/PremiumDateField'
 
 import SelectField from '@/components/SelectField'
 
@@ -271,12 +272,7 @@ function NewSubscriptionContent() {
             <label className="app-field-label">
               Próximo vencimento
             </label>
-            <input
-              type="date"
-              value={nextDueDate}
-              onChange={(e) => setNextDueDate(e.target.value)}
-              className="app-input font-semibold"
-            />
+            <PremiumDateField label="Próximo vencimento da assinatura" value={nextDueDate} onChange={setNextDueDate} />
           </div>
         </section>
 

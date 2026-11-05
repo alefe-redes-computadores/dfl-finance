@@ -1280,6 +1280,18 @@ export default function TransactionsPage() {
       advFilters.status !== 'all'
     );
 
+  const hasActiveView = hasAdvancedFilters || quickFilter !== 'all' || pendingKind !== 'all' || Boolean(search.trim()) || !isCurrentMonth
+  function resetVisibleView() {
+    setSearch('')
+    setQuickFilter('all')
+    setPendingKind('all')
+    setAdvFilters(defaultAdvFilters)
+    setTempFilters(defaultAdvFilters)
+    setCurrentDate(new Date())
+    setShowFilterDrawer(false)
+    router.replace('/transactions')
+  }
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans relative transition-colors duration-300">
       <TransferModal isOpen={commandTransferOpen} onClose={closeCommandTransfer} context={effectiveContext} />
@@ -1307,6 +1319,8 @@ export default function TransactionsPage() {
             <div className="relative shrink-0" ref={exportMenuRef}>
               <button
                 type="button"
+                aria-expanded={showExportMenu}
+                aria-controls="dfl-export-options"
                 aria-label="Exportar transações"
                 title="Exportar"
                 onClick={() => setShowExportMenu(!showExportMenu)}
@@ -1320,7 +1334,7 @@ export default function TransactionsPage() {
               </button>
 
               {showExportMenu && (
-                <div className="absolute right-0 top-[46px] z-50 w-48 rounded-[18px] border border-gray-200/80 bg-white p-2 shadow-xl shadow-black/10 animate-in fade-in zoom-in-95 duration-150 dark:border-slate-700 dark:bg-slate-800">
+                <div id="dfl-export-options" className="absolute right-0 top-[46px] z-50 w-48 rounded-[18px] border border-gray-200/80 bg-white p-2 shadow-xl shadow-black/10 animate-in fade-in zoom-in-95 duration-150 dark:border-slate-700 dark:bg-slate-800">
                   <div className="px-3 pb-1.5 pt-1">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">
                       Exportar extrato
@@ -1419,7 +1433,7 @@ export default function TransactionsPage() {
                 type="button"
                 aria-label="Limpar busca"
                 onClick={() => setSearch('')}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-300"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-300"
               >
                 <X size={14} />
               </button>
@@ -1490,6 +1504,7 @@ export default function TransactionsPage() {
                 <button
                   type="button"
                   key={f.key}
+                  aria-pressed={selected}
                   onClick={() => setQuickFilter(f.key as QuickFilter)}
                   className={`flex h-[42px] min-w-0 flex-col items-center justify-center gap-0.5 rounded-[12px] border border-transparent text-[9.5px] font-semibold transition-all active:scale-[0.97] ${
                     selected
@@ -1506,6 +1521,12 @@ export default function TransactionsPage() {
             })}
           </div>
 
+          <div className="mt-2 flex min-h-9 flex-wrap items-center justify-between gap-2 px-1" aria-live="polite">
+            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+              {pageLoading ? 'Conferindo lançamentos…' : `${displayTxs.length} lançamento${displayTxs.length === 1 ? '' : 's'}${visibleDebtReceivables.length ? ` · ${visibleDebtReceivables.length} a receber` : ''}`}
+            </p>
+            {hasActiveView && <button type="button" onClick={resetVisibleView} className="min-h-10 rounded-xl border border-teal-200 px-3 text-[11px] font-bold text-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-teal-800 dark:text-teal-300">Limpar visualização</button>}
+          </div>
           {quickFilter === 'pending' && (
             <div className="mt-2 grid grid-cols-3 gap-1 rounded-[14px] border border-gray-200/70 bg-white p-1 dark:border-slate-700 dark:bg-slate-800">
               {[
@@ -1535,6 +1556,7 @@ export default function TransactionsPage() {
                 <button
                   type="button"
                   key={option.key}
+                  aria-pressed={pendingKind === option.key}
                   onClick={() =>
                     setPendingKind(
                       option.key as PendingKind

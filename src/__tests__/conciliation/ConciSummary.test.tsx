@@ -25,7 +25,7 @@ describe('ConciSummary', () => {
       />
     )
 
-    expect(screen.getByText('Conciliação concluída! 🎉')).toBeInTheDocument()
+    expect(screen.getByText('Revisão concluída')).toBeInTheDocument()
     expect(screen.getByText('10')).toBeInTheDocument()
     expect(screen.getByText('7')).toBeInTheDocument()
     expect(screen.getByText('3')).toBeInTheDocument()
@@ -41,7 +41,7 @@ describe('ConciSummary', () => {
       />
     )
 
-    const resetButton = screen.getByText('Recomeçar')
+    const resetButton = screen.getByText('Revisar novamente')
     fireEvent.click(resetButton)
 
     expect(mockOnReset).toHaveBeenCalled()
@@ -57,7 +57,7 @@ describe('ConciSummary', () => {
       />
     )
 
-    expect(screen.getByText('0')).toBeInTheDocument()
+    expect(screen.getAllByText('0')).toHaveLength(3)
     expect(screen.getByText('Total')).toBeInTheDocument()
   })
 })

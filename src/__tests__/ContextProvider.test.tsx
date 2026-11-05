@@ -17,7 +17,11 @@ Object.defineProperty(window, 'localStorage', { value: localStorageMock })
 // Mock do supabase
 jest.mock('@/lib/supabase', () => ({
   supabase: {
-    auth: { getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'test-user' } }, error: null }) },
+    auth: {
+      getSession: jest.fn().mockResolvedValue({ data: { session: null }, error: null }),
+      onAuthStateChange: jest.fn(() => ({ data: { subscription: { unsubscribe: jest.fn() } } })),
+      getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'test-user' } }, error: null })
+    },
     from: jest.fn().mockReturnValue({
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
@@ -51,9 +55,9 @@ describe('ContextProvider', () => {
     localStorage.clear()
   })
 
-  it('inicia com appMode null e contexto dfl', () => {
+  it('inicia no modo full e contexto dfl', () => {
     render(<ContextProvider><TestConsumer /></ContextProvider>)
-    expect(screen.getByTestId('appmode-value').textContent).toBe('null')
+    expect(screen.getByTestId('appmode-value').textContent).toBe('full')
     expect(screen.getByTestId('context-value').textContent).toBe('dfl')
   })
 
@@ -90,7 +94,7 @@ describe('ContextToggle', () => {
   it('renderiza com PJ e PF quando appMode é full', () => {
     localStorage.setItem('dfl_app_mode', 'full')
     render(<ContextProvider><ContextToggle /></ContextProvider>)
-    expect(screen.getByText('PJ')).toBeInTheDocument()
-    expect(screen.getByText('PF')).toBeInTheDocument()
+    expect(screen.getByText('Empresa')).toBeInTheDocument()
+    expect(screen.getByText('Pessoal')).toBeInTheDocument()
   })
 })

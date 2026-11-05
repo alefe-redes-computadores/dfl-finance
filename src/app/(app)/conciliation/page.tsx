@@ -1,4 +1,5 @@
 'use client'
+import PremiumDateField from '@/components/PremiumDateField'
 
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -616,15 +617,7 @@ export default function ConciliationPage() {
 
                 <label className="block min-w-0">
                   <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-gray-400">Data</span>
-                  <div className="relative">
-                    <CalendarDays size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="date"
-                      value={review.date}
-                      onChange={(e) => setReview({ ...review, date: e.target.value })}
-                      className="h-12 w-full min-w-0 rounded-[17px] border border-gray-200 bg-gray-50 pl-9 pr-2 text-[12px] font-bold text-gray-800 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100"
-                    />
-                  </div>
+                  <PremiumDateField label="Data da conciliação" value={review.date} onChange={date => setReview({ ...review, date })} />
                 </label>
               </div>
 

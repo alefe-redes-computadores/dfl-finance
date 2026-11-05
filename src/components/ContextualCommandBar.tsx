@@ -51,6 +51,7 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
     return () => window.clearTimeout(handle)
   }, [])
   useEffect(() => {
+    if (typeof window.matchMedia !== 'function') { setAnimate(false); return }
     const media = window.matchMedia('(prefers-reduced-motion: reduce)')
     const update = () => setAnimate(!media.matches)
     update()
@@ -58,8 +59,8 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
     return () => media.removeEventListener?.('change', update)
   }, [])
   useEffect(() => {
-    if (!animate || !shown || !pageActive || voiceStatus === 'listening' || voiceStatus === 'processing') return
-    const example = config.examples[position]
+    if (!animate || !shown || !pageActive || !config.examples.length || voiceStatus === 'listening' || voiceStatus === 'processing') return
+    const example = config.examples[position] || config.examples[0] || ''
     const complete = letters >= example.length
     const timer = window.setTimeout(() => {
       if (complete) { setLetters(0); setPosition(current => (current + 1) % config.examples.length) }
@@ -110,7 +111,7 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
               className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left transition-colors hover:bg-slate-100/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-teal-500 active:scale-[0.99] dark:hover:bg-slate-800/90">
               <Search size={18} className="shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
               <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-slate-600 dark:text-slate-300" aria-hidden="true">
-                {animate && shown ? config.examples[position].slice(0, letters) || '\u00a0' : config.examples[0]}
+                {animate && shown ? (config.examples[position] || config.examples[0] || '').slice(0, letters) || '\u00a0' : (config.examples[0] || 'Buscar nas finanças')}
                 {animate && shown && <span className="dfl-command-caret" aria-hidden="true">|</span>}
               </span>
               <ArrowUpRight size={15} className="shrink-0 text-slate-400" aria-hidden="true" />
@@ -118,8 +119,8 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
             <button type="button" onClick={() => {
               vibrate([4])
               setLetters(0)
-              setPosition(current => (current + 1) % config.examples.length)
-            }} aria-label="Mostrar outro exemplo do DFL Comando"
+              setPosition(current => config.examples.length ? (current + 1) % config.examples.length : 0)
+            }} disabled={config.examples.length < 2} aria-label="Mostrar outro exemplo do DFL Comando"
               className="flex h-9 w-8 shrink-0 items-center justify-center rounded-xl text-slate-400 transition active:scale-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 dark:text-slate-500">
               <RefreshCcw size={14} aria-hidden="true" />
             </button>
@@ -137,7 +138,7 @@ export default function ContextualCommandBar({ scope }: { scope: ContextualComma
                 className="min-h-9 shrink-0 rounded-lg px-2 font-semibold text-teal-700 underline underline-offset-2 dark:text-teal-300">Digitar</button>
             </div>
           )}
-          <div className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Atalhos contextuais">
+          <div className="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-label="Atalhos contextuais">
             {config.shortcuts.map(shortcut => (
               <button key={shortcut.label} type="button" onClick={() => openShortcut(shortcut)}
                 className="rounded-full border border-slate-200/80 bg-slate-50 px-2.5 py-1.5 text-[10.5px] font-semibold text-slate-600 transition active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">

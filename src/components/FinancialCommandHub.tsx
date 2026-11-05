@@ -68,7 +68,7 @@ export default function FinancialCommandHub({ scope, context, userId }: Props) {
         <div className="min-w-0 flex-1">
           <h2 className="text-[12px] font-extrabold text-slate-900 dark:text-slate-100">DFL Comando</h2>
           <p className="text-[11px] leading-4 text-slate-500 dark:text-slate-400">
-            {scope === 'transactions' ? 'Sugestões para o extrato' : scope === 'analysis' ? 'Sugestões para análise' : scope === 'cards' ? 'Sugestões para cartões' : scope === 'home' ? 'Ações para começar' : 'Navegue ou abra uma ação segura'}
+            {scope === 'transactions' ? 'Sugestões para o extrato' : scope === 'analysis' ? 'Sugestões para análise' : scope === 'cards' ? 'Sugestões para cartões' : scope === 'home' ? 'Ações para começar' : 'Navegue ou abra uma ação segura'} · {favorites.length} fixado{favorites.length === 1 ? '' : 's'}
           </p>
         </div>
         {recent.length > 0 && (
@@ -78,7 +78,7 @@ export default function FinancialCommandHub({ scope, context, userId }: Props) {
           </button>
         )}
       </div>
-      <div id="dfl-hub-action-list" className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+      <div id="dfl-hub-action-list" role="group" aria-label="Atalhos financeiros seguros" className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
         {visibleActions.map(action => {
           const favorite = favorites.includes(action.id)
           const wasRecent = recent.includes(action.id)
@@ -94,7 +94,7 @@ export default function FinancialCommandHub({ scope, context, userId }: Props) {
               </button>
               <button type="button" onClick={() => toggleFavorite(action.id)} aria-pressed={favorite}
                 aria-label={favorite ? `Desafixar ${action.title}` : `Fixar ${action.title}`}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500 dark:text-slate-500">
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500 dark:text-slate-500">
                 <Star size={16} className={favorite ? 'fill-amber-400 text-amber-500' : ''} aria-hidden="true" />
               </button>
             </div>

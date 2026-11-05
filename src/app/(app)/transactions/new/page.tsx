@@ -982,14 +982,15 @@ function NewTransactionContent() {
   }, [uploading, receiptUrl, receiptType])
 
   return (
-    <div className="mx-auto min-h-full w-full max-w-2xl bg-gray-50 pb-28 dark:bg-slate-950">
+    <div aria-busy={isSubmitting} className="mx-auto min-h-full w-full max-w-2xl bg-gray-50 pb-28 dark:bg-slate-950">
 
       {/* HEADER */}
       <div className="app-topbar">
         <div className="rounded-[20px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3">
             <button
-              onClick={() => { vibrate([5]); router.replace('/transactions'); }}
+              onClick={() => { if (isSubmitting) return; vibrate([5]); router.replace('/transactions'); }}
+              disabled={isSubmitting}
               className="h-11 w-11 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform shrink-0 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
              type="button" aria-label="Voltar para transações" title="Voltar para transações">
               <ChevronLeft size={20} className="text-gray-700 dark:text-gray-300" />
@@ -1066,12 +1067,13 @@ function NewTransactionContent() {
               Valor {isIncome ? 'da receita' : 'da despesa'}
             </p>
 
-            <div className="flex justify-center items-center gap-1.5">
-              <span className={`text-2xl font-bold opacity-50 ${themeColor}`}>R$</span>
+            <div className="flex max-w-full min-w-0 justify-center items-center gap-1.5">
+              <span className={`shrink-0 text-2xl font-bold opacity-50 ${themeColor}`}>R$</span>
               <MoneyInput
                 value={amountNum}
                 onChange={(num) => setAmountNum(num)}
-                className={`text-[42px] font-black tracking-tight outline-none bg-transparent ${themeColor} w-64 text-center placeholder:text-gray-300 dark:placeholder:text-gray-700`}
+                ariaLabel="Valor da transação em reais"
+                className={`min-w-0 w-full max-w-[16rem] text-[clamp(1.9rem,9vw,2.625rem)] font-black tracking-tight outline-none bg-transparent ${themeColor} text-center placeholder:text-gray-300 dark:placeholder:text-gray-700`}
                 placeholder="0,00"
                 autoFocus
               />
@@ -1390,9 +1392,19 @@ function NewTransactionContent() {
             )}
           </div>
 
+          <button type="button" onClick={() => { vibrate([5]); setShowDatePicker(true) }}
+            className="flex min-h-12 w-full items-center justify-between gap-3 rounded-[18px] border border-slate-200/80 bg-white px-4 text-left text-[12px] font-semibold text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            aria-label={`Data do lançamento: ${formatDateLabel(date)}. Alterar data`}>
+            <span className="flex min-w-0 items-center gap-2"><Calendar size={17} className="shrink-0 text-teal-600"/> Data: {formatDateLabel(date)}</span>
+            <ChevronRight size={17} className="shrink-0 text-slate-400"/>
+          </button>
+
           {/* MAIS OPÇÕES */}
           <div>
             <button
+              type="button"
+              aria-expanded={showDetails}
+              aria-controls="dfl-transaction-advanced"
               onClick={() => { vibrate([5]); setShowDetails(!showDetails) }}
               className="w-full rounded-[20px] bg-white dark:bg-slate-800 border border-gray-200/70 dark:border-slate-700 shadow-sm px-4 py-3 text-[13px] font-bold text-teal-600 dark:text-teal-400 flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
             >
@@ -1400,7 +1412,7 @@ function NewTransactionContent() {
               {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
 
-            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showDetails ? 'max-h-[1400px] opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}>
+            <div id="dfl-transaction-advanced" aria-hidden={!showDetails} {...(!showDetails ? { inert: true } : {})} className={`overflow-hidden transition-all duration-300 ease-in-out motion-reduce:transition-none ${showDetails ? 'max-h-[1400px] opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}>
               <div className="space-y-4">
                 <div className="bg-white dark:bg-slate-800 rounded-[20px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 space-y-4">
                   {/* Data */}
@@ -1600,10 +1612,11 @@ function NewTransactionContent() {
       </div>
 
       {/* CTA FIXO INFERIOR - COM Z-INDEX MAIOR */}
-      <div className="sticky bottom-0 z-50 bg-gradient-to-t from-[#f8f9fa] dark:from-slate-900 via-[#f8f9fa]/90 dark:via-slate-900/90 to-transparent px-4 py-5">
+      <div className="sticky bottom-0 z-50 bg-gradient-to-t from-[#f8f9fa] dark:from-slate-900 via-[#f8f9fa]/90 dark:via-slate-900/90 to-transparent px-4 pt-4 pb-[max(1.25rem,var(--safe-area-bottom))]">
         <button
           onClick={() => { vibrate([10, 50]); handleSave() }}
-          disabled={isSubmitting}
+          disabled={isSubmitting || uploading}
+          aria-live="polite"
           className={`w-full h-14 rounded-[20px] flex items-center justify-center gap-2 text-white font-bold text-[15px] shadow-lg transition-all active:scale-[0.98] ${
             isIncome
               ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
@@ -1612,7 +1625,7 @@ function NewTransactionContent() {
         >
           {isSubmitting ? (
             <>
-              <Loader2 className="animate-spin" size={20} />
+              <Loader2 className="animate-spin motion-reduce:animate-none" size={20} />
               Salvando...
             </>
           ) : (

@@ -547,7 +547,7 @@ html[data-native-shell='true'] .app-header {
     padding-bottom: var(--safe-area-bottom);
   }
   .app-nav-tab {
-    @apply relative flex min-w-0 flex-col items-center gap-1 px-1 py-1 transition-transform active:scale-[0.95] focus-visible:rounded-2xl;
+    @apply relative flex min-w-0 flex-col items-center gap-1 px-1 py-1 transition-transform active:scale-[0.95] focus-visible:rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500;
   }
   .app-nav-tab-icon {
     @apply flex h-7 min-w-9 items-center justify-center rounded-full px-2 transition-all duration-200;
@@ -654,4 +654,19 @@ input[data-premium-input="true"]:focus-visible {
 @keyframes dfl-command-blink { 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .dfl-command-frame::before, .dfl-command-caret { animation: none !important; }
+}
+
+/* R450-A: conforto de toque e navegacao mobile */
+@media (hover: hover) and (pointer: fine) {
+  .app-empty-region .app-primary-action:hover {
+    filter: brightness(1.06);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-empty-region *,
+  .app-empty-region *::before,
+  .app-empty-region *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

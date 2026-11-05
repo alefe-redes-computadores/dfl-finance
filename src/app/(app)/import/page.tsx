@@ -1,5 +1,6 @@
 // src/app/(app)/import/page.tsx
 'use client'
+import PremiumDateField from '@/components/PremiumDateField'
 
 import SelectField from '@/components/SelectField'
 
@@ -463,18 +464,7 @@ function ImportContent() {
                       : 'border-gray-200 focus-within:ring-2 focus-within:ring-teal-500/20 dark:border-slate-700'
                   }`}
                 >
-                  <Calendar size={18} className="mr-2 text-gray-400 dark:text-gray-500" />
-                  <input
-                    type="date"
-                    value={formData.date}
-                    onChange={(event) =>
-                      setFormData((current) => ({
-                        ...current,
-                        date: event.target.value,
-                      }))
-                    }
-                    className="w-full bg-transparent text-gray-800 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 dark:text-gray-200"
-                  />
+                  <PremiumDateField label="Data da importação" value={formData.date} onChange={date => setFormData(current => ({ ...current, date }))} />
                 </div>
 
                 {errors.date && (
