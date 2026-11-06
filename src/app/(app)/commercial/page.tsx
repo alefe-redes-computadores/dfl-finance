@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Building2, Store, Layers3, Plus,
-  RefreshCw, ShieldCheck, Save, LockKeyhole,
-  CheckCircle2, ImageIcon, BarChart3, Calculator, BookOpen, FlaskConical, ChevronRight
+  RefreshCw, ShieldCheck, Save,
+  ImageIcon, BarChart3, Calculator, BookOpen, FlaskConical, ChevronRight, Pencil, X
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -13,6 +13,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import SelectField from '@/components/SelectField'
 import { cleanCnpj, formatCnpj, isValidCnpj } from '@/lib/commercialIdentity'
+import { prepareOrganizationEdit, prepareStoreEdit, preparePlatformReference } from '@/lib/commercialEditPolicy'
 
 type Organization = {
   id: string
@@ -36,6 +37,7 @@ type CommercialPlatform = {
   display_name: string
   provider_key: string
   mode: string
+  external_merchant_ref: string | null
 }
 
 const inputClass =
@@ -113,6 +115,18 @@ export default function CommercialPage() {
   const [legalName, setLegalName] = useState('')
   const [taxId, setTaxId] = useState('')
   const [showOrganizationForm, setShowOrganizationForm] = useState(false)
+  const [showStoreForm, setShowStoreForm] = useState(false)
+  const [showPlatformForm, setShowPlatformForm] = useState(false)
+  const [editingOrganizationId, setEditingOrganizationId] = useState('')
+  const [editOrganizationName, setEditOrganizationName] = useState('')
+  const [editLegalName, setEditLegalName] = useState('')
+  const [editTaxId, setEditTaxId] = useState('')
+  const [editingStoreId, setEditingStoreId] = useState('')
+  const [editStoreName, setEditStoreName] = useState('')
+  const [editStoreAcronym, setEditStoreAcronym] = useState('')
+  const [editStoreLogo, setEditStoreLogo] = useState('')
+  const [editingPlatformId, setEditingPlatformId] = useState('')
+  const [editMerchantReference, setEditMerchantReference] = useState('')
   const [organizationId, setOrganizationId] = useState('')
   const [storeName, setStoreName] = useState('')
   const [storeAcronym, setStoreAcronym] = useState('')
@@ -142,7 +156,7 @@ export default function CommercialPage() {
             .eq('owner_id', user.id)
             .order('created_at', { ascending: false }),
           supabase.from('dfl_commercial_platforms')
-            .select('id,store_id,display_name,provider_key,mode')
+            .select('id,store_id,display_name,provider_key,mode,external_merchant_ref')
             .eq('owner_id', user.id)
             .order('created_at', { ascending: false })
         ])
@@ -256,6 +270,7 @@ export default function CommercialPage() {
       setStoreName('')
       setStoreAcronym('')
       setLogoUrl('')
+      setShowStoreForm(false)
       showToast('Loja cadastrada.', 'success')
     })
   }
@@ -302,7 +317,89 @@ export default function CommercialPage() {
 
       setMerchantReference('')
       setCustomProvider('')
+      setShowPlatformForm(false)
       showToast('Plataforma cadastrada em modo OFF.', 'success')
+    })
+  }
+
+  function beginOrganizationEdit(item: Organization) {
+    if (busy) return
+    setShowOrganizationForm(false)
+    setEditingOrganizationId(item.id)
+    setEditOrganizationName(item.name)
+    setEditLegalName(item.legal_name || '')
+    setEditTaxId(formatCnpj(item.tax_id || ''))
+    haptic.light()
+  }
+
+  function updateOrganization() {
+    void save(async () => {
+      if (!user?.id || !editingOrganizationId ||
+          !organizations.some(item => item.id === editingOrganizationId)) {
+        throw new Error('Organização indisponível para edição.')
+      }
+      const changes = prepareOrganizationEdit({ name: editOrganizationName, legalName: editLegalName, taxId: editTaxId })
+      const { error } = await supabase.from('dfl_commercial_organizations')
+        .update(changes)
+        .eq('id', editingOrganizationId)
+        .eq('owner_id', user.id)
+        .select('id').single()
+      if (error) throw error
+      setEditingOrganizationId('')
+      showToast('Organização atualizada no banco.', 'success')
+    })
+  }
+
+  function beginStoreEdit(item: CommercialStore) {
+    if (busy) return
+    setShowStoreForm(false)
+    setEditingStoreId(item.id)
+    setEditStoreName(item.name)
+    setEditStoreAcronym(item.acronym)
+    setEditStoreLogo(item.logo_url || '')
+    haptic.light()
+  }
+
+  function updateStore() {
+    void save(async () => {
+      if (!user?.id || !editingStoreId || !stores.some(item => item.id === editingStoreId)) {
+        throw new Error('Loja indisponível para edição.')
+      }
+      const changes = prepareStoreEdit({ name: editStoreName, acronym: editStoreAcronym, logoUrl: editStoreLogo })
+      const { error } = await supabase.from('dfl_commercial_stores')
+        .update(changes)
+        .eq('id', editingStoreId)
+        .eq('owner_id', user.id)
+        .select('id').single()
+      if (error) throw error
+      setEditingStoreId('')
+      showToast('Loja atualizada no banco.', 'success')
+    })
+  }
+
+  function beginPlatformEdit(item: CommercialPlatform) {
+    if (busy) return
+    setShowPlatformForm(false)
+    setEditingPlatformId(item.id)
+    setEditMerchantReference(item.external_merchant_ref || '')
+    haptic.light()
+  }
+
+  function updatePlatformReference() {
+    void save(async () => {
+      if (!user?.id || !editingPlatformId || !platforms.some(item => item.id === editingPlatformId)) {
+        throw new Error('Plataforma indisponível para edição.')
+      }
+      const changes = preparePlatformReference(editMerchantReference)
+      // Não altera provider_key, store_id, organization_id, mode nem active.
+      const { error } = await supabase.from('dfl_commercial_platforms')
+        .update(changes)
+        .eq('id', editingPlatformId)
+        .eq('owner_id', user.id)
+        .select('id').single()
+      if (error) throw error
+      setEditingPlatformId('')
+      showToast('Identificador comercial salvo no banco.', 'success')
     })
   }
 
@@ -402,9 +499,35 @@ export default function CommercialPage() {
                 )}
               </div>
             </div>
-            <div className="mt-3 border-t border-slate-200/70 pt-2.5 text-[10px] font-semibold text-slate-500 dark:border-slate-700">
-              {stores.filter(item => item.organization_id === organization.id).length} loja(s) vinculada(s)
+            <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-200/70 pt-2.5 text-[10px] font-semibold text-slate-500 dark:border-slate-700">
+              <span>{stores.filter(item => item.organization_id === organization.id).length} loja(s) vinculada(s)</span>
+              <button type="button" disabled={busy} onClick={() => beginOrganizationEdit(organization)}
+                aria-label={`Editar organização ${organization.name}`}
+                className="flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-[11px] font-bold text-teal-700 transition-colors hover:bg-teal-500/10 dark:text-teal-300">
+                <Pencil size={14} /> Editar
+              </button>
             </div>
+            {editingOrganizationId === organization.id && (
+              <div className="mt-3 space-y-3 rounded-2xl border border-teal-500/20 bg-white/80 p-3 dark:bg-slate-900/75">
+                <p className="text-[12px] font-bold text-teal-700 dark:text-teal-300">Editar organização</p>
+                <label className="block space-y-1"><span className="text-[11px] font-semibold">Nome de exibição</span>
+                  <input aria-label="Editar nome da organização" className={inputClass} value={editOrganizationName}
+                    onChange={event => setEditOrganizationName(event.target.value)} maxLength={160} /></label>
+                <label className="block space-y-1"><span className="text-[11px] font-semibold">Razão social</span>
+                  <input aria-label="Editar razão social" className={inputClass} value={editLegalName}
+                    onChange={event => setEditLegalName(event.target.value)} maxLength={160} /></label>
+                <label className="block space-y-1"><span className="text-[11px] font-semibold">CNPJ (opcional)</span>
+                  <input aria-label="Editar CNPJ" className={`${inputClass} font-mono`} value={editTaxId}
+                    onChange={event => setEditTaxId(formatCnpj(event.target.value))} maxLength={18}
+                    inputMode="text" autoCapitalize="characters" autoComplete="off" /></label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" className={buttonClass} disabled={busy || !user || authLoading}
+                    onClick={updateOrganization}><Save size={15} /> Salvar</button>
+                  <button type="button" disabled={busy} onClick={() => setEditingOrganizationId('')}
+                    className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-300 text-xs font-bold dark:border-slate-700"><X size={15} /> Cancelar</button>
+                </div>
+              </div>
+            )}
           </article>
         ))}
 
@@ -489,38 +612,61 @@ export default function CommercialPage() {
 
       {tab === 'stores' ? (
         <section className={panelClass}>
-          <h2 className="flex items-center gap-2 font-bold">
-            <Store size={19} /> Minhas lojas
-          </h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 font-bold"><Store size={19} /> Minhas lojas</h2>
+            {stores.length > 0 && (
+              <button type="button" onClick={() => setShowStoreForm(value => !value)}
+                aria-expanded={showStoreForm} className="min-h-10 rounded-xl bg-teal-500/10 px-3 text-[11px] font-bold text-teal-700 dark:text-teal-300">
+                {showStoreForm ? 'Fechar' : '+ Nova loja'}
+              </button>
+            )}
+          </div>
 
           {stores.map(store => (
-            <div
-              key={store.id}
-              className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3 dark:bg-slate-950"
-            >
-              <StoreIdentity store={store} />
-
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold">
-                  {store.name}
-                </p>
-                <p className="truncate text-xs text-slate-500">
-                  {organizations.find(item =>
-                    item.id === store.organization_id
-                  )?.name || 'Organização'}
-                </p>
+            <article key={store.id} className="space-y-2 rounded-[20px] border border-slate-200/70 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950">
+              <div className="flex items-center gap-3">
+                <StoreIdentity store={store} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-bold">{store.name}</p>
+                  <p className="truncate text-[11px] text-slate-500">{organizations.find(item => item.id === store.organization_id)?.name || 'Organização'}</p>
+                  <p className="mt-1 text-[10px] font-semibold text-slate-400">{store.active ? 'Ativa' : 'Inativa'} · {store.acronym}</p>
+                </div>
+                <button type="button" disabled={busy} onClick={() => beginStoreEdit(store)}
+                  aria-label={`Editar loja ${store.name}`} className="flex min-h-10 items-center gap-1 rounded-xl px-2.5 text-[11px] font-bold text-teal-700 dark:text-teal-300">
+                  <Pencil size={14} /> Editar
+                </button>
               </div>
-
-              <CheckCircle2
-                size={17}
-                className={store.active
-                  ? 'text-teal-500'
-                  : 'text-slate-400'}
-              />
-            </div>
+              {editingStoreId === store.id && (
+                <div className="space-y-3 border-t border-slate-200 pt-3 dark:border-slate-700">
+                  <p className="text-[12px] font-bold text-teal-700 dark:text-teal-300">Editar identidade da loja</p>
+                  <label className="block space-y-1"><span className="text-[11px] font-semibold">Nome</span>
+                    <input aria-label="Editar nome da loja" className={inputClass} value={editStoreName}
+                      onChange={event => setEditStoreName(event.target.value)} maxLength={160} /></label>
+                  <label className="block space-y-1"><span className="text-[11px] font-semibold">Sigla</span>
+                    <input aria-label="Editar sigla da loja" className={inputClass} value={editStoreAcronym}
+                      onChange={event => setEditStoreAcronym(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} maxLength={12} /></label>
+                  <label className="block space-y-1"><span className="text-[11px] font-semibold">URL HTTPS do logotipo (opcional)</span>
+                    <input aria-label="Editar logotipo da loja" className={inputClass} value={editStoreLogo}
+                      onChange={event => setEditStoreLogo(event.target.value)} maxLength={500} /></label>
+                  <p className="text-[10px] leading-4 text-slate-400">A organização vinculada e o status da loja são preservados.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" className={buttonClass} disabled={busy || !user || authLoading}
+                      onClick={updateStore}><Save size={15} /> Salvar</button>
+                    <button type="button" disabled={busy} onClick={() => setEditingStoreId('')}
+                      className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-300 text-xs font-bold dark:border-slate-700"><X size={15} /> Cancelar</button>
+                  </div>
+                </div>
+              )}
+            </article>
           ))}
 
-          <h3 className="font-semibold">Adicionar loja</h3>
+          {!loading && stores.length === 0 && (
+            <p className="rounded-xl bg-slate-50 p-3 text-[12px] text-slate-500 dark:bg-slate-950">Nenhuma loja cadastrada. Comece vinculando uma loja à organização.</p>
+          )}
+
+          {((!loading && stores.length === 0) || showStoreForm) && (
+          <div className="space-y-3 border-t border-slate-200 pt-3 dark:border-slate-700">
+            <h3 className="text-[12px] font-bold text-teal-700 dark:text-teal-300">Adicionar loja</h3>
 
           <SelectField
             title="Organização da loja"
@@ -575,43 +721,63 @@ export default function CommercialPage() {
           >
             <Save size={17} /> Salvar loja
           </button>
+          </div>
+          )}
         </section>
       ) : (
         <section className={panelClass}>
-          <h2 className="flex items-center gap-2 font-bold">
-            <Layers3 size={19} /> Plataformas
-          </h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 font-bold"><Layers3 size={19} /> Plataformas</h2>
+            {platforms.length > 0 && (
+              <button type="button" onClick={() => setShowPlatformForm(value => !value)}
+                aria-expanded={showPlatformForm} className="min-h-10 rounded-xl bg-teal-500/10 px-3 text-[11px] font-bold text-teal-700 dark:text-teal-300">
+                {showPlatformForm ? 'Fechar' : '+ Nova plataforma'}
+              </button>
+            )}
+          </div>
 
           {platforms.map(platform => (
-            <div
-              key={platform.id}
-              className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3 dark:bg-slate-950"
-            >
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-200 text-xs font-black dark:bg-slate-800">
-                {platform.provider_key === 'ifood'
-                  ? 'iF'
-                  : platform.provider_key === '99food'
-                    ? '99'
-                    : <Layers3 size={18} />}
+            <article key={platform.id} className="space-y-2 rounded-[20px] border border-slate-200/70 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-500/10 font-black text-teal-600 dark:text-teal-400">
+                  {platform.provider_key === 'ifood' ? 'iF' : platform.provider_key === '99food' ? '99' : <Layers3 size={18} />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-bold">{platform.display_name}</p>
+                  <p className="truncate text-[11px] text-slate-500">{stores.find(item => item.id === platform.store_id)?.name || 'Loja'}</p>
+                  <p className="mt-1 text-[10px] font-semibold text-slate-400">Modo OFF · sem integração automática</p>
+                  {platform.external_merchant_ref && <p className="mt-1 break-all text-[10px] text-slate-400">Identificador: {platform.external_merchant_ref}</p>}
+                </div>
+                <button type="button" disabled={busy} onClick={() => beginPlatformEdit(platform)}
+                  aria-label={`Editar plataforma ${platform.display_name}`} className="flex min-h-10 items-center gap-1 rounded-xl px-2.5 text-[11px] font-bold text-teal-700 dark:text-teal-300">
+                  <Pencil size={14} /> Editar
+                </button>
               </div>
-
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold">
-                  {platform.display_name}
-                </p>
-                <p className="truncate text-xs text-slate-500">
-                  {stores.find(item =>
-                    item.id === platform.store_id
-                  )?.name || 'Loja'}
-                  {' · OFF'}
-                </p>
-              </div>
-
-              <LockKeyhole size={17} className="text-slate-400" />
-            </div>
+              {editingPlatformId === platform.id && (
+                <div className="space-y-3 border-t border-slate-200 pt-3 dark:border-slate-700">
+                  <p className="text-[12px] font-bold text-teal-700 dark:text-teal-300">Editar identificador comercial</p>
+                  <input aria-label="Editar identificador da plataforma" className={inputClass}
+                    value={editMerchantReference} onChange={event => setEditMerchantReference(event.target.value)}
+                    placeholder="Identificador na plataforma (opcional)" maxLength={160} />
+                  <p className="text-[10px] leading-4 text-slate-400">Para proteger históricos, o fornecedor, a loja vinculada e o modo OFF não podem ser alterados aqui.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" className={buttonClass} disabled={busy || !user || authLoading}
+                      onClick={updatePlatformReference}><Save size={15} /> Salvar</button>
+                    <button type="button" disabled={busy} onClick={() => setEditingPlatformId('')}
+                      className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-300 text-xs font-bold dark:border-slate-700"><X size={15} /> Cancelar</button>
+                  </div>
+                </div>
+              )}
+            </article>
           ))}
 
-          <h3 className="font-semibold">Adicionar plataforma</h3>
+          {!loading && platforms.length === 0 && (
+            <p className="rounded-xl bg-slate-50 p-3 text-[12px] text-slate-500 dark:bg-slate-950">Nenhuma plataforma cadastrada. Adicione uma vinculação em modo OFF.</p>
+          )}
+
+          {((!loading && platforms.length === 0) || showPlatformForm) && (
+          <div className="space-y-3 border-t border-slate-200 pt-3 dark:border-slate-700">
+            <h3 className="text-[12px] font-bold text-teal-700 dark:text-teal-300">Adicionar plataforma</h3>
 
           <SelectField
             title="Loja da plataforma"
@@ -665,6 +831,8 @@ export default function CommercialPage() {
           >
             <Plus size={17} /> Cadastrar em modo OFF
           </button>
+          </div>
+          )}
         </section>
       )}
     </main>

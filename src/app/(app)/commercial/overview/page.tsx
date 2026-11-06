@@ -12,6 +12,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import SelectField from '@/components/SelectField'
+import { formatCnpj } from '@/lib/commercialIdentity'
 import {
   downloadCommercialCsv,
   type CommercialExportRow
@@ -21,6 +22,7 @@ type Organization = {
   id: string
   name: string
   legal_name: string | null
+  tax_id: string | null
 }
 
 type Shop = {
@@ -78,7 +80,7 @@ export default function CommercialOverviewPage() {
     try {
       const [a, b, c, d] = await Promise.all([
         supabase.from('dfl_commercial_organizations')
-          .select('id,name,legal_name')
+          .select('id,name,legal_name,tax_id')
           .eq('owner_id', user.id),
         supabase.from('dfl_commercial_stores')
           .select('id,organization_id,name,acronym,active')
@@ -257,6 +259,25 @@ export default function CommercialOverviewPage() {
           </div>
         ))}
       </section>
+
+      {visibleOrganizations.length > 0 && (
+        <details className={`${panel} group`}>
+          <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 text-[12px] font-bold [&::-webkit-details-marker]:hidden">
+            <span className="flex items-center gap-2"><Building2 size={17} className="text-teal-500" /> Identidade das organizações ({visibleOrganizations.length})</span>
+            <span className="text-teal-600 dark:text-teal-400">Ver</span>
+          </summary>
+          <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 dark:border-slate-700">
+            {visibleOrganizations.map(item => (
+              <div key={item.id} className="rounded-2xl bg-slate-50 p-3 dark:bg-slate-950">
+                <p className="break-words text-[13px] font-bold">{item.name}</p>
+                {item.legal_name && <p className="mt-0.5 break-words text-[11px] text-slate-500">{item.legal_name}</p>}
+                {item.tax_id && <p className="mt-1 font-mono text-[11px] text-teal-600 dark:text-teal-400">CNPJ · {formatCnpj(item.tax_id)}</p>}
+                <p className="mt-2 text-[10px] text-slate-400">{shops.filter(shop => shop.organization_id === item.id).length} loja(s) vinculada(s)</p>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
 
       <section className={`${panel} space-y-3`}>
         <h2 className="text-sm font-bold">Explorar estrutura</h2>
