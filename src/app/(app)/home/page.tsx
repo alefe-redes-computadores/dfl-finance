@@ -10,6 +10,7 @@ import { resolveKnownCommitments } from '@/lib/financialCommitments'
 import { useEffect, useState, useCallback, useRef, lazy, Suspense, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import ContextualCommandBar from '@/components/ContextualCommandBar'
+import HomeDecisionPulse from '@/components/home/HomeDecisionPulse'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { db } from '@/lib/db'
@@ -111,6 +112,7 @@ function HomeContent() {
   const [hideBalance, setHideBalance] = useState(false)
   const [showOperationalDetail, setShowOperationalDetail] = useState(false)
   const [showAllHomePriorities, setShowAllHomePriorities] = useState(false)
+  const [homeFocusMode, setHomeFocusMode] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
@@ -150,6 +152,23 @@ function HomeContent() {
     hasFinancialOutbox,
   } = useLocalSync()
   const hasSyncFailure = Boolean(lastSyncError)
+
+  // R453: preferência visual por usuário/contexto. Nenhum dado financeiro é gravado.
+  const homeFocusKey = user?.id ? `dfl_home_focus_r453_${user.id}_${effectiveContext}` : ''
+  useEffect(() => {
+    if (!homeFocusKey) return
+    try { setHomeFocusMode(localStorage.getItem(homeFocusKey) !== 'full') }
+    catch { setHomeFocusMode(true) }
+  }, [homeFocusKey])
+  const toggleHomeFocus = () => {
+    const next = !homeFocusMode
+    setHomeFocusMode(next)
+    if (homeFocusKey) {
+      try { localStorage.setItem(homeFocusKey, next ? 'focus' : 'full') }
+      catch { /* preferencia visual opcional */ }
+    }
+    vibrate([8])
+  }
 
   useEffect(() => {
     setIsClient(true)
@@ -675,7 +694,7 @@ function HomeContent() {
         continue
       }
 
-      const dueState = getDueDateState(tx.date)
+      const dueState = getDueDateState(tx.due_date || tx.date)
 
       if (
         !dueState.isOverdue &&
@@ -2533,6 +2552,41 @@ function HomeContent() {
         <ContextualCommandBar scope="home" />
       </section>
 
+      <div className="mb-2.5 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-black uppercase tracking-[0.12em] text-teal-700 dark:text-teal-400">
+            {isCurrentMonth ? 'Seu financeiro, agora' : 'Seu financeiro, no período'}
+          </p>
+          <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+            {isCurrentMonth ? 'Primeiro as decisões, depois os detalhes.' : 'Histórico completo durante a navegação mensal.'}
+          </p>
+        </div>
+        {isCurrentMonth && (
+          <button type="button" onClick={toggleHomeFocus} aria-pressed={!homeFocusMode}
+            className="min-h-10 shrink-0 rounded-[14px] border border-slate-200 bg-white px-3 text-[11px] font-bold text-teal-700 transition active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800 dark:text-teal-400">
+            {homeFocusMode ? 'Visão completa' : 'Focar no essencial'}
+          </button>
+        )}
+      </div>
+
+      <HomeDecisionPulse
+        userId={user?.id ?? null}
+        context={effectiveContext}
+        transactions={localTransactions}
+        isDataReady={!isDataLoading}
+        upcomingAlerts={homePriorityAlerts.filter(item => item.severity >= 2).length}
+        isOnline={!!isOnline}
+        isSyncing={!!isSyncing}
+        hasSyncFailure={hasSyncFailure}
+        pendingCount={typeof pendingCount === 'number' ? pendingCount : 0}
+        hasFinancialOutbox={!!hasFinancialOutbox}
+        isBalanceReconciling={!!isBalanceReconciling}
+        balanceVerifiedAt={balanceVerifiedAt}
+        lastSuccessfulSyncAt={lastSuccessfulSyncAt}
+        onOpenAgenda={() => router.push('/agenda')}
+        onOpenSync={() => setIsSyncModalOpen(true)}
+      />
+
       {!isDataLoading && syncAttempted && isOnline && !isSyncing && !hasSyncFailure && accounts.length === 0 && localTransactions.length === 0 && (
         <section aria-label="Primeiros passos no Finance" className="mb-4 rounded-[24px] border border-teal-500/20 bg-white p-4 shadow-sm dark:bg-slate-800/90">
           <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-teal-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">
@@ -2560,6 +2614,12 @@ function HomeContent() {
         if (insightIndex >= 0 && attentionIndex >= 0 && insightIndex < attentionIndex) {
           order.splice(insightIndex, 1)
           order.splice(order.indexOf('pendings') + 1, 0, 'intelligence')
+        }
+        // Modo essencial não apaga personalizações nem altera o motor financeiro.
+        // Ao explorar meses históricos, o layout completo volta automaticamente.
+        if (homeFocusMode && isCurrentMonth) {
+          const focusOrder = ['pendings', 'balance', 'intelligence', 'recent']
+          return focusOrder.filter(id => order.includes(id)).map(sectionId => renderSection(sectionId))
         }
         return order.map(sectionId => renderSection(sectionId))
       })()}

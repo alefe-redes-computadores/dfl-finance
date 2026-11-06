@@ -276,6 +276,28 @@ export default function MorePage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   const [exporting, setExporting] = useState(false)
+  const [isSigningOut, setIsSigningOut] = useState(false)
+  const signingOutRef = useRef(false)
+
+  const handleSafeSignOut = async () => {
+    if (signingOutRef.current) return
+    signingOutRef.current = true
+    setIsSigningOut(true)
+    try {
+      // Nunca apaga IndexedDB ou a fila offline; isolamento é por usuário.
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        showToast('Não foi possível encerrar a sessão. Confira a conexão e tente novamente.', 'error')
+        return
+      }
+      router.replace('/login')
+    } catch {
+      showToast('Não foi possível confirmar a saída. Sua fila local foi preservada.', 'error')
+    } finally {
+      signingOutRef.current = false
+      setIsSigningOut(false)
+    }
+  }
 
   useEffect(() => setIsClient(true), [])
 
@@ -796,13 +818,13 @@ export default function MorePage() {
 
       {/* LOGOUT */}
       <div className="px-4 mt-6 mb-8">
-        <button type="button" onClick={() => supabase.auth.signOut().then(() => router.push('/login'))} className="w-full flex items-center justify-between rounded-[24px] border border-red-200/60 dark:border-red-900/40 bg-white dark:bg-slate-800 px-4 py-3.5 text-left shadow-sm hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-[0.98] transition-all">
+        <button type="button" onClick={handleSafeSignOut} disabled={isSigningOut} aria-busy={isSigningOut} className="w-full flex items-center justify-between rounded-[24px] border border-red-200/60 dark:border-red-900/40 bg-white dark:bg-slate-800 px-4 py-3.5 text-left shadow-sm hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-[0.98] transition-all">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-[14px] bg-red-50 dark:bg-red-900/20 flex items-center justify-center shrink-0">
               <LogOut size={18} className="text-red-500 dark:text-red-400" strokeWidth={2.3} />
             </div>
             <div className="min-w-0">
-              <p className="text-[14px] font-semibold text-red-500 dark:text-red-400">Sair do aplicativo</p>
+              <p className="text-[14px] font-semibold text-red-500 dark:text-red-400">{isSigningOut ? 'Encerrando sessão…' : 'Sair do aplicativo'}</p>
               <p className="text-[12px] text-gray-400 dark:text-gray-500">Encerrar sessão neste dispositivo</p>
             </div>
           </div>
