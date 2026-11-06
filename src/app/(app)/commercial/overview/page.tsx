@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import SelectField from '@/components/SelectField'
 import {
   downloadCommercialCsv,
   type CommercialExportRow
@@ -259,17 +260,17 @@ export default function CommercialOverviewPage() {
 
       <section className={`${panel} space-y-3`}>
         <h2 className="text-sm font-bold">Explorar estrutura</h2>
-        <select
-          aria-label="Filtrar organização"
+        <SelectField
+          title="Filtrar organização"
+          placeholder="Todas as organizações"
           value={organizationId}
-          onChange={event => setOrganizationId(event.target.value)}
-          className="w-full rounded-2xl border border-slate-200 bg-transparent p-3 text-sm dark:border-slate-700"
-        >
-          <option value="all">Todas as organizações</option>
-          {organizations.map(item => (
-            <option key={item.id} value={item.id}>{item.name}</option>
-          ))}
-        </select>
+          onChange={setOrganizationId}
+          disabled={loading}
+          options={[
+            { value: 'all', label: 'Todas as organizações', description: 'Visão consolidada' },
+            ...organizations.map(item => ({ value: item.id, label: item.name })),
+          ]}
+        />
 
         <div className="relative">
           <Search

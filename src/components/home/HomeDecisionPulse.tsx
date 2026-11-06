@@ -68,8 +68,8 @@ export default function HomeDecisionPulse({
   return (
     <section aria-label="Mudanças, vencimentos e confiabilidade do financeiro"
       className="mb-3.5 overflow-hidden rounded-[21px] border border-slate-200/80 bg-white/90 shadow-sm dark:border-slate-700 dark:bg-slate-800/85">
-      <div className="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0 dark:divide-slate-700/70">
-        <div className="flex min-w-0 items-start gap-2.5 px-3.5 py-3">
+      <div className="grid grid-cols-2 gap-px bg-slate-200/70 sm:grid-cols-3 dark:bg-slate-700/70">
+        <div className="col-span-2 flex min-w-0 items-start gap-2.5 bg-white px-3.5 py-2.5 sm:col-span-1 dark:bg-slate-800">
           <Activity size={17} className="mt-0.5 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
           <div className="min-w-0">
             <p className="text-[11px] font-bold text-slate-800 dark:text-slate-100">O que mudou</p>
@@ -78,7 +78,7 @@ export default function HomeDecisionPulse({
           </div>
         </div>
         <button type="button" onClick={onOpenAgenda}
-          className="flex min-w-0 items-start gap-2.5 px-3.5 py-3 text-left transition-colors hover:bg-slate-50 active:bg-slate-100 dark:hover:bg-slate-700/40">
+          className="flex min-w-0 items-start gap-2 bg-white px-3 py-3 text-left transition-colors hover:bg-slate-50 active:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700/40">
           <CalendarClock size={17} className="mt-0.5 shrink-0 text-amber-500" aria-hidden="true" />
           <span className="min-w-0 flex-1">
             <span className="block text-[11px] font-bold text-slate-800 dark:text-slate-100">Vencimentos próximos</span>
@@ -89,7 +89,7 @@ export default function HomeDecisionPulse({
           <ChevronRight size={15} className="mt-1 shrink-0 text-slate-400" aria-hidden="true" />
         </button>
         <button type="button" onClick={onOpenSync}
-          className="flex min-w-0 items-start gap-2.5 px-3.5 py-3 text-left transition-colors hover:bg-slate-50 active:bg-slate-100 dark:hover:bg-slate-700/40">
+          className="flex min-w-0 items-start gap-2 bg-white px-3 py-3 text-left transition-colors hover:bg-slate-50 active:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700/40">
           <TrustIcon size={17} className={`mt-0.5 shrink-0 ${trust.tone === 'caution' ? 'text-amber-500' : trust.tone === 'safe' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}`} aria-hidden="true" />
           <span className="min-w-0 flex-1">
             <span className="block text-[11px] font-bold text-slate-800 dark:text-slate-100">{trust.label}</span>

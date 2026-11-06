@@ -5,17 +5,20 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Building2, Store, Layers3, Plus,
   RefreshCw, ShieldCheck, Save, LockKeyhole,
-  CheckCircle2, ImageIcon
+  CheckCircle2, ImageIcon, BarChart3, Calculator, BookOpen, FlaskConical, ChevronRight
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import SelectField from '@/components/SelectField'
+import { cleanCnpj, formatCnpj, isValidCnpj } from '@/lib/commercialIdentity'
 
 type Organization = {
   id: string
   name: string
   legal_name: string | null
+  tax_id: string | null
 }
 
 type CommercialStore = {
@@ -108,6 +111,8 @@ export default function CommercialPage() {
 
   const [organizationName, setOrganizationName] = useState('')
   const [legalName, setLegalName] = useState('')
+  const [taxId, setTaxId] = useState('')
+  const [showOrganizationForm, setShowOrganizationForm] = useState(false)
   const [organizationId, setOrganizationId] = useState('')
   const [storeName, setStoreName] = useState('')
   const [storeAcronym, setStoreAcronym] = useState('')
@@ -129,7 +134,7 @@ export default function CommercialPage() {
       const [orgResult, storeResult, platformResult] =
         await Promise.all([
           supabase.from('dfl_commercial_organizations')
-            .select('id,name,legal_name')
+            .select('id,name,legal_name,tax_id')
             .eq('owner_id', user.id)
             .order('created_at', { ascending: false }),
           supabase.from('dfl_commercial_stores')
@@ -191,18 +196,25 @@ export default function CommercialPage() {
         throw new Error('Informe o nome da organização.')
       }
 
+      if (taxId.trim() && !isValidCnpj(taxId)) {
+        throw new Error('CNPJ inválido. Confira os 14 caracteres e os dígitos verificadores.')
+      }
+
       const result = await supabase
         .from('dfl_commercial_organizations')
         .insert({
           owner_id: user.id,
           name: organizationName.trim(),
-          legal_name: legalName.trim() || null
+          legal_name: legalName.trim() || null,
+          tax_id: cleanCnpj(taxId) || null
         })
 
       if (result.error) throw result.error
 
       setOrganizationName('')
       setLegalName('')
+      setTaxId('')
+      setShowOrganizationForm(false)
       showToast('Organização cadastrada.', 'success')
     })
   }
@@ -323,84 +335,77 @@ export default function CommercialPage() {
         </button>
       </header>
 
-      <button
-        type="button"
-        onClick={() => router.push('/commercial/overview')}
-        className="flex w-full items-center justify-between rounded-3xl border border-teal-500/20 bg-teal-500/10 p-4 text-left transition active:scale-[.99]"
-      >
-        <div>
-          <p className="text-sm font-bold">Central Comercial 360</p>
-          <p className="mt-1 text-xs text-slate-500">
-            Indicadores, filtros, segurança e exportação
-          </p>
-        </div>
-        <Layers3 size={21} className="text-teal-500" />
-      </button>
-
-      <button
-        type="button"
-        onClick={() => router.push('/commercial/simulation')}
-        className="flex w-full items-center justify-between rounded-3xl border border-teal-500/20 bg-teal-500/10 p-4 text-left transition active:scale-[.99]"
-      >
-        <div>
-          <p className="text-sm font-bold">Simulador de repasses</p>
-          <p className="mt-1 text-xs text-slate-500">Taxas, retenções e comparação de cenários · sem gravação</p>
-        </div>
-        <Layers3 size={21} className="text-teal-500" />
-      </button>
-
-      <button type="button" onClick={() => router.push('/commercial/ledger')}
-        className="flex w-full items-center justify-between rounded-3xl border border-teal-500/20 bg-teal-500/5 p-4 text-left transition active:scale-[.99]">
-        <div><p className="text-sm font-bold">Ledger comercial supervisionado</p>
-          <p className="mt-1 text-xs text-slate-500">Registros e conciliação parcial · requer migração R443</p></div>
-        <Layers3 size={21} className="text-teal-500" />
-      </button>
-
-      <button type="button" onClick={() => router.push('/commercial/operation')}
-        className="flex w-full items-center justify-between rounded-3xl border border-teal-500/20 bg-teal-500/10 p-4 text-left transition active:scale-[.99]">
-        <div><p className="text-sm font-bold">Operação comercial · laboratório</p>
-          <p className="mt-1 text-xs text-slate-500">CSV, taxas, repasses e conciliação manual · OFF</p></div>
-        <Layers3 size={21} className="text-teal-500" />
-      </button>
-
-      <section className="rounded-3xl border border-teal-500/20 bg-teal-500/5 p-4">
-        <div className="flex items-start gap-3">
-          <ShieldCheck size={22} className="shrink-0 text-teal-600" />
-          <div>
-            <p className="text-sm font-bold">Fundação comercial segura</p>
-            <p className="mt-1 text-xs leading-relaxed text-slate-500">
-              Cadastros administrativos disponíveis. Integração,
-              importações, repasses e lançamentos automáticos
-              permanecem desligados.
-            </p>
-          </div>
-        </div>
+      <section aria-label="Ferramentas comerciais" className="grid grid-cols-2 gap-2.5">
+        {[
+          { label: 'Central 360', hint: 'Indicadores e filtros', href: '/commercial/overview', icon: BarChart3 },
+          { label: 'Simular repasses', hint: 'Taxas e cenários', href: '/commercial/simulation', icon: Calculator },
+          { label: 'Ledger', hint: 'Conciliação supervisionada', href: '/commercial/ledger', icon: BookOpen },
+          { label: 'Laboratório', hint: 'CSV e simulações · OFF', href: '/commercial/operation', icon: FlaskConical },
+        ].map(item => (
+          <button key={item.href} type="button" onClick={() => { haptic.light(); router.push(item.href) }}
+            className="group min-h-28 rounded-[22px] border border-teal-500/15 bg-white p-3.5 text-left shadow-sm transition active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800/90">
+            <div className="mb-2.5 flex items-center justify-between">
+              <span className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-teal-500/10 text-teal-600 dark:text-teal-400">
+                <item.icon size={18} aria-hidden="true" />
+              </span>
+              <ChevronRight size={15} className="text-slate-400 transition-transform group-hover:translate-x-0.5" />
+            </div>
+            <span className="block text-[12px] font-bold text-slate-900 dark:text-white">{item.label}</span>
+            <span className="mt-0.5 block text-[10px] leading-4 text-slate-500 dark:text-slate-400">{item.hint}</span>
+          </button>
+        ))}
       </section>
+
+      <details className="group rounded-[20px] border border-teal-500/20 bg-teal-500/5">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2.5 px-3.5 py-3 [&::-webkit-details-marker]:hidden">
+          <ShieldCheck size={19} className="shrink-0 text-teal-500" />
+          <span className="min-w-0 flex-1 text-[12px] font-bold">Cadastros seguros · integrações OFF</span>
+          <ChevronRight size={15} className="shrink-0 text-slate-400 transition-transform group-open:rotate-90" />
+        </summary>
+        <p className="px-3.5 pb-3 text-[11px] leading-5 text-slate-500 dark:text-slate-400">
+          Cadastros administrativos disponíveis. Importações, repasses, integrações e lançamentos automáticos continuam desligados.
+        </p>
+      </details>
 
       <section className={panelClass}>
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 font-bold">
             <Building2 size={19} /> Organizações
           </h2>
-          <span className="text-xs text-slate-500">
-            {organizations.length}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs tabular-nums text-slate-500">{organizations.length}</span>
+            {organizations.length > 0 && (
+              <button type="button" aria-expanded={showOrganizationForm}
+                onClick={() => setShowOrganizationForm(current => !current)}
+                className="flex min-h-10 items-center gap-1.5 rounded-xl bg-teal-500/10 px-3 text-[11px] font-bold text-teal-700 dark:text-teal-300">
+                <Plus size={14} /> {showOrganizationForm ? 'Fechar' : 'Nova'}
+              </button>
+            )}
+          </div>
         </div>
 
         {organizations.map(organization => (
-          <div
-            key={organization.id}
-            className="rounded-2xl bg-slate-50 p-3 dark:bg-slate-950"
-          >
-            <p className="text-sm font-semibold">
-              {organization.name}
-            </p>
-            {organization.legal_name && (
-              <p className="mt-1 text-xs text-slate-500">
-                {organization.legal_name}
-              </p>
-            )}
-          </div>
+          <article key={organization.id} className="overflow-hidden rounded-[20px] border border-slate-200/70 bg-gradient-to-br from-slate-50 to-teal-50/50 p-3.5 dark:border-slate-700 dark:from-slate-800 dark:to-teal-950/20">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] bg-teal-500/10 text-teal-600 dark:text-teal-400">
+                <Building2 size={20} aria-hidden="true" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="break-words text-[14px] font-bold leading-5 text-slate-900 dark:text-white">{organization.name}</h3>
+                {organization.legal_name && (
+                  <p className="mt-0.5 break-words text-[11px] leading-4 text-slate-500 dark:text-slate-400">{organization.legal_name}</p>
+                )}
+                {organization.tax_id && (
+                  <p className="mt-2 font-mono text-[11px] font-semibold tracking-wide text-teal-700 dark:text-teal-300">
+                    CNPJ · {formatCnpj(organization.tax_id)}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="mt-3 border-t border-slate-200/70 pt-2.5 text-[10px] font-semibold text-slate-500 dark:border-slate-700">
+              {stores.filter(item => item.organization_id === organization.id).length} loja(s) vinculada(s)
+            </div>
+          </article>
         ))}
 
         {!loading && organizations.length === 0 && (
@@ -409,6 +414,9 @@ export default function CommercialPage() {
           </p>
         )}
 
+        {((!loading && organizations.length === 0) || showOrganizationForm) && (
+        <div className="space-y-3 border-t border-slate-200/70 pt-4 dark:border-slate-700">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-teal-600 dark:text-teal-400">{organizations.length === 0 ? 'Cadastrar primeira organização' : 'Nova organização'}</p>
         <input
           className={inputClass}
           value={organizationName}
@@ -425,6 +433,22 @@ export default function CommercialPage() {
           maxLength={160}
         />
 
+        <label className="block space-y-1.5">
+          <span className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400">CNPJ <span className="font-normal">(opcional)</span></span>
+          <input
+            aria-label="CNPJ da organização"
+            className={`${inputClass} font-mono tracking-wide`}
+            value={taxId}
+            onChange={event => setTaxId(formatCnpj(event.target.value))}
+            placeholder="00.000.000/0000-00"
+            inputMode="text"
+            autoCapitalize="characters"
+            autoComplete="off"
+            maxLength={18}
+          />
+          <span className="block text-[10px] leading-4 text-slate-400">Pontuação automática. Aceita o CNPJ numérico e o alfanumérico de 2026.</span>
+        </label>
+
         <button
           type="button"
           className={buttonClass}
@@ -433,6 +457,8 @@ export default function CommercialPage() {
         >
           <Plus size={17} /> Cadastrar organização
         </button>
+        </div>
+        )}
       </section>
 
       <div className="grid grid-cols-2 gap-2">
@@ -496,21 +522,18 @@ export default function CommercialPage() {
 
           <h3 className="font-semibold">Adicionar loja</h3>
 
-          <select
-            className={inputClass}
+          <SelectField
+            title="Organização da loja"
+            placeholder="Selecione uma organização"
             value={organizationId}
-            onChange={event => setOrganizationId(event.target.value)}
-          >
-            <option value="">Selecione a organização</option>
-            {organizations.map(organization => (
-              <option
-                key={organization.id}
-                value={organization.id}
-              >
-                {organization.name}
-              </option>
-            ))}
-          </select>
+            onChange={setOrganizationId}
+            disabled={busy || loading || organizations.length === 0}
+            options={organizations.map(organization => ({
+              value: organization.id,
+              label: organization.name,
+              description: organization.tax_id ? formatCnpj(organization.tax_id) : organization.legal_name || undefined,
+            }))}
+          />
 
           <input
             className={inputClass}
@@ -523,7 +546,7 @@ export default function CommercialPage() {
           <input
             className={inputClass}
             value={storeAcronym}
-            onChange={event => setStoreAcronym(event.target.value)}
+            onChange={event => setStoreAcronym(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
             placeholder={`Sigla: ${
               getAcronym(storeName || 'Da Família Lanches')
             }`}
@@ -590,28 +613,31 @@ export default function CommercialPage() {
 
           <h3 className="font-semibold">Adicionar plataforma</h3>
 
-          <select
-            className={inputClass}
+          <SelectField
+            title="Loja da plataforma"
+            placeholder="Selecione uma loja"
             value={storeId}
-            onChange={event => setStoreId(event.target.value)}
-          >
-            <option value="">Selecione a loja</option>
-            {stores.map(store => (
-              <option key={store.id} value={store.id}>
-                {store.name}
-              </option>
-            ))}
-          </select>
+            onChange={setStoreId}
+            disabled={busy || loading || stores.length === 0}
+            options={stores.map(store => ({
+              value: store.id,
+              label: store.name,
+              description: organizations.find(org => org.id === store.organization_id)?.name,
+            }))}
+          />
 
-          <select
-            className={inputClass}
+          <SelectField
+            title="Plataforma parceira"
+            placeholder="Escolha uma plataforma"
             value={provider}
-            onChange={event => setProvider(event.target.value)}
-          >
-            <option value="ifood">iFood</option>
-            <option value="99food">99Food</option>
-            <option value="other">Outra plataforma</option>
-          </select>
+            onChange={setProvider}
+            disabled={busy}
+            options={[
+              { value: 'ifood', label: 'iFood', description: 'Cadastro administrativo · OFF' },
+              { value: '99food', label: '99Food', description: 'Cadastro administrativo · OFF' },
+              { value: 'other', label: 'Outra plataforma', description: 'Identificador personalizado · OFF' },
+            ]}
+          />
 
           {provider === 'other' && (
             <input
