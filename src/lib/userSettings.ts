@@ -1,5 +1,6 @@
 // src/lib/userSettings.ts
 import { supabase } from '@/lib/supabase'
+import { normalizeProactiveHistory, type ProactiveHistoryEntry, type ProactiveFrequency } from '@/lib/proactiveObservations'
 import { normalizeNotificationRules, type NotificationRuleOverrides } from '@/lib/nativeNotificationRules'
 import { normalizePlanningGroups, normalizePlanningReserves, normalizePlanningFlexLimits, type PlanningGroupMap, type PlanningReserve } from '@/lib/financePlanning'
 
@@ -28,6 +29,8 @@ export interface UserPreferences {
   notification_rules: NotificationRuleOverrides
   notification_privacy: 'private' | 'full'
   notification_onboarding_done: boolean
+  proactive_frequency: ProactiveFrequency
+  proactive_history: ProactiveHistoryEntry[]
   notification_categories: {
     invoices: boolean
     transactions: boolean
@@ -82,6 +85,8 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   notification_rules: {},
   notification_privacy: 'private',
   notification_onboarding_done: false,
+  proactive_frequency: 'daily',
+  proactive_history: [],
   notification_categories: {
     invoices: true,
     transactions: true,
@@ -203,6 +208,8 @@ function normalizePreferences(value: unknown): UserPreferences {
     notification_rules: normalizeNotificationRules(raw.notification_rules),
     notification_privacy: raw.notification_privacy === 'full' ? 'full' : 'private',
     notification_onboarding_done: raw.notification_onboarding_done === true,
+    proactive_frequency: raw.proactive_frequency === 'weekly' || raw.proactive_frequency === 'off' ? raw.proactive_frequency : 'daily',
+    proactive_history: normalizeProactiveHistory(raw.proactive_history),
     notification_categories: {
       ...DEFAULT_USER_PREFERENCES.notification_categories,
       ...(raw.notification_categories &&

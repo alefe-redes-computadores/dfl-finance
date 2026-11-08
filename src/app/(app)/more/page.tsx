@@ -775,6 +775,7 @@ export default function MorePage() {
             <MenuItem iconName="calendar-days" label="Agenda Financeira 360" href="/agenda" colorClass="text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30" />
             <MenuItem iconName="calendar-clock" label="Compromissos e Estabilidade de Caixa" href="/commitment-center" colorClass="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
             <MenuItem iconName="brain-circuit" label="Central de Inteligência Financeira" href="/intelligence-center" colorClass="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
+            <MenuItem iconName="sparkles" label="Observações do Finance" href="/intelligence-center/observations" colorClass="text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20" />
             <MenuItem iconName="chart-no-axes-combined" label="Tendências Financeiras" href="/financial-trends" colorClass="text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30" />
             <MenuItem iconName="heart-pulse" label="Diagnóstico de Saúde Financeira" href="/financial-health" colorClass="text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30" />
             <MenuItem iconName="calendar-check" label="Revisão Mensal Inteligente" href="/monthly-review" colorClass="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />

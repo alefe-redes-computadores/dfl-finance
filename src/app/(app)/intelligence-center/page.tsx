@@ -85,6 +85,14 @@ export default function IntelligenceCenterPage() {
 
       <ContextToggle/>
 
+      <Link href="/intelligence-center/observations" prefetch={false}
+        className="flex min-h-20 items-center gap-3 rounded-[23px] border border-teal-500/25 bg-teal-50 p-4 shadow-sm transition active:scale-[0.99] dark:bg-teal-950/30">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] bg-teal-600 text-white"><BrainCircuit size={22}/></span>
+        <span className="min-w-0 flex-1"><span className="block text-[14px] font-black text-slate-900 dark:text-white">Observações do Finance</span>
+          <span className="mt-1 block text-[11px] leading-4 text-slate-600 dark:text-slate-300">Fechamentos, tendências, riscos e sinais explicados. Você decide quando revisar.</span></span>
+        <ArrowUpRight size={19} className="shrink-0 text-teal-700 dark:text-teal-300"/>
+      </Link>
+
       <section className="rounded-[24px] bg-slate-950 p-5 text-white dark:border dark:border-slate-800">
         <div className="flex items-center gap-2">
           <BrainCircuit size={21} className="text-teal-300"/>

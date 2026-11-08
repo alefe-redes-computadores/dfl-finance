@@ -2587,6 +2587,16 @@ function HomeContent() {
         onOpenSync={() => setIsSyncModalOpen(true)}
       />
 
+      {isCurrentMonth && !isDataLoading && intelligenceHighlights.length > 0 && (
+        <button type="button" onClick={() => router.push('/intelligence-center/observations')}
+          className="mb-3 flex min-h-12 w-full items-center gap-2.5 rounded-[17px] border border-teal-500/20 bg-teal-500/5 px-3.5 py-3 text-left transition active:scale-[0.99]">
+          <Sparkles size={17} className="shrink-0 text-teal-600 dark:text-teal-400" />
+          <span className="min-w-0 flex-1"><span className="block text-[12px] font-bold text-slate-800 dark:text-white">Observações do Finance</span>
+            <span className="block truncate text-[10px] text-slate-500 dark:text-slate-400">Entenda os sinais com dados, explicação e próximos passos.</span></span>
+          <ChevronRight size={16} className="shrink-0 text-teal-600 dark:text-teal-400" />
+        </button>
+      )}
+
       {!isDataLoading && syncAttempted && isOnline && !isSyncing && !hasSyncFailure && accounts.length === 0 && localTransactions.length === 0 && (
         <section aria-label="Primeiros passos no Finance" className="mb-4 rounded-[24px] border border-teal-500/20 bg-white p-4 shadow-sm dark:bg-slate-800/90">
           <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-teal-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">
