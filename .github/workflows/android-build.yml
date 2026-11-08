@@ -208,6 +208,11 @@ jobs:
           node scripts/check-r458-proactive-intelligence.mjs
           node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/proactiveObservations.test.ts
 
+      - name: R459 Release Closeout
+        run: |
+          node scripts/check-r459-closeout.mjs
+          node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/r459Delivery.test.ts
+
       - name: Generate canonical web icons
         run: npm run icons:generate
 

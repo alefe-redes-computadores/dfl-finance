@@ -30,6 +30,7 @@ export interface UserPreferences {
   notification_privacy: 'private' | 'full'
   notification_onboarding_done: boolean
   proactive_frequency: ProactiveFrequency
+  proactive_android_enabled: boolean
   proactive_history: ProactiveHistoryEntry[]
   notification_categories: {
     invoices: boolean
@@ -86,6 +87,7 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   notification_privacy: 'private',
   notification_onboarding_done: false,
   proactive_frequency: 'daily',
+  proactive_android_enabled: false,
   proactive_history: [],
   notification_categories: {
     invoices: true,
@@ -209,6 +211,7 @@ function normalizePreferences(value: unknown): UserPreferences {
     notification_privacy: raw.notification_privacy === 'full' ? 'full' : 'private',
     notification_onboarding_done: raw.notification_onboarding_done === true,
     proactive_frequency: raw.proactive_frequency === 'weekly' || raw.proactive_frequency === 'off' ? raw.proactive_frequency : 'daily',
+    proactive_android_enabled: raw.proactive_android_enabled === true,
     proactive_history: normalizeProactiveHistory(raw.proactive_history),
     notification_categories: {
       ...DEFAULT_USER_PREFERENCES.notification_categories,

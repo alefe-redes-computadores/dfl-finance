@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -12,6 +12,9 @@ import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useUserSettings } from '@/hooks/useUserSettings'
 import { useToast } from '@/contexts/ToastContext'
+import { useAuth } from '@/lib/hooks/useAuth'
+import { Capacitor } from '@capacitor/core'
+import { requestProactiveDigestPermission, syncProactiveNativeDigest } from '@/lib/proactiveNativeDigest'
 import { buildFinancialIntelligence } from '@/lib/financial-intelligence'
 import { buildMonthlyReview, type MonthlyRow, type MonthlyCategory } from '@/lib/financeMonthlyReview'
 import {
@@ -38,12 +41,14 @@ const month = (date: Date, offset: number) => {
 
 export default function ProactiveObservationsPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const { effectiveContext } = useContext_()
   const { settings, loading: preferencesLoading, updateSettings } = useUserSettings()
   const { showToast } = useToast()
   const [reference] = useState(() => new Date())
   const [view, setView] = useState<'new' | 'history'>('new')
   const [busy, setBusy] = useState(false)
+  const [nativeMessage, setNativeMessage] = useState('')
   const filters = { context: effectiveContext }
   const transactions = useLocalData({ table: 'transactions', filters })
   const accounts = useLocalData({ table: 'accounts', filters })
@@ -94,10 +99,12 @@ export default function ProactiveObservationsPage() {
   const frequency: ProactiveFrequency = preferences?.proactive_frequency || 'daily'
   const history = useMemo(() => normalizeProactiveHistory(preferences?.proactive_history, reference),
     [preferences?.proactive_history, reference])
-  const visible = observations.filter(item =>
-    observationVisibility(history, item.key, frequency, reference) === 'active')
-  const prior = observations.filter(item =>
-    observationVisibility(history, item.key, frequency, reference) !== 'active')
+  const visible = useMemo(() => observations.filter(item =>
+    observationVisibility(history, item.key, frequency, reference) === 'active'),
+    [observations, history, frequency, reference])
+  const prior = useMemo(() => observations.filter(item =>
+    observationVisibility(history, item.key, frequency, reference) !== 'active'),
+    [observations, history, frequency, reference])
   const selected = view === 'new' ? visible : prior
 
   const save = async (changes: Record<string, unknown>, message: string) => {
@@ -114,6 +121,52 @@ export default function ProactiveObservationsPage() {
   const changeHistory = (item: ProactiveObservation, action: 'seen'|'snooze'|'reopen') => {
     void save({ proactive_history: reviewObservation(history, item.key, action, new Date()) },
       action === 'seen' ? 'Observação revisada.' : action === 'snooze' ? 'Adiada por 7 dias.' : 'Observação reaberta.')
+  }
+
+  // Só agenda ao examinar a Central; nunca faz varredura financeira global no boot.
+  useEffect(() => {
+    if (loading || !preferences || !user?.id) return
+    let active = true
+    void syncProactiveNativeDigest(user.id, effectiveContext, visible, {
+      enabled: preferences.proactive_android_enabled === true,
+      frequency,
+      privacy: preferences.notification_privacy,
+      hour: preferences.notification_hour,
+    }).then(status => {
+      if (!active) return
+      const labels: Record<typeof status, string> = {
+        unsupported: 'Disponível apenas no APK Android.',
+        disabled: 'Resumo Android desligado.',
+        'not-permitted': 'O Android ainda não permitiu notificações.',
+        unchanged: 'Próximo resumo já está agendado.',
+        scheduled: 'Próximo resumo Android agendado.',
+        'nothing-to-remind': 'Sem sinais prioritários para agendar.',
+      }
+      setNativeMessage(labels[status])
+    }).catch(() => { if (active) setNativeMessage('Não foi possível agendar. Abra esta tela para tentar novamente.') })
+    return () => { active = false }
+  }, [loading, user?.id, effectiveContext, visible, preferences, frequency])
+
+  const toggleNativeSummary = async () => {
+    if (!settings || busy) return
+    if (!settings.preferences.proactive_android_enabled) {
+      if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') {
+        showToast('A notificação local funciona somente no APK Android.', 'info')
+        return
+      }
+      try {
+        const permission = await requestProactiveDigestPermission()
+        if (permission !== 'granted') {
+          showToast('Libere as notificações nas configurações do Android para ativar.', 'warning')
+          return
+        }
+      } catch {
+        showToast('Não consegui verificar a permissão do Android.', 'error')
+        return
+      }
+    }
+    await save({ proactive_android_enabled: !settings.preferences.proactive_android_enabled },
+      settings.preferences.proactive_android_enabled ? 'Resumo Android desativado.' : 'Resumo Android ativado.')
   }
 
   return (
@@ -151,6 +204,23 @@ export default function ProactiveObservationsPage() {
         <div className="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-[10px] leading-4 text-slate-500 dark:bg-slate-800/70 dark:text-slate-400">
           <Info size={15} className="mt-0.5 shrink-0"/><p>Estas são observações dentro do aplicativo. Não são push Android e não exigem permissão. Os lembretes nativos de vencimento continuam separados na Central de Alertas 360.</p>
         </div>
+      </section>
+
+      <section className={panel}>
+        <div className="flex items-start gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-teal-600 dark:bg-teal-500/10"><BrainCircuit size={20}/></span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[14px] font-bold text-slate-900 dark:text-white">Resumo inteligente no Android</h2>
+            <p className="mt-1 text-[11px] leading-5 text-slate-500">Opcional. Agenda um próximo aviso quando você consulta esta tela e há sinais prioritários confiáveis. Não acompanha mudanças com o app fechado.</p>
+          </div>
+          <button type="button" role="switch" aria-label="Receber resumo inteligente no Android"
+            aria-checked={preferences?.proactive_android_enabled === true} disabled={!settings || busy || loading}
+            onClick={() => void toggleNativeSummary()}
+            className={`relative h-7 w-12 shrink-0 rounded-full disabled:opacity-50 ${preferences?.proactive_android_enabled ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-600'}`}>
+            <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${preferences?.proactive_android_enabled ? 'left-6' : 'left-1'}`}/>
+          </button>
+        </div>
+        <p role="status" className="mt-2 text-[10px] leading-5 text-slate-500">{nativeMessage || 'O padrão é desligado. Toque para ativar e solicitar permissão.'} O horário é o definido na Central de Notificações; a entrega pode variar conforme o Android.</p>
       </section>
 
       <div className="grid grid-cols-2 gap-2">

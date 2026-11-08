@@ -7,6 +7,7 @@ import { fetchLatestApkRelease } from '@/lib/mobileUpdateService'
 import { hasNewApk, parseInstalledBuild, type ApkRelease } from '@/lib/mobileUpdatePolicy'
 
 const RECHECK_MS = 20 * 60 * 1000
+const RETRY_AFTER_ERROR_MS = 2 * 60 * 1000
 
 type CheckState = 'idle' | 'checking' | 'ready' | 'error'
 
@@ -29,6 +30,8 @@ export function useApkUpdate(includeWeb = false) {
       setLatest(release)
       setState('ready')
     } catch {
+      // Falha de rede não bloqueia novas verificações pelos próximos 20 min.
+      checkedRef.current = Date.now() - RECHECK_MS + RETRY_AFTER_ERROR_MS
       if (mountedRef.current) setState('error')
     }
   }, [])

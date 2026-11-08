@@ -6,7 +6,9 @@ import { useUserSettings } from '@/hooks/useUserSettings'
 import {
   addNativeNotificationActionListener,
   syncNativeFinancialReminders,
+  normalizeNativeNotificationRoute,
 } from '@/lib/nativeNotifications'
+import { clearProactiveNativeDigest } from '@/lib/proactiveNativeDigest'
 
 const DFL_NOTIFICATION_ROUTE_STORAGE_KEY = 'dfl_finance_pending_notification_route'
 const DFL_NOTIFICATION_ROUTE_TTL_MS = 5 * 60 * 1000
@@ -38,7 +40,7 @@ function consumeNotificationRoute() {
       return null
     }
 
-    return parsed.route
+    return normalizeNativeNotificationRoute(parsed.route)
   } catch {
     return null
   }
@@ -112,6 +114,10 @@ export default function NativeNotificationManager({
             userId,
             settings.preferences
           )
+          // OFF/pausa remove resumos antigos, sem afetar vencimentos R457.
+          if (settings.preferences.proactive_android_enabled !== true || settings.preferences.proactive_frequency === 'off') {
+            await clearProactiveNativeDigest()
+          }
         } while (active && rerun)
       } catch (error) {
         console.warn(
@@ -180,6 +186,11 @@ export default function NativeNotificationManager({
       }
     }
   }, [router, settings, userId])
+
+  useEffect(() => {
+    if (!userId) return undefined
+    return () => { void clearProactiveNativeDigest().catch(() => undefined) }
+  }, [userId])
 
   return null
 }

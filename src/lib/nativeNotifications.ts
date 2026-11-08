@@ -487,7 +487,7 @@ export async function sendNativeNotificationTest() {
       channelId: DFL_NOTIFICATION_CHANNEL_ID,
       smallIcon: DFL_NOTIFICATION_SMALL_ICON,
       iconColor: '#0f766e',
-      extra: { managedBy: 'dfl-finance-test' },
+      extra: { managedBy: 'dfl-finance-test', route: '/notification-center' },
     }],
   })
 

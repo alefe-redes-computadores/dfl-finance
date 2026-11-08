@@ -1,14 +1,27 @@
 'use client'
 
+import { useCallback, useEffect, useState } from 'react'
 import { Browser } from '@capacitor/browser'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, CheckCircle2, Download, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react'
 import { useApkUpdate } from '@/hooks/useApkUpdate'
 import { APK_ACTIONS_URL, formatApkExpiry } from '@/lib/mobileUpdatePolicy'
+import { fetchApkWorkflowHealth } from '@/lib/mobileUpdateService'
+import type { WorkflowHealth } from '@/lib/apkWorkflowDiagnostics'
 
 export default function AppUpdatesPage() {
   const router = useRouter()
   const { android, installedBuild, latest, state, refresh, updateAvailable } = useApkUpdate(true)
+  const [workflow, setWorkflow] = useState<WorkflowHealth | null>(null)
+  const [workflowError, setWorkflowError] = useState(false)
+  const checkWorkflow = useCallback(async (force = false) => {
+    try {
+      const result = await fetchApkWorkflowHealth(force)
+      setWorkflow(result)
+      setWorkflowError(false)
+    } catch { setWorkflowError(true) }
+  }, [])
+  useEffect(() => { void checkWorkflow() }, [checkWorkflow])
   const url = latest?.pageUrl || APK_ACTIONS_URL
   const open = () => {
     if (android) void Browser.open({ url })
@@ -45,7 +58,7 @@ export default function AppUpdatesPage() {
           <h2 className="flex items-center gap-2 text-[14px] font-bold text-slate-900 dark:text-slate-100">
             <Download size={18} className="text-teal-600"/> Último APK certificado
           </h2>
-          <button type="button" onClick={() => void refresh(true)} disabled={state === 'checking'}
+          <button type="button" onClick={() => { void refresh(true); void checkWorkflow(true) }} disabled={state === 'checking'}
             className="flex min-h-10 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-[11px] font-semibold text-slate-600 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300">
             <RefreshCw size={14} className={state === 'checking' ? 'animate-spin motion-reduce:animate-none' : ''}/> Verificar
           </button>
@@ -71,6 +84,21 @@ export default function AppUpdatesPage() {
           className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[15px] bg-teal-600 px-3 text-[12px] font-bold text-white active:scale-[0.98]">
           <Download size={17}/> Abrir GitHub Actions
         </button>
+      </section>
+
+      <section aria-label="Diagnóstico das Actions" className="space-y-2 rounded-[22px] border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+        <h2 className="text-[13px] font-bold text-slate-900 dark:text-white">Última Action Android</h2>
+        {workflowError && <p role="status" className="text-[11px] text-amber-600">Não foi possível consultar o histórico. Nenhuma atualização nova será anunciada por isso.</p>}
+        {!workflow && !workflowError && <p className="text-[11px] text-slate-500">Verificando estado do build...</p>}
+        {workflow && <>
+          {workflow.kind === 'building' && <p className="text-[11px] text-slate-600 dark:text-slate-300">Build #{workflow.build} em andamento. Ainda não há APK novo aprovado.</p>}
+          {workflow.kind === 'failed' && <p className="text-[11px] text-amber-700 dark:text-amber-300">O build #{workflow.build} falhou. Ele não é anunciado como atualização disponível.</p>}
+          {workflow.kind === 'expired' && <p className="text-[11px] text-amber-700 dark:text-amber-300">O artefato do build #{workflow.build} expirou em {workflow.expiresAt ? formatApkExpiry(workflow.expiresAt) : 'data indisponível'}. Consulte outro APK válido.</p>}
+          {workflow.kind === 'ready' && <p className="text-[11px] text-teal-700 dark:text-teal-300">Build #{workflow.build} aprovado, com artefato disponível até {workflow.expiresAt ? formatApkExpiry(workflow.expiresAt) : 'prazo não informado'}.</p>}
+          {workflow.kind === 'unavailable' && <p className="text-[11px] text-slate-500">O build #{workflow.build} concluiu, mas não há um artefato APK verificável.</p>}
+          {workflow.kind === 'none' && <p className="text-[11px] text-slate-500">Histórico da Action indisponível ou não reconhecido.</p>}
+        </>}
+        <p className="text-[10px] leading-4 text-slate-500">Falhas e builds em andamento aparecem apenas aqui, sem alertas de versão nova. A disponibilidade do APK é verificada separadamente.</p>
       </section>
 
       <section className="flex gap-3 rounded-[22px] border border-slate-200 bg-slate-50 p-4 text-[11px] leading-5 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">

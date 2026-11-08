@@ -1,4 +1,5 @@
 /** Consultas somente de leitura à API pública do GitHub. Zero tokens, zero SQL. */
+import { classifyLatestWorkflow, classifyLatestArtifact, type WorkflowHealth } from '@/lib/apkWorkflowDiagnostics'
 import {
   APK_REPOSITORY, APK_WORKFLOW_FILE,
   parseSuccessfulApkRun, releaseFromArtifacts,
@@ -60,4 +61,28 @@ export async function fetchLatestApkRelease(force = false): Promise<ApkRelease |
   } finally {
     inFlight = null
   }
+}
+
+/** Histórico técnico exibido apenas na Central; não dispara banner nem notificação. */
+let workflowRecent: { at: number; value: WorkflowHealth } | null = null
+let workflowFlight: Promise<WorkflowHealth> | null = null
+
+export async function fetchApkWorkflowHealth(force = false): Promise<WorkflowHealth> {
+  if (workflowFlight) return workflowFlight
+  if (!force && workflowRecent && Date.now() - workflowRecent.at < CHECK_CACHE_MS) return workflowRecent.value
+  workflowFlight = (async () => {
+    const data = await githubJson(`${API}/actions/workflows/${WORKFLOW_NAME}/runs?branch=main&per_page=2`)
+    const health = classifyLatestWorkflow(data)
+    if (health.kind !== 'ready') return health
+    const rows = data && typeof data === 'object' && 'workflow_runs' in data
+      ? (data as { workflow_runs?: unknown }).workflow_runs : null
+    if (!Array.isArray(rows) || !rows[0] || typeof rows[0].id !== 'number') return { ...health, kind: 'unavailable' }
+    const artifacts = await githubJson(`${API}/actions/runs/${rows[0].id}/artifacts?per_page=30`)
+    return classifyLatestArtifact(health, artifacts)
+  })()
+  try {
+    const result = await workflowFlight
+    workflowRecent = { at: Date.now(), value: result }
+    return result
+  } finally { workflowFlight = null }
 }
