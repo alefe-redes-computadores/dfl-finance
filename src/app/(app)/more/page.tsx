@@ -810,6 +810,7 @@ export default function MorePage() {
             <MenuItem iconName="sliders-horizontal" label="Central de Configurações" href="/settings" colorClass="text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-500/10" />
             <MenuItem iconName="settings" label="Aparência e opções rápidas" onClick={() => setShowSettingsModal(true)} colorClass="text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-700" />
             <MenuItem iconName="download" label="Exportar Dados" onClick={() => setShowExportModal(true)} colorClass="text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700" />
+            <MenuItem iconName="smartphone" label="Atualizações do aplicativo" href="/updates" colorClass="text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-900/30" />
             <MenuItem iconName="shield-check" label="Backup e recuperação" href="/data-safety" colorClass="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
           </div>
           </div>

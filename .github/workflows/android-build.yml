@@ -197,6 +197,11 @@ jobs:
       - name: Mobile contracts
         run: npm run mobile:check
 
+      - name: R456 APK updates certification
+        run: |
+          node scripts/check-r456-app-updates.mjs
+          node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/mobileUpdatePolicy.test.ts
+
       - name: Generate canonical web icons
         run: npm run icons:generate
 
