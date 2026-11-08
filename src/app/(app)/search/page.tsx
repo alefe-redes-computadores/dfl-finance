@@ -365,6 +365,7 @@ export default function Page() {
   const [resolvedSearchKey, setResolvedSearchKey] = useState('')
   const [failedSearchKey, setFailedSearchKey] = useState('')
   const [loading, setLoading] = useState(false)
+  const [searchElapsedMs, setSearchElapsedMs] = useState<number | null>(null)
   const [searchError, setSearchError] = useState(false)
   const [searchAttempt, setSearchAttempt] = useState(0)
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -557,6 +558,7 @@ export default function Page() {
     let active = true
 
     const timer = setTimeout(async () => {
+      const startedAt = performance.now()
       setLoading(true)
       setSearchError(false)
       setFailedSearchKey('')
@@ -567,6 +569,7 @@ export default function Page() {
           trimmedQuery
         )
         if (active) {
+          setSearchElapsedMs(Math.max(0, Math.round(performance.now() - startedAt)))
           setItems(result)
           setResolvedQuery(trimmedQuery)
           setResolvedSearchKey(requestKey)
@@ -574,6 +577,7 @@ export default function Page() {
         }
       } catch {
         if (active) {
+          setSearchElapsedMs(null)
           setItems([])
           setResolvedQuery('')
           setResolvedSearchKey('')
@@ -1038,6 +1042,7 @@ export default function Page() {
             <div className="mb-2.5 flex items-center justify-between px-1">
               <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-400 dark:text-slate-600">
                 Resultados
+                {searchElapsedMs !== null && <span className="ml-1 font-medium normal-case tracking-normal text-teal-600 dark:text-teal-400">· busca local em {searchElapsedMs} ms</span>}
               </p>
               <p className="text-[11px] font-bold tabular-nums text-slate-400 dark:text-slate-600">
                 {visibleItems.length}{items.length >= 40 ? ' · refine para encontrar mais' : ''}

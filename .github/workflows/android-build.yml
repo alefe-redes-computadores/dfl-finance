@@ -213,6 +213,11 @@ jobs:
           node scripts/check-r459-closeout.mjs
           node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/r459Delivery.test.ts
 
+      - name: R460 Search Turbo Closeout
+        run: |
+          node scripts/check-r460-search-turbo.mjs
+          node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/searchTurboR460.test.ts
+
       - name: Generate canonical web icons
         run: npm run icons:generate
 

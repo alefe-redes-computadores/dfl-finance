@@ -205,14 +205,35 @@ function exactTokenMatch(token: string, haystack: string) {
   return haystack.split(/[^a-z0-9]+/).some(word => word === token || (token.length >= 3 && word.startsWith(token)))
 }
 
-function fuzzyTokenMatch(token: string, haystack: string) {
-  if (exactTokenMatch(token, haystack)) return true
-  if (token.length < 4) return false
+/** R460: consulta numérica precisa do custo de formatação somente quando há dígitos. */
+export function searchNeedsAmountTokens(tokens: readonly string[]): boolean {
+  return tokens.some(token => /[0-9]/.test(token))
+}
 
-  return haystack
-    .split(/[^a-z0-9]+/)
-    .filter((word) => word.length >= 4)
-    .some((word) => editDistanceAtMostOne(token, word))
+/** Índice efêmero por registro: evita separar o mesmo texto a cada token. */
+export function buildFinancialSearchMatchIndex(haystack: string) {
+  const words = haystack.split(/[^a-z0-9]+/)
+  const numericWords = haystack.split(/\s+/)
+  const exactCache = new Map<string, boolean>()
+  const fuzzyCache = new Map<string, boolean>()
+  const exact = (token: string): boolean => {
+    const cached = exactCache.get(token)
+    if (cached !== undefined) return cached
+    const matched = /^[0-9.,]+$/.test(token)
+      ? numericWords.includes(token)
+      : words.some(word => word === token || (token.length >= 3 && word.startsWith(token)))
+    exactCache.set(token, matched)
+    return matched
+  }
+  const fuzzy = (token: string): boolean => {
+    const cached = fuzzyCache.get(token)
+    if (cached !== undefined) return cached
+    const matched = exact(token) || (token.length >= 4 &&
+      words.some(word => word.length >= 4 && editDistanceAtMostOne(token, word)))
+    fuzzyCache.set(token, matched)
+    return matched
+  }
+  return { exact, fuzzy }
 }
 
 // R425: palavras de uso diario nao podem virar meses por diferenca de uma letra.
@@ -440,6 +461,7 @@ export async function searchFinancialData(
   const entity = parseFinancialEntityQuery(query)
   const dateIntent = financialEntityDateIntent(query, entity)
   const tokens = searchableTokens(entity ? entity.qualifier : query, dateIntent)
+  const includeMoneyTokens = searchNeedsAmountTokens(tokens)
   // R435: 'metas' lista metas; 'meta viagem' consulta o nome sem exigir 'meta' nele.
   // Comando vazio continua sem abrir qualquer tabela do IndexedDB.
   if (!entity) {
@@ -525,24 +547,28 @@ export async function searchFinancialData(
         contact?.name, contact?.person_name, card?.name, card?.institution,
         ...relatedTags.map((tag: any) => tag.name),
         row.receipt_url ? 'comprovante anexo recibo' : '',
-        ...moneyTokens(row.amount), ...moneyTokens(row.balance), ...moneyTokens(row.target_amount),
-        ...moneyTokens(row.saved_amount), ...moneyTokens(row.installment_amount),
-        ...moneyTokens(row.installment_value), ...moneyTokens(row.limit_amount),
-        ...moneyTokens(row.total_amount), ...moneyTokens(row.remaining_amount),
-        ...moneyTokens(row.paid_amount),
+        // Nomes/texto não requerem 10 formatações de moeda para cada registro.
+        ...(includeMoneyTokens ? [
+          ...moneyTokens(row.amount), ...moneyTokens(row.balance), ...moneyTokens(row.target_amount),
+          ...moneyTokens(row.saved_amount), ...moneyTokens(row.installment_amount),
+          ...moneyTokens(row.installment_value), ...moneyTokens(row.limit_amount),
+          ...moneyTokens(row.total_amount), ...moneyTokens(row.remaining_amount),
+          ...moneyTokens(row.paid_amount),
+        ] : []),
       ].map(norm).filter(Boolean)
       const haystack = fields.join(' ')
-      if (tokens.length && !tokens.every((token) => fuzzyTokenMatch(token, haystack))) return
+      const matchIndex = buildFinancialSearchMatchIndex(haystack)
+      if (tokens.length && !tokens.every((token) => matchIndex.fuzzy(token))) return
       if (!tokens.length && !dateIntent && !entity) return
 
       let score = 0
-      const fuzzyCount = tokens.filter(token => !exactTokenMatch(token, haystack)).length
+      const fuzzyCount = tokens.filter(token => !matchIndex.exact(token)).length
       for (const token of tokens) {
         if (exactTokenMatch(token, norm(row.description)) || exactTokenMatch(token, norm(row.name)) || exactTokenMatch(token, norm(row.title))) score += 8
         else if (exactTokenMatch(token, norm(category?.name))) score += 6
         else if (exactTokenMatch(token, norm(account?.name)) || exactTokenMatch(token, norm(account?.bank)) || exactTokenMatch(token, norm(account?.bank_name))) score += 5
-        else if (exactTokenMatch(token, haystack)) score += 2
-        else if (fuzzyTokenMatch(token, haystack)) score += 1
+        else if (matchIndex.exact(token)) score += 2
+        else if (matchIndex.fuzzy(token)) score += 1
       }
       if (dateIntent) score += 4
       if (row.receipt_url && tokens.some((t) => ['comprovante','anexo','recibo'].includes(t))) score += 5
