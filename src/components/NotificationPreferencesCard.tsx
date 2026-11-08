@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Bell, BellOff, CalendarClock, Check, ChevronDown, ChevronUp,
   CircleDollarSign, CreditCard, HandCoins, Landmark, RefreshCw,
@@ -35,6 +36,7 @@ const leadOptions = [
 ]
 
 export default function NotificationPreferencesCard() {
+  const router = useRouter()
   const { settings, loading, updateSettings } = useUserSettings()
   const { light, success, error: errorHaptic } = useHapticFeedback()
   const { showToast } = useToast()
@@ -248,6 +250,12 @@ export default function NotificationPreferencesCard() {
         </button>
       </div>
 
+      <div className="px-4 pb-3">
+        <button type="button" onClick={() => router.push('/notification-center')}
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[15px] bg-teal-600 px-3 text-[12px] font-bold text-white transition active:scale-[0.98]">
+          <Bell size={16}/> Personalizar por categoria
+        </button>
+      </div>
       {expanded && (
         <div className="border-t border-gray-100 px-4 pb-4 pt-4 dark:border-slate-700/70">
           <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">

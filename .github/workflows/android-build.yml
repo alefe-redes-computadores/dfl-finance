@@ -200,6 +200,7 @@ jobs:
       - name: R456 APK updates certification
         run: |
           node scripts/check-r456-app-updates.mjs
+          node scripts/check-r457-notification-center.mjs
           node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/mobileUpdatePolicy.test.ts
 
       - name: Generate canonical web icons

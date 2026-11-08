@@ -1,5 +1,6 @@
 // src/lib/userSettings.ts
 import { supabase } from '@/lib/supabase'
+import { normalizeNotificationRules, type NotificationRuleOverrides } from '@/lib/nativeNotificationRules'
 import { normalizePlanningGroups, normalizePlanningReserves, normalizePlanningFlexLimits, type PlanningGroupMap, type PlanningReserve } from '@/lib/financePlanning'
 
 export type ThemePreference = 'light' | 'dark'
@@ -24,6 +25,9 @@ export interface UserPreferences {
   notification_overdue: boolean
   notification_grouping: boolean
   notification_action_open: boolean
+  notification_rules: NotificationRuleOverrides
+  notification_privacy: 'private' | 'full'
+  notification_onboarding_done: boolean
   notification_categories: {
     invoices: boolean
     transactions: boolean
@@ -75,6 +79,9 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   notification_overdue: true,
   notification_grouping: true,
   notification_action_open: true,
+  notification_rules: {},
+  notification_privacy: 'private',
+  notification_onboarding_done: false,
   notification_categories: {
     invoices: true,
     transactions: true,
@@ -193,6 +200,9 @@ function normalizePreferences(value: unknown): UserPreferences {
         : DEFAULT_USER_PREFERENCES.notification_overdue,
     notification_grouping: typeof raw.notification_grouping === 'boolean' ? raw.notification_grouping : true,
     notification_action_open: typeof raw.notification_action_open === 'boolean' ? raw.notification_action_open : true,
+    notification_rules: normalizeNotificationRules(raw.notification_rules),
+    notification_privacy: raw.notification_privacy === 'full' ? 'full' : 'private',
+    notification_onboarding_done: raw.notification_onboarding_done === true,
     notification_categories: {
       ...DEFAULT_USER_PREFERENCES.notification_categories,
       ...(raw.notification_categories &&

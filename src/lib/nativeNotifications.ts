@@ -2,8 +2,10 @@
 
 import { Capacitor, registerPlugin } from '@capacitor/core'
 import { db } from '@/lib/db'
+import { reminderOccurrences, resolveNotificationRule, sameScheduledReminder, type NotificationRuleOverrides } from '@/lib/nativeNotificationRules'
 
 export const DFL_NOTIFICATION_CHANNEL_ID = 'dfl-financial-alerts'
+const DFL_NOTIFICATION_PRIVATE_CHANNEL_ID = 'dfl-financial-private-v1'
 export const DFL_NOTIFICATION_SMALL_ICON = 'ic_stat_dfl_finance'
 
 type PermissionState =
@@ -96,12 +98,15 @@ export interface NativeNotificationPreferences {
   notification_grouping?: boolean
   notification_action_open?: boolean
   notification_categories?: Partial<NotificationCategoryPreferences>
+  notification_rules?: NotificationRuleOverrides
+  notification_privacy?: 'private' | 'full'
 }
 
 interface ReminderCandidate {
   key: string
   title: string
   body: string
+  amount: number
   dueDate: string
   route: string
   category: keyof NotificationCategoryPreferences
@@ -123,9 +128,9 @@ export function normalizeNativeNotificationRoute(value: unknown) {
   const route = value.trim()
 
   // Compat V37: !route.includes('://') é o contrato histórico de rota interna.
+  const safeLocalPath = route.startsWith('/') && !route.startsWith('//')
   if (
-    !route.startsWith('/') ||
-    route.startsWith('//') ||
+    !safeLocalPath ||
     route.includes('://') ||
     route.includes('\\\\') ||
     route.includes('\\n') ||
@@ -166,34 +171,12 @@ function formatMoney(value: unknown) {
   })
 }
 
-function parseDate(date: string) {
-  const [year, month, day] = date.split('-').map(Number)
-
-  if (!year || !month || !day) return null
-
-  return new Date(year, month - 1, day)
-}
-
 function toISODate(date: Date) {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
 
   return `${year}-${month}-${day}`
-}
-
-function addDays(date: Date, amount: number) {
-  const result = new Date(date)
-  result.setDate(result.getDate() + amount)
-  return result
-}
-
-function reminderAt(dateISO: string, hour: number) {
-  const date = parseDate(dateISO)
-  if (!date) return null
-
-  date.setHours(hour, 0, 0, 0)
-  return date
 }
 
 function stableNotificationId(key: string) {
@@ -279,6 +262,7 @@ async function collectReminderCandidates(
         key: `invoice:${invoice.id}`,
         title: `Fatura ${cardNames.get(invoice.credit_card_id) || 'Cartão'}`,
         body: `${formatMoney(remaining)} em aberto`,
+        amount: remaining,
         dueDate: invoice.due_date,
         route: `/cards/details?id=${invoice.credit_card_id}`,
         category: 'invoices',
@@ -308,6 +292,7 @@ async function collectReminderCandidates(
         key: `debt:${debt.id}`,
         title: debt.person_name || 'Quem me deve',
         body: `${formatMoney(remaining)} a receber`,
+        amount: remaining,
         dueDate: debt.due_date,
         route: `/debts/details?id=${debt.id}`,
         category: 'debts',
@@ -331,6 +316,7 @@ async function collectReminderCandidates(
           financing.installment_value ||
             financing.installment_amount
         )} previsto`,
+        amount: numberValue(financing.installment_value || financing.installment_amount),
         dueDate: financing.next_due_date,
         route: `/financings/details?id=${financing.id}`,
         category: 'financings',
@@ -348,6 +334,7 @@ async function collectReminderCandidates(
         body: `${formatMoney(loan.remaining_amount)} restante${
           loan.description ? ` • ${loan.description}` : ''
         }`,
+        amount: numberValue(loan.remaining_amount),
         dueDate: loan.due_date,
         route: `/loans/details?id=${loan.id}`,
         category: 'loans',
@@ -377,6 +364,7 @@ async function collectReminderCandidates(
         key: `subscription:${subscription.id}`,
         title: subscription.name || 'Assinatura',
         body: `${formatMoney(subscription.amount)} previsto`,
+        amount: numberValue(subscription.amount),
         dueDate:
           explicitDue ||
           nextMonthlyDueDate(dueDay),
@@ -407,6 +395,7 @@ async function collectReminderCandidates(
         key: `goal:${goal.id}`,
         title: goal.name || 'Meta financeira',
         body: `${formatMoney(remaining)} para concluir`,
+        amount: remaining,
         dueDate: goal.deadline,
         route: `/goals/details?id=${goal.id}`,
         category: 'goals',
@@ -435,6 +424,7 @@ async function collectReminderCandidates(
             ? ` • ${transaction.description}`
             : ''
         }`,
+        amount: numberValue(transaction.amount),
         dueDate: transaction.date,
         route: `/transactions/details?id=${transaction.id}`,
         category: 'transactions',
@@ -557,13 +547,25 @@ function occurrenceTitle(
 async function ensureChannel() {
   if (!isNative()) return
 
+  // O canal legado continua disponível para quem opta por valores visíveis.
   await LocalNotifications.createChannel({
     id: DFL_NOTIFICATION_CHANNEL_ID,
     name: 'Alertas financeiros',
-    description:
-      'Faturas, vencimentos, recorrências e compromissos financeiros.',
+    description: 'Faturas, vencimentos, recorrências e compromissos financeiros.',
     importance: 4,
     visibility: 1,
+    vibration: true,
+    lights: true,
+    lightColor: '#0f766e',
+  })
+  // Android não permite alterar a visibilidade de um canal já criado.
+  // Um ID novo preserva o bloqueio de valores na tela bloqueada.
+  await LocalNotifications.createChannel({
+    id: DFL_NOTIFICATION_PRIVATE_CHANNEL_ID,
+    name: 'Lembretes financeiros privados',
+    description: 'Lembretes com valores ocultos na tela bloqueada.',
+    importance: 4,
+    visibility: 0,
     vibration: true,
     lights: true,
     lightColor: '#0f766e',
@@ -583,28 +585,16 @@ export async function syncNativeFinancialReminders(
     }
   }
 
-  // Sempre remove a agenda anterior antes de recalcular.
-  // Isso também faz o OFF realmente cancelar lembretes já agendados.
-  const cancelled = await cancelManagedNotifications()
-
+  // OFF continua cancelando só as notificações deste aplicativo.
   if (!preferences.push_notifications) {
-    return {
-      supported: true,
-      scheduled: 0,
-      cancelled,
-      disabled: true,
-    }
+    const cancelled = await cancelManagedNotifications()
+    return { supported: true, scheduled: 0, cancelled, disabled: true }
   }
 
   const permitted = await hasNotificationPermission()
-
   if (!permitted) {
-    return {
-      supported: true,
-      scheduled: 0,
-      cancelled,
-      permissionDenied: true,
-    }
+    const cancelled = await cancelManagedNotifications()
+    return { supported: true, scheduled: 0, cancelled, permissionDenied: true }
   }
 
   await ensureChannel()
@@ -627,25 +617,17 @@ export async function syncNativeFinancialReminders(
     preferences
   )
 
-  const hour = Math.min(
-    21,
-    Math.max(
-      6,
-      Number.isFinite(preferences.notification_hour)
-        ? Number(preferences.notification_hour)
-        : 9
-    )
-  )
-
+  // R457: cada tipo possui antecedência, valor mínimo e repetição próprios.
+  // Datas são calculadas em tempo civil, nunca em UTC para decisões de vencimento.
   const now = Date.now()
-  const maxSchedule =
-    now + 60 * 24 * 60 * 60 * 1000
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
+  const reference = new Date(now)
+  const defaultLeadDays = normalizedLeadDays(preferences)
+  const overdueEnabled = preferences.notification_overdue !== false
+  const privateMode = preferences.notification_privacy !== 'full'
+  const channelId = privateMode ? DFL_NOTIFICATION_PRIVATE_CHANNEL_ID : DFL_NOTIFICATION_CHANNEL_ID
+  const proposed: NativeNotificationSchema[] = []
   const notifications: NativeNotificationSchema[] = []
   const usedIds = new Set<number>()
-  const leadDays = normalizedLeadDays(preferences)
 
   const append = (
     candidate: ReminderCandidate,
@@ -653,36 +635,17 @@ export async function syncNativeFinancialReminders(
     title: string,
     at: Date
   ) => {
-    const timestamp = at.getTime()
-
-    if (
-      timestamp <= now + 60_000 ||
-      timestamp > maxSchedule ||
-      notifications.length >= 60
-    ) {
-      return
-    }
-
-    const key =
-      `${candidate.key}:${candidate.dueDate}:${suffix}`
-
-    let id = stableNotificationId(key)
-
-    while (usedIds.has(id)) {
-      id = id >= 1_999_999_999 ? 1 : id + 1
-    }
-
+    if (proposed.length >= 5000) return
+    const key = `${candidate.key}:${candidate.dueDate}:${suffix}`
+    let id = stableNotificationId(`${userId}:${key}`)
+    while (usedIds.has(id)) id = id >= 1_999_999_999 ? 1 : id + 1
     usedIds.add(id)
-
-    notifications.push({
+    proposed.push({
       id,
-      title,
-      body: candidate.body,
-      schedule: {
-        at,
-        allowWhileIdle: true,
-      },
-      channelId: DFL_NOTIFICATION_CHANNEL_ID,
+      title: privateMode ? 'Lembrete financeiro' : title,
+      body: privateMode ? 'Há um compromisso para conferir no DFL Finance.' : candidate.body,
+      schedule: { at, allowWhileIdle: true },
+      channelId,
       smallIcon: DFL_NOTIFICATION_SMALL_ICON,
       iconColor: '#0f766e',
       actionTypeId: canShowOpenAction ? 'dfl-finance-open' : undefined,
@@ -697,48 +660,24 @@ export async function syncNativeFinancialReminders(
   }
 
   for (const candidate of candidates) {
-    const due = parseDate(candidate.dueDate)
-    if (!due) continue
-
-    const dueDay = new Date(due)
-    dueDay.setHours(0, 0, 0, 0)
-
-    if (dueDay < today) {
-      if (preferences.notification_overdue !== false) {
-        const at = new Date()
-        at.setHours(hour, 0, 0, 0)
-
-        if (at.getTime() <= now + 60_000) {
-          at.setDate(at.getDate() + 1)
-        }
-
-        append(
-          candidate,
-          `overdue:${toISODate(at)}`,
-          occurrenceTitle(candidate.title, 0, true),
-          at
-        )
-      }
-
-      continue
-    }
-
-    for (const days of leadDays) {
-      const at = reminderAt(
-        toISODate(addDays(due, -days)),
-        hour
-      )
-
-      if (!at) continue
-
+    const rule = resolveNotificationRule(candidate.category, {
+      ...preferences,
+      notification_lead_days: defaultLeadDays,
+    })
+    if (!overdueEnabled) rule.overdueEveryDays = 0
+    if (candidate.amount <= 0 || candidate.amount < rule.minimumAmount) continue
+    for (const occurrence of reminderOccurrences(candidate.dueDate, rule, reference)) {
       append(
         candidate,
-        `lead:${days}`,
-        occurrenceTitle(candidate.title, days),
-        at
+        occurrence.suffix,
+        occurrenceTitle(candidate.title, occurrence.leadDays, occurrence.overdue),
+        occurrence.at
       )
     }
   }
+  // A agenda mais próxima vence a corrida por capacidade, sem priorizar uma tabela arbitrária.
+  proposed.sort((a, b) => (a.schedule?.at?.getTime() || 0) - (b.schedule?.at?.getTime() || 0))
+  notifications.push(...proposed.slice(0, 56)) // reserva espaço para resumos de grupos
 
   // No Android, várias pendências do mesmo horário formam um único grupo.
   // Um resumo separado é criado apenas quando há pelo menos dois itens.
@@ -757,7 +696,7 @@ export async function syncNativeFinancialReminders(
       for (const item of groupItems) item.group = key
       const when = groupItems[0].schedule?.at
       if (!when) continue
-      let summaryId = stableNotificationId(`group:${key}`)
+      let summaryId = stableNotificationId(`${userId}:group:${key}`)
       while (usedIds.has(summaryId)) summaryId = summaryId >= 1_999_999_999 ? 1 : summaryId + 1
       usedIds.add(summaryId)
       notifications.push({
@@ -767,7 +706,7 @@ export async function syncNativeFinancialReminders(
         schedule: { at: new Date(when.getTime() + 1000), allowWhileIdle: true },
         group: key,
         groupSummary: true,
-        channelId: DFL_NOTIFICATION_CHANNEL_ID,
+        channelId,
         smallIcon: DFL_NOTIFICATION_SMALL_ICON,
         iconColor: '#0f766e',
         actionTypeId: canShowOpenAction ? 'dfl-finance-open' : undefined,
@@ -777,23 +716,52 @@ export async function syncNativeFinancialReminders(
   }
 
   notifications.sort(
-    (a, b) =>
-      (a.schedule?.at?.getTime() || 0) -
-      (b.schedule?.at?.getTime() || 0)
+    (a, b) => (a.schedule?.at?.getTime() || 0) - (b.schedule?.at?.getTime() || 0)
   )
-
-  if (notifications.length > 0) {
-    await LocalNotifications.schedule({
-      notifications,
+  // A assinatura descreve exatamente o aviso, inclusive hora e privacidade.
+  for (const item of notifications) {
+    const signature = JSON.stringify({
+      id: item.id,
+      at: item.schedule?.at?.toISOString(),
+      title: item.title,
+      body: item.body,
+      channelId: item.channelId,
+      route: item.extra?.route,
+      key: item.extra?.key,
+      group: item.group,
+      groupSummary: item.groupSummary || false,
+      actionTypeId: item.actionTypeId,
     })
+    item.extra = { ...item.extra, signature }
   }
+
+  // Reconciliação incremental: não cancela/reagenda lembretes idênticos ao retomar o APK.
+  const current = await LocalNotifications.getPending()
+  const managed = current.notifications.filter(item => item.extra?.managedBy === 'dfl-finance')
+  const existingById = new Map(managed.map(item => [item.id, item]))
+  const desiredById = new Map(notifications.map(item => [item.id, item]))
+  const stale = managed.filter(item => {
+    const desired = desiredById.get(item.id)
+    return !desired || !sameScheduledReminder(item, desired)
+  })
+  if (stale.length > 0) {
+    await LocalNotifications.cancel({ notifications: stale.map(item => ({ id: item.id })) })
+  }
+  const needed = notifications.filter(item => {
+    const current = existingById.get(item.id)
+    return !current || !sameScheduledReminder(current, item)
+  })
+  if (needed.length > 0) await LocalNotifications.schedule({ notifications: needed })
 
   return {
     supported: true,
     scheduled: notifications.length,
-    cancelled,
+    kept: notifications.length - needed.length,
+    added: needed.length,
+    cancelled: stale.length,
     candidates: candidates.length,
   }
+
 }
 
 export async function clearNativeFinancialReminders() {
