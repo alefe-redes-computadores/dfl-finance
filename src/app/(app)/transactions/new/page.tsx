@@ -1026,7 +1026,7 @@ function NewTransactionContent() {
 
       {/* CORPO DO FORMULÁRIO - COM pb-40 PARA O BOTÃO FICAR VISÍVEL */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-40">
-        <div className="space-y-2.5">
+        <div className="space-y-3">
 
           {/* TIPO DA TRANSAÇÃO */}
           <div className="rounded-[20px] border border-gray-200/70 bg-white p-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
