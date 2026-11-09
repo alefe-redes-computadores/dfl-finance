@@ -55,7 +55,7 @@ function MenuItem({
   }
 
   const content = (
-    <div className={`group w-full flex items-center gap-3 rounded-[18px] px-3 py-3 transition-all active:scale-[0.98] ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50'}`}>
+    <div className={`group w-full flex items-center gap-3 rounded-[16px] px-3 py-2.5 transition-all active:scale-[0.98] ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50'}`}>
       <div className={`w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0 ${disabled ? 'bg-gray-100 dark:bg-slate-700 text-gray-400' : colorClass}`}>
         <IconComp size={18} strokeWidth={2.2} />
       </div>
@@ -726,14 +726,14 @@ export default function MorePage() {
       </nav>
 
       {/* BLOCOS REORGANIZADOS */}
-      <div className="px-4 space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div data-r463-menu="compact" className="px-4 space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <details open className="group overflow-hidden rounded-[20px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
           <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 [&::-webkit-details-marker]:hidden">
             <span className="min-w-0 text-[13px] font-semibold text-gray-800 dark:text-gray-100">Minha estrutura</span>
             <ChevronRight size={16} className="shrink-0 text-gray-400 transition-transform group-open:rotate-90" aria-hidden="true" />
           </summary>
           <div className="px-2 pb-2">
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 space-y-1">
+          <div className="space-y-1">
             <MenuItem iconName="store" label="Gestão comercial" href="/commercial" badge="OFF" colorClass="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
             <MenuItem iconName="wallet" label="Contas" href="/accounts" colorClass="text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30" />
             <MenuItem iconName="credit-card" label="Cartões de Crédito" href="/cards" colorClass="text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30" />
@@ -749,7 +749,7 @@ export default function MorePage() {
             <ChevronRight size={16} className="shrink-0 text-gray-400 transition-transform group-open:rotate-90" aria-hidden="true" />
           </summary>
           <div className="px-2 pb-2">
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 space-y-1">
+          <div className="space-y-1">
             <MenuItem iconName="activity" label="Radar de Fôlego" href="/cash-pressure" colorClass="text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30" />
             <MenuItem iconName="piggy-bank" label="Meu plano financeiro" href="/planning" badge="V173" colorClass="text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30" />
             <MenuItem iconName="gauge" label="Ritmo Financeiro" href="/spending-pulse" badge="NOVO" colorClass="text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
@@ -770,7 +770,7 @@ export default function MorePage() {
             <ChevronRight size={16} className="shrink-0 text-gray-400 transition-transform group-open:rotate-90" aria-hidden="true" />
           </summary>
           <div className="px-2 pb-2">
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 space-y-1">
+          <div className="space-y-1">
             <MenuItem iconName="bot" label="Assistente financeiro" href="/assistant" badge="IA" colorClass="text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-900/30" />
             <MenuItem iconName="calendar-days" label="Agenda Financeira 360" href="/agenda" colorClass="text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30" />
             <MenuItem iconName="calendar-clock" label="Compromissos e Estabilidade de Caixa" href="/commitment-center" colorClass="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
@@ -805,7 +805,7 @@ export default function MorePage() {
             <ChevronRight size={16} className="shrink-0 text-gray-400 transition-transform group-open:rotate-90" aria-hidden="true" />
           </summary>
           <div className="px-2 pb-2">
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 space-y-1">
+          <div className="space-y-1">
             <MenuItem iconName="search" label="Buscar e comandar" href="/search" colorClass="text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30" />
             <MenuItem iconName="bell" label="Central de Notificações" href="/notifications" colorClass="text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30" />
             <MenuItem iconName="bell-ring" label="Personalizar alertas financeiros" href="/notification-center" colorClass="text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-900/20" />

@@ -37,6 +37,14 @@ function formatCurrency(val: number) {
   }).format(val)
 }
 
+function formatAxisCurrency(value: number): string {
+  if (!Number.isFinite(value)) return '—'
+  const absolute = Math.abs(value)
+  if (absolute >= 1_000_000) return `${(value / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`
+  if (absolute >= 1000) return `${(value / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`
+  return `R$ ${value.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`
+}
+
 function ProjectionChartComponent({
   data = [],
   title = 'Projeção de Saldo (12 meses)',
@@ -98,9 +106,9 @@ function ProjectionChartComponent({
         </p>
       </div>
 
-      <div className="h-[240px]">
+      <div className="h-[216px]">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={safeData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+          <AreaChart data={safeData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="otimistaGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
@@ -125,11 +133,11 @@ function ProjectionChartComponent({
               interval="preserveStartEnd"
             />
             <YAxis
-              tickFormatter={(v) => formatCurrency(Number(v))}
+              tickFormatter={(v) => formatAxisCurrency(Number(v))}
               tick={{ fontSize: 11, fill: '#9ca3af' }}
               axisLine={false}
               tickLine={false}
-              width={52}
+              width={72}
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10, fontWeight: 600 }} iconType="circle" iconSize={8} />

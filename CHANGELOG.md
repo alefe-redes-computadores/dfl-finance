@@ -2,7 +2,16 @@
 
 Este histórico descreve **funcionalidades do código**, não garante que a pessoa usuária já tenha o APK correspondente. O número de build Android é o `run_number` da Action de publicação, não o valor histórico `0.1.0` de `package.json`.
 
-## R462 — Integridade comercial e compatibilidade de comprovantes (candidata local)
+## R463 — Acabamento premium mobile-first (candidata local)
+
+- Transações: cabeçalho integral deixa de usar sticky; rola junto com extrato, eliminando sobreposição em listas longas.
+- Home: saldo mais compacto, legibilidade do título aprimorada e ornamentação removida; lógica de privacidade e estado offline preservados.
+- Nova receita/despesa: topo, valor e espaçamentos compactados sem reduzir alvos de toque, remover ações ou alterar validação.
+- Mais: grupos mais leves, sem borda dupla e com espaçamento menor; navegação e permissões preservadas.
+- Análises: reduz distâncias dos KPIs; evita gráfico comparativo vazio com eixos artificiais; corrige margem e rótulos da projeção. Cálculos e fórmulas financeiros inalterados.
+- Gate R463 e testes; requer inspeção visual no APK/PWA antes de certificação final. Sem mudanças no banco, webhook ou sync.
+
+## R462 — Integridade comercial e compatibilidade de comprovantes (publicada no código; homologação Android pendente)
 
 - Alocação comercial passou para o RPC idempotente já implantado; intenção armazenada localmente antes da chamada, com a mesma chave e payload reutilizados após falhas e reaberturas.
 - Vendas, repasses e alocações usam paginação estável por UUID, filtros de proprietário/loja/plataforma no servidor, contagem verificada antes/depois e bloqueio de totais em leitura incompleta. Isso não é snapshot transacional simultâneo nem substitui reconciliação em banco quando houver concorrência.

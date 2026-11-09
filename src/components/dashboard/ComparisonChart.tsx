@@ -18,13 +18,17 @@ interface ComparisonChartProps {
 }
 
 function ComparisonChartComponent({ data, title = 'Comparativo PF vs PJ' }: ComparisonChartProps) {
-  if (!data || data.length === 0) {
+  const hasValues = Array.isArray(data) && data.some((row) =>
+    [row.receitasPF, row.despesasPF, row.receitasPJ, row.despesasPJ]
+      .some((value) => Number.isFinite(value) && value !== 0)
+  )
+  if (!hasValues) {
     return (
       <div className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50 text-center py-10 flex flex-col items-center justify-center transition-colors duration-300">
         <div className="w-12 h-12 bg-gray-50 dark:bg-slate-700/50 rounded-full flex items-center justify-center mb-3">
           <BarChart2 size={24} className="text-gray-400 dark:text-gray-500" />
         </div>
-        <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Nenhum dado disponível para este período.</p>
+        <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Sem receitas ou despesas para comparar neste período.</p>
       </div>
     )
   }
@@ -85,8 +89,8 @@ function ComparisonChartComponent({ data, title = 'Comparativo PF vs PJ' }: Comp
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50 transition-colors duration-300">
-      <h3 className="font-bold text-[16px] text-gray-800 dark:text-gray-100 mb-6">{title}</h3>
-      <div className="h-[240px]">
+      <h3 className="font-bold text-[16px] text-gray-800 dark:text-gray-100 mb-4">{title}</h3>
+      <div className="h-[216px]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} layout="vertical" margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" strokeOpacity={0.4} horizontal={true} vertical={true} />

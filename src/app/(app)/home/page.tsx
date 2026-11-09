@@ -1179,15 +1179,11 @@ function HomeContent() {
     switch (sectionId) {
       case 'balance':
         return (
-          <div key="balance" className="mb-4 sm:mb-5">
-            <div className="relative isolate overflow-hidden rounded-[26px] border border-slate-200/80 bg-gradient-to-br from-white via-white to-teal-50/70 px-5 py-5 shadow-[0_12px_35px_rgba(15,23,42,0.065)] sm:px-6 sm:py-6 dark:border-slate-700/80 dark:from-slate-800 dark:via-slate-800 dark:to-teal-950/25">
-              <div className="pointer-events-none absolute -right-4 -top-4 text-teal-600 opacity-[0.06] dark:text-teal-300 dark:opacity-[0.07]">
-                <Wallet size={92} />
-              </div>
-
-              <div className="relative z-10 mb-4 flex items-start justify-between gap-3">
+          <div key="balance" className="mb-3 sm:mb-4">
+            <div data-r463-balance="compact" className="relative isolate overflow-hidden rounded-[24px] border border-slate-200/80 bg-gradient-to-br from-white via-white to-teal-50/70 px-5 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)] sm:px-6 sm:py-5 dark:border-slate-700/80 dark:from-slate-800 dark:via-slate-800 dark:to-teal-950/25">
+              <div className="relative z-10 mb-2 flex items-center justify-between gap-3">
                 <div>
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">
                     Saldo total
                   </span>
                   {isOnline && (isBalanceReconciling || !balanceVerifiedAt) ? (

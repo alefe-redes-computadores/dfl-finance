@@ -1304,7 +1304,7 @@ export default function TransactionsPage() {
 
       <ExportFeedbackOverlay status={exportStatus} onClose={() => setExportStatus('idle')} />
 
-      <div className="sticky top-0 z-40 border-b border-gray-200/70 bg-[#f8f9fa]/95 px-4 pb-3 pt-3 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/95">
+      <div data-r463-scroll="normal" className="relative z-30 border-b border-gray-200/70 bg-[#f8f9fa] px-4 pb-3 pt-3 dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto max-w-md">
           <div className="mb-3 flex items-center justify-between">
             <div className="min-w-0">

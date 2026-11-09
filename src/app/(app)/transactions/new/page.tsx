@@ -986,7 +986,7 @@ function NewTransactionContent() {
 
       {/* HEADER */}
       <div className="app-topbar">
-        <div className="rounded-[20px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
+        <div className="rounded-[20px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-3">
           <div className="flex items-start justify-between gap-3">
             <button
               onClick={() => { if (isSubmitting) return; vibrate([5]); router.replace('/transactions'); }}
@@ -1000,7 +1000,7 @@ function NewTransactionContent() {
               <h1 className="font-semibold text-[18px] text-gray-900 dark:text-gray-100 capitalize">
                 {isIncome ? 'Nova receita' : 'Nova despesa'}
               </h1>
-              <div className="mt-2 flex justify-center">
+              <div className="mt-1 flex justify-center">
                 <ContextToggle />
               </div>
             </div>
@@ -1026,7 +1026,7 @@ function NewTransactionContent() {
 
       {/* CORPO DO FORMULÁRIO - COM pb-40 PARA O BOTÃO FICAR VISÍVEL */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-40">
-        <div className="space-y-3">
+        <div className="space-y-2.5">
 
           {/* TIPO DA TRANSAÇÃO */}
           <div className="rounded-[20px] border border-gray-200/70 bg-white p-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -1062,7 +1062,7 @@ function NewTransactionContent() {
           </div>
 
           {/* VALOR */}
-          <div className="bg-white dark:bg-slate-800 rounded-[20px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 text-center">
+          <div className="bg-white dark:bg-slate-800 rounded-[20px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4 text-center">
             <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-2">
               Valor {isIncome ? 'da receita' : 'da despesa'}
             </p>
@@ -1612,7 +1612,7 @@ function NewTransactionContent() {
       </div>
 
       {/* CTA FIXO INFERIOR - COM Z-INDEX MAIOR */}
-      <div className="sticky bottom-0 z-50 bg-gradient-to-t from-[#f8f9fa] dark:from-slate-900 via-[#f8f9fa]/90 dark:via-slate-900/90 to-transparent px-4 pt-4 pb-[max(1.25rem,var(--safe-area-bottom))]">
+      <div className="sticky bottom-0 z-50 bg-gradient-to-t from-[#f8f9fa] dark:from-slate-900 via-[#f8f9fa]/90 dark:via-slate-900/90 to-transparent px-4 pt-2 pb-[max(1.25rem,var(--safe-area-bottom))]">
         <button
           onClick={() => { vibrate([10, 50]); handleSave() }}
           disabled={isSubmitting || uploading}

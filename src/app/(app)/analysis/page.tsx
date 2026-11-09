@@ -696,7 +696,7 @@ function AnalysisContent() {
     }
 
     return (
-      <div className="space-y-4 animate-in fade-in duration-300">
+      <div data-r463-analysis="compact" className="space-y-3 animate-in fade-in duration-300">
         <div className="grid grid-cols-2 gap-3">
           <KPICard title="Burn Rate" value={metrics.kpis.burnRate} icon="fire" prefix="R$ " color="red" />
           <KPICard title="Runway" value={metrics.kpis.runway} icon="gauge" suffix=" meses" color="teal" />
@@ -747,7 +747,7 @@ function AnalysisContent() {
   return (
     <div
       ref={containerRef}
-      className="mx-auto min-h-full max-w-2xl bg-gray-50 px-4 pb-8 pt-3 font-sans transition-colors duration-300 dark:bg-slate-950"
+      className="mx-auto min-h-full max-w-2xl bg-gray-50 px-4 pb-8 pt-2 font-sans transition-colors duration-300 dark:bg-slate-950"
     >
       {loadingPulse && (
         <div className="fixed top-6 right-5 z-50">

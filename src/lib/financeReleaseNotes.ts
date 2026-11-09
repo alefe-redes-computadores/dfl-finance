@@ -7,6 +7,16 @@ export type FinanceReleaseNote = {
 
 export const FINANCE_RELEASE_NOTES: readonly FinanceReleaseNote[] = [
   {
+    version: 'R463',
+    title: 'Acabamento premium e rolagem das transações',
+    changes: [
+      'Transações: cabeçalho, comando, busca e filtros rolam junto da lista, sem esconder lançamentos.',
+      'Home: card de saldo mais compacto e alinhado, mantendo privacidade e estado offline.',
+      'Nova transação e Mais: espaçamento otimizado para operação em celular.',
+      'Análises: comparação sem gráfico vazio artificial e projeções com eixo legível.',
+    ],
+  },
+  {
     version: 'R462',
     title: 'Integridade comercial e comprovantes',
     changes: [

@@ -228,6 +228,11 @@ jobs:
           node scripts/check-r462-closeout.mjs
           node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/commercialR462.test.ts src/__tests__/receiptR462.test.ts
 
+      - name: R463 Premium UX and Transaction Scroll Closeout
+        run: |
+          node scripts/check-r463-premium-ui.mjs
+          node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/r463PremiumUi.test.ts
+
       - name: Generate canonical web icons
         run: npm run icons:generate
 

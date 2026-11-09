@@ -55,7 +55,7 @@ function CategoryPieComponent({ pfData, pjData, title = 'Distribuição de Gasto
 
   if (!hasData) {
     return (
-      <div className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50 text-center py-10 flex flex-col items-center justify-center transition-colors duration-300">
+      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50 text-center py-7 flex flex-col items-center justify-center transition-colors duration-300">
         <div className="w-12 h-12 bg-gray-50 dark:bg-slate-700/50 rounded-full flex items-center justify-center mb-3">
           <PieChartIcon size={24} className="text-gray-400 dark:text-gray-500" />
         </div>
