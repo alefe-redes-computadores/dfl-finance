@@ -1,5 +1,7 @@
 // src/app/api/ocr-receipt/route.ts
 import { NextRequest, NextResponse } from 'next/server'
+import { assistantNativePreflight, withAssistantNativeCors } from '@/lib/server/assistantNativeCors'
+import { validateOwnSignedReceiptUrl } from '@/lib/server/receiptUrlSecurity'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient } from '@supabase/supabase-js'
 
@@ -31,51 +33,12 @@ function getSupabaseAuthClient() {
   })
 }
 
-function validateReceiptUrl(rawUrl: unknown) {
-  if (typeof rawUrl !== 'string' || !rawUrl.trim()) {
-    throw new Error('URL da imagem é obrigatória.')
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!supabaseUrl) {
-    throw new Error('Supabase não configurado no servidor.')
-  }
-
-  let candidate: URL
-  let allowedOrigin: string
-
-  try {
-    candidate = new URL(rawUrl)
-    allowedOrigin = new URL(supabaseUrl).origin
-  } catch {
-    throw new Error('URL da imagem inválida.')
-  }
-
-  if (candidate.origin !== allowedOrigin) {
-    throw new Error('A imagem precisa pertencer ao armazenamento do DFL Finance.')
-  }
-
-  const receiptPrefix = '/storage/v1/object/public/receipts/'
-  let decodedPath: string
-
-  try {
-    decodedPath = decodeURIComponent(candidate.pathname)
-  } catch {
-    throw new Error('URL da imagem inválida.')
-  }
-
-  if (
-    !candidate.pathname.startsWith(receiptPrefix) ||
-    !decodedPath.startsWith(receiptPrefix) ||
-    decodedPath.includes('/../')
-  ) {
-    throw new Error('A imagem precisa pertencer ao bucket de comprovantes.')
-  }
-
-  return candidate.toString()
+function validateReceiptUrl(rawUrl: unknown, ownerId: string) {
+  const origin = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+  return validateOwnSignedReceiptUrl(rawUrl, origin, ownerId)
 }
 
-export async function POST(request: NextRequest) {
+async function handleReceiptPost(request: NextRequest) {
   try {
     const authorization = request.headers.get('authorization')
     const accessToken = authorization?.startsWith('Bearer ')
@@ -122,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     let imageUrl: string
     try {
-      imageUrl = validateReceiptUrl(body?.imageUrl)
+      imageUrl = validateReceiptUrl(body?.imageUrl, user.id)
     } catch (error) {
       return NextResponse.json(
         {
@@ -273,4 +236,14 @@ Se não identificar um texto, use null. Para valor não identificado, use 0.`
       { status: 500 }
     )
   }
+}
+
+
+// Preflight não exige JWT; POST sempre valida o usuário antes do OCR.
+export function OPTIONS(request: NextRequest): Response {
+  return assistantNativePreflight(request)
+}
+
+export async function POST(request: NextRequest): Promise<Response> {
+  return withAssistantNativeCors(request, await handleReceiptPost(request))
 }

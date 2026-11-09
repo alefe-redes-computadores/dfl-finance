@@ -45,3 +45,10 @@ operar-*.sh
 /0
 
 .env.local
+
+# Artefatos transitórios locais de cirurgias (não apagar arquivos rastreados)
+.dfl-v*.gz.b64
+.dfl-r*.gz.b64
+.dfl-*-tmp*/
+.dfl-*-stage*/
+*.tsbuildinfo

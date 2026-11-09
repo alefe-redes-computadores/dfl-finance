@@ -852,12 +852,7 @@ ${snapshot}`
             )
 
             const message =
-              String(
-                error?.message ||
-                  'O provedor interrompeu a resposta.'
-              )
-                .trim()
-                .slice(0, 240)
+              'O assistente não conseguiu concluir a resposta. Tente novamente.'
 
             controller.enqueue(
               encoder.encode(
@@ -909,8 +904,7 @@ ${snapshot}`
         error:
           isTimeout
             ? 'O assistente demorou mais que o esperado. Tente novamente.'
-            : error?.message ||
-              'Erro ao consultar o assistente.',
+            : 'Não foi possível consultar o assistente agora.',
       },
       {
         status:

@@ -218,6 +218,11 @@ jobs:
           node scripts/check-r460-search-turbo.mjs
           node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/searchTurboR460.test.ts
 
+      - name: R461 Final Security, OCR and Changelog certification
+        run: |
+          node scripts/check-r461-final-security.mjs
+          node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/r461Security.test.ts
+
       - name: Generate canonical web icons
         run: npm run icons:generate
 

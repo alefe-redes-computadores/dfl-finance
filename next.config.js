@@ -164,6 +164,20 @@ const isMobileBuild =
 
 const nextConfig = {
   reactStrictMode: true,
+  ...(isMobileBuild ? {} : {
+    async headers() {
+      return [{
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' },
+          { key: 'Permissions-Policy', value: 'camera=(self), microphone=(self), geolocation=(), payment=()' },
+        ],
+      }]
+    },
+  }),
 
   /*
    * Dois targets, um único produto:

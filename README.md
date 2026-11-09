@@ -1,106 +1,55 @@
-# 💰 DFL Finance
+# DFL Finance
 
-O **DFL Finance** é uma aplicação de controle financeiro pessoal e empresarial desenvolvida com foco absoluto em uma experiência *mobile-first*, performance otimizada e disponibilidade offline. 
+Aplicativo financeiro **pessoal e empresarial**, local-first e mobile-first, com interface web/PWA (Next.js) e APK Android (Capacitor). Os dados operacionais do dispositivo residem em IndexedDB/Dexie e são reconciliados com Supabase por uma fila de sincronização; saldos e lançamentos exigem confirmação e tratamento de conflitos.
 
-O projeto foi arquitetado para ser um sistema **"local-first"**. Isso significa que a interface do usuário carrega os dados diretamente do armazenamento do dispositivo, garantindo rapidez e navegação sem travamentos, mesmo com conexões de internet instáveis.
+## Componentes atuais
 
-## 🚀 Funcionalidades Principais
+- **Web:** Next.js 15 (App Router), React 19, Tailwind e Lucide; produção Vercel.
+- **Android:** Capacitor 6 e exportação estática do mesmo código, sem incluir APIs Next dentro do APK.
+- **Dados:** Dexie local + Supabase com autenticação e RLS. A chave `NEXT_PUBLIC_SUPABASE_ANON_KEY` é pública por natureza; credenciais privilegiadas jamais entram no cliente.
+- **Integrações:** bot financeiro WhatsApp via Edge Function `whatsapp-webhook`, OCR/IA por APIs autenticadas no servidor, notificações locais Android.
+- **Inteligência:** análises financeiras determinísticas, DFL Comando Turbo, conciliação e observações proativas.
 
-*   **Gestão de Orçamentos:** Acompanhamento mensal, quinzenal ou semanal com cálculos de projeções inteligentes de consumo.
-*   **Controle de Transações:** Registro ágil de receitas (income) e despesas (expense) com suporte a categorização e anexos (recibos).
-*   **Gestão de Dívidas:** Monitoramento detalhado de devedores, histórico de pagamentos e envios de lembretes integrados via WhatsApp.
-*   **Metas Financeiras:** Acompanhamento de metas de economia com barras de progresso dinâmicas e histórico de contribuições.
-*   **Contatos/CRM Financeiro:** Gestão de fornecedores e clientes com vínculo direto às transações.
-*   **Modo Offline e PWA:** Funcionalidade de Progressive Web App permitindo a instalação nativa no smartphone e cache de dados via Service Workers.
-*   **UX Mobile:** Resposta tátil (Haptic Feedback) e navegação otimizada para o uso com uma só mão.
-
-
-## 🛠️ Tecnologias Utilizadas
-
-*   **Framework:** [Next.js 14+](https://nextjs.org/) (Utilizando o novo App Router)
-*   **Estilização:** [Tailwind CSS](https://tailwindcss.com/)
-*   **Banco de Dados/BaaS:** [Supabase](https://supabase.com/)
-*   **Ícones:** [Lucide React](https://lucide.dev/)
-*   **Manipulação de Datas:** [date-fns](https://date-fns.org/)
-*   **Persistência de Dados Local:** IndexedDB (via Dexie.js)
-## 🏗️ Arquitetura e Estrutura de Diretórios
-
-O projeto segue a arquitetura **Local-First**. Os *Custom Hooks* (`useLocalData`, `useSafeDb`) priorizam a leitura e gravação no IndexedDB local. Uma fila de sincronização (`syncQueue`) trabalha em segundo plano para enviar os dados ao Supabase assim que a conexão de rede estiver estável.
-
-
-Abaixo está a estrutura de pastas atual da aplicação:
+## Estrutura
 
 ```text
-dfl-finance/
-├── public/                 # Assets estáticos e configuração do PWA
-│   ├── manifest.json       # Configuração de instalação do PWA
-│   └── sw.js               # Service Worker para cache e uso offline
-├── src/
-│   ├── app/                # Roteamento baseado em arquivos (App Router)
-│   │   ├── (app)/          # Grupo de rotas da área autenticada
-│   │   │   ├── budgets/    # Telas de controle de orçamentos
-│   │   │   ├── contacts/   # Telas de agenda e CRM de contatos
-│   │   │   ├── debts/      # Telas de gestão de contas a pagar/receber
-│   │   │   ├── goals/      # Telas de metas financeiras
-│   │   │   └── transactions/# Telas de lançamentos e extratos
-│   │   ├── layout.tsx      # Layout principal da aplicação
-│   │   └── page.tsx        # Página inicial / Autenticação
-│   ├── components/         # Componentes de UI reutilizáveis
-│   │   ├── ContextToggle   # Alternância entre contas (Pessoal/Empresa)
-│   │   └── Skeleton        # Componentes de carregamento visual
-│   ├── contexts/           # Gerenciamento de estado global (Context API)
-│   │   ├── ToastContext    # Sistema de notificações e alertas
-│   │   └── AuthContext     # Gerenciamento de sessão do Supabase
-│   ├── hooks/              # Regras de negócio encapsuladas
-│   │   ├── useLocalData    # Leitura reativa do banco local
-│   │   ├── useSafeDb       # Operações seguras de escrita local/nuvem
-│   │   └── useHapticFeedback # Vibrações nativas no mobile
-│   └── lib/                # Configurações e utilitários da aplicação
-│       ├── db.ts           # Configuração do banco de dados local (IndexedDB)
-│       ├── iconUtils.ts    # Renderização dinâmica da biblioteca Lucide
-│       └── utils.ts        # Funções de formatação (moeda, CNPJ, etc)
-├── .env.local              # Variáveis de ambiente secretas (Supabase, URLs)
-├── next.config.mjs         # Regras de compilação do Next.js e next-pwa
-├── tailwind.config.ts      # Tokens de design e cores do projeto
-├── package.json            # Gerenciamento de dependências
-└── tsconfig.json           # Tipagem estática do projeto
+src/app/(app)/                 Páginas autenticadas (Home, Busca, Inteligência, Finanças)
+src/app/api/                   APIs web autenticadas (chat, OCR, importação)
+src/lib/                      Motores financeiros, segurança, sync, utilitários
+src/hooks/                    Hooks de dados locais e experiência
+src/components/               Componentes de interface
+supabase/functions/           Edge Functions (incluindo bot)
+supabase/migrations/          Migrações de banco
+scripts/                      Gates de regressão e build Android
+.github/workflows/android-build.yml  CI / APK
+```
 
+## Desenvolvimento
 
-## ⚙️ Instalação e Configuração
+```bash
+npm ci
+npm run typecheck
+npm run lint
+npm run mobile:check
+node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand
+```
 
-### Pré-requisitos
-* Node.js v18 ou superior instalado.
-* Chaves de API do Supabase.
+Use **Node compatível com a versão instalada** e configure `.env.local` diretamente no dispositivo/ambiente de execução. Nunca publique `.env.local`, tokens, `GEMINI_API_KEY`, `service_role`, dumps ou dados financeiros no Git. `NEXT_PUBLIC_` só deve conter valores intencionalmente públicos.
 
-### Como rodar o projeto localmente
+`npm run dev` inicia a versão web local; `npm run build:mobile` gera o export Capacitor com o servidor web configurado em `NEXT_PUBLIC_DFL_SERVER_ORIGIN`.
 
-1. **Clone o repositório:**
-    git clone https://github.com/alefe-redes-computadores/dfl-finance.git
-    cd dfl-finance
+## Publicação segura
 
-2. **Instale as dependências:**
-    npm install
+O GitHub `main` e a Action Android são a autoridade de versão. Cada cirurgia é validada em instalação local, com **backup seletivo e rollback**, antes de um `publicar.sh` separado. Publicar apenas arquivos explicitamente aprovados (não usar `git add .`/`git add -A`). Confirmar SHA do commit, Action `success`, artefato `DFL-Finance-App`, expiração e deploy Vercel READY antes da homologação.
 
-3. **Configure as Variáveis de Ambiente:**
-Crie um arquivo `.env.local` na raiz do projeto com as credenciais do seu Supabase:
-    NEXT_PUBLIC_SUPABASE_URL=sua_url_do_supabase_aqui
-    NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_chave_anon_aqui
+A Central de Atualizações mostra o número de build instalado e a versão certificada. Veja [CHANGELOG.md](CHANGELOG.md) e as notas no app. O `version` de `package.json` é um metadado interno de pacote e **não** substitui `versionCode` Android.
 
-4. **Inicie o servidor de desenvolvimento:**
-    npm run dev
+## Privacidade e segurança
 
-Acesse a aplicação no navegador via: http://localhost:3000
+O Finance contém dados privados: não publica sitemap de registros e bloqueia indexação. A autorização real depende do servidor e de RLS; esconder menus não é controle de acesso. Os comprovantes ficam em **bucket privado**, com URLs assinadas e pasta por proprietário. O aplicativo não deve oferecer envio de dinheiro, publicação de dados ou instalação silenciosa sem confirmação explícita.
 
-## 📱 Fluxo de Desenvolvimento Mobile
+Para revisão dos controles e pendências operacionais, consulte `docs/R461-AUDITORIA-SEGURANCA.md`. O bot financeiro permanece independente dos módulos de mensageria Site/Entregas.
 
-Este repositório foi otimizado para manutenção direta via smartphone utilizando o **Termux** e editores mobile nativos (como **Acode** ou **Spck Editor**).
+## Homologação real do APK
 
-**Comandos úteis para o dia a dia no Termux:**
-
-* Para baixar novidades da nuvem sem sobrescrever configurações locais:
-    git pull origin main
-
-* Para enviar alterações feitas pelo celular:
-    git add .
-    git commit -m "feat: descrição da sua alteração"
-    git push origin maina
+Verificar a alternância Empresa/Pessoal, conciliação e saldos, pesquisa, alertas com o Android bloqueado/fechado, OCR de imagem e importação PDF/OFX, offline/online, atualização do APK e bot WhatsApp. **Não apagar o IndexedDB nem realizar lançamentos financeiros reais exclusivamente para testar.**

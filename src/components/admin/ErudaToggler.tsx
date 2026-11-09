@@ -5,6 +5,7 @@ import { Terminal, Power } from 'lucide-react'
 
 export function ErudaToggler() {
   const [isActive, setIsActive] = useState(false)
+  if (process.env.NODE_ENV !== 'development') return null
 
   const toggleEruda = async () => {
     if (isActive) {

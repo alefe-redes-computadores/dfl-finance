@@ -41,7 +41,7 @@ ok(details.includes('Os dados atuais do lançamento foram preservados'), 'OCR em
 ok(imports.includes('stableImportHash'), 'importação possui assinatura estável')
 ok(imports.includes('batchOccurrences'), 'importação preserva ocorrências idênticas legítimas')
 ok(imports.includes('existingIdempotencyKeys'), 'reimportação reconhece identidade persistida')
-ok(imports.includes('`import:${source}:${stableImportHash(signature)}:${occurrence}`'), 'idempotency_key é determinística por origem/assinatura/ocorrência')
+ok(imports.includes('financialOperationId(`${userId}:import:${source}:${stableImportHash(signature)}:${occurrence}`)') && imports.includes('existingIdempotencyKeys.has(idempotencyKey)'), 'idempotency_key estável por usuário/origem/assinatura/ocorrência e deduplicação')
 
 ok(receipts.includes('uploadReceiptFile({ userId: user.id, file })'), 'Central usa upload compartilhado')
 ok(receipts.includes('await removeReceiptFile(receipt.path)'), 'Central usa remoção compartilhada')

@@ -1,5 +1,6 @@
 // src/app/api/extract-invoice/route.ts
 import { NextRequest, NextResponse } from 'next/server'
+import { assistantNativePreflight, withAssistantNativeCors } from '@/lib/server/assistantNativeCors'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient } from '@supabase/supabase-js'
 
@@ -86,7 +87,7 @@ function looksLikeOfx(text: string) {
   return header.includes('OFXHEADER') || header.includes('<OFX')
 }
 
-export async function POST(request: NextRequest) {
+async function handleInvoicePost(request: NextRequest) {
   try {
     const authorization = request.headers.get('authorization')
     const accessToken = authorization?.startsWith('Bearer ')
@@ -314,4 +315,13 @@ function parseOFX(ofxText: string): ExtractedTransaction[] {
   }
 
   return transactions
+}
+
+
+export function OPTIONS(request: NextRequest): Response {
+  return assistantNativePreflight(request)
+}
+
+export async function POST(request: NextRequest): Promise<Response> {
+  return withAssistantNativeCors(request, await handleInvoicePost(request))
 }

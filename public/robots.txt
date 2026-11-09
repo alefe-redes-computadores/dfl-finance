@@ -1,0 +1,3 @@
+# O DFL Finance é um aplicativo com dados privados, não um site de catálogo.
+User-agent: *
+Disallow: /

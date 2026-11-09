@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft, CheckCircle2, Download, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react'
 import { useApkUpdate } from '@/hooks/useApkUpdate'
 import { APK_ACTIONS_URL, formatApkExpiry } from '@/lib/mobileUpdatePolicy'
+import { FINANCE_RELEASE_NOTES } from '@/lib/financeReleaseNotes'
 import { fetchApkWorkflowHealth } from '@/lib/mobileUpdateService'
 import type { WorkflowHealth } from '@/lib/apkWorkflowDiagnostics'
 
@@ -99,6 +100,23 @@ export default function AppUpdatesPage() {
           {workflow.kind === 'none' && <p className="text-[11px] text-slate-500">Histórico da Action indisponível ou não reconhecido.</p>}
         </>}
         <p className="text-[10px] leading-4 text-slate-500">Falhas e builds em andamento aparecem apenas aqui, sem alertas de versão nova. A disponibilidade do APK é verificada separadamente.</p>
+      </section>
+
+      <section aria-label="Novidades recentes do Finance" className="space-y-3 rounded-[23px] border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+        <div>
+          <h2 className="text-[14px] font-black text-slate-900 dark:text-white">O que mudou no Finance</h2>
+          <p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Histórico das melhorias recentes. O build instalado e o último APK disponível são exibidos acima.</p>
+        </div>
+        {FINANCE_RELEASE_NOTES.map((entry, index) => (
+          <details key={entry.version} open={index === 0} className="rounded-[16px] border border-slate-200/80 bg-slate-50/60 px-3 py-3 dark:border-slate-700 dark:bg-slate-900/60">
+            <summary className="cursor-pointer list-none text-[12px] font-bold text-slate-900 dark:text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500">
+              <span className="font-black text-teal-700 dark:text-teal-300">{entry.version}</span> · {entry.title}
+            </summary>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-[11px] leading-5 text-slate-600 dark:text-slate-300">
+              {entry.changes.map(change => <li key={change}>{change}</li>)}
+            </ul>
+          </details>
+        ))}
       </section>
 
       <section className="flex gap-3 rounded-[22px] border border-slate-200 bg-slate-50 p-4 text-[11px] leading-5 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">

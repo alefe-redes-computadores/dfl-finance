@@ -20,6 +20,7 @@ export const metadata: Metadata = {
   applicationName: 'DFL Finance',
   description: 'Controle financeiro pessoal e empresarial',
   manifest: '/manifest.json',
+  robots: { index: false, follow: false, googleBot: { index: false, follow: false } },
   icons: {
     icon: [
       {
