@@ -3,7 +3,7 @@
  * O serviço de OCR nunca obtém acesso amplo ao Storage: só consome um link
  * temporário, de uma imagem da pasta do próprio usuário.
  */
-const ALLOWED_RECEIPT_NAME = /^[a-z0-9][a-z0-9._-]{0,170}\.(?:jpg|jpeg|png|webp|heic|heif)$/i
+const ALLOWED_RECEIPT_NAME = /^[a-z0-9][a-z0-9._-]{0,170}\.(?:jpg|jpeg|jpe|jfif|png|webp|heic|heif)$/i
 const USER_ID_RE = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i
 
 export function validateOwnSignedReceiptUrl(

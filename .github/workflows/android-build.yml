@@ -223,6 +223,11 @@ jobs:
           node scripts/check-r461-final-security.mjs
           node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/r461Security.test.ts
 
+      - name: R462 Commercial Idempotency, Complete Ledger and Receipt Compatibility
+        run: |
+          node scripts/check-r462-closeout.mjs
+          node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/commercialR462.test.ts src/__tests__/receiptR462.test.ts
+
       - name: Generate canonical web icons
         run: npm run icons:generate
 

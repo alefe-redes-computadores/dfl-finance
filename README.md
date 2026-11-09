@@ -53,3 +53,11 @@ Para revisão dos controles e pendências operacionais, consulte `docs/R461-AUDI
 ## Homologação real do APK
 
 Verificar a alternância Empresa/Pessoal, conciliação e saldos, pesquisa, alertas com o Android bloqueado/fechado, OCR de imagem e importação PDF/OFX, offline/online, atualização do APK e bot WhatsApp. **Não apagar o IndexedDB nem realizar lançamentos financeiros reais exclusivamente para testar.**
+
+
+## R462 — Integridade do ledger comercial
+
+- Alocações usam `dfl_commercial_allocate_idempotent` (RPC existente): a tentativa é preservada na instalação local até confirmação do servidor. Se a resposta se perder, reabra o ledger e use **Retomar / confirmar tentativa anterior** antes de criar qualquer outra alocação.
+- O resumo usa paginação por UUID e verifica a contagem das páginas; leituras parciais ou com volume excessivo bloqueiam indicadores e operações. O carregamento **não é uma transação com snapshot simultâneo**; para auditoria concorrente de alta escala, utilizar agregação transacional no servidor após homologação específica.
+- Os nomes físicos de novos comprovantes seguem o MIME aceito. Arquivos JPEG/JFIF antigos continuam elegíveis para OCR somente por URL assinada e propriedade autenticada.
+- Nenhuma atualização da R462 muda o webhook financeiro ou movimenta contas; atualizações Android continuam manuais e exigem Action aprovada.

@@ -2,7 +2,15 @@
 
 Este histórico descreve **funcionalidades do código**, não garante que a pessoa usuária já tenha o APK correspondente. O número de build Android é o `run_number` da Action de publicação, não o valor histórico `0.1.0` de `package.json`.
 
-## R461 — Fechamento de segurança e transparência (pendente de validação/publicação)
+## R462 — Integridade comercial e compatibilidade de comprovantes (candidata local)
+
+- Alocação comercial passou para o RPC idempotente já implantado; intenção armazenada localmente antes da chamada, com a mesma chave e payload reutilizados após falhas e reaberturas.
+- Vendas, repasses e alocações usam paginação estável por UUID, filtros de proprietário/loja/plataforma no servidor, contagem verificada antes/depois e bloqueio de totais em leitura incompleta. Isso não é snapshot transacional simultâneo nem substitui reconciliação em banco quando houver concorrência.
+- Histórico comercial renderizado progressivamente para reduzir custo de UI em listas extensas.
+- Nome físico de novos comprovantes segue o MIME aceito; arquivos legados `.jfif` e `.jpe` continuam compatíveis com OCR privado de usuário autorizado.
+- Testes e documentação de fechamento. **Sem nova migração, sem alteração de saldos ou bot WhatsApp.**
+
+## R461 — Fechamento de segurança e transparência — APK #1048
 
 - OCR de comprovantes: aceita apenas URL assinada de arquivo privado na pasta do usuário autenticado, na origem Supabase conhecida; mantém rejeição de URL externa, arquivo alheio e redirecionamento.
 - Android: preflight CORS limitado a `https://localhost`, com POST autenticado para OCR e extração de faturas.

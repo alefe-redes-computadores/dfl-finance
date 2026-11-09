@@ -59,7 +59,6 @@ export function getReceiptStoragePath(value?: string | null) {
 }
 
 export function buildReceiptStorageName(file: Pick<File, 'name' | 'type'>) {
-  const fromName = getReceiptExtension(file.name)
   const fromMime =
     file.type === 'application/pdf'
       ? 'pdf'
@@ -69,7 +68,8 @@ export function buildReceiptStorageName(file: Pick<File, 'name' | 'type'>) {
           ? 'webp'
           : 'jpg'
 
-  const extension = fromName || fromMime
+  // A extensão física deve refletir o MIME aceito; nomes legados continuam resolvidos.
+  const extension = fromMime
   const id =
     typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
@@ -80,7 +80,7 @@ export function buildReceiptStorageName(file: Pick<File, 'name' | 'type'>) {
 
 export function getReceiptKind(fileName?: string | null): ReceiptKind {
   const ext = getReceiptExtension(fileName)
-  if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'heic', 'heif'].includes(ext)) {
+  if (['jpg', 'jpeg', 'jpe', 'jfif', 'png', 'webp', 'gif', 'bmp', 'heic', 'heif'].includes(ext)) {
     return 'image'
   }
   if (ext === 'pdf') return 'pdf'

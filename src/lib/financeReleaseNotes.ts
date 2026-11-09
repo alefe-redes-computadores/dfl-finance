@@ -7,7 +7,16 @@ export type FinanceReleaseNote = {
 
 export const FINANCE_RELEASE_NOTES: readonly FinanceReleaseNote[] = [
   {
-    version: 'R461',
+    version: 'R462',
+    title: 'Integridade comercial e comprovantes',
+    changes: [
+      'Conciliação comercial com identidade durável e repetição segura após falha de rede.',
+      'Resumo comercial com paginação integral, bloqueio de totais incompletos e histórico progressivo.',
+      'Compatibilidade de imagens JPEG/JFIF com OCR e proteção de links privados preservada.',
+    ],
+  },
+  {
+    version: 'R461 · APK #1048',
     title: 'Fechamento de segurança e transparência',
     changes: [
       'Leitura de comprovantes privados: link assinado, proprietário e origem validados.',
