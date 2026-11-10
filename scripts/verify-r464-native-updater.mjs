@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+const read = p => fs.readFileSync(p,'utf8')
+const root='android/app/src/main'
+const main=read(`${root}/java/com/dflfinance/app/MainActivity.java`)
+const manifest=read(`${root}/AndroidManifest.xml`)
+const plugin=read(`${root}/java/com/dflfinance/app/DflApkUpdaterPlugin.java`)
+const provider=read(`${root}/java/com/dflfinance/app/DflApkFileProvider.java`)
+const paths=read(`${root}/res/xml/dfl_apk_paths.xml`)
+assert(main.includes('registerPlugin(DflApkUpdaterPlugin.class);'))
+assert(main.includes('registerPlugin(SystemBarsPlugin.class);'))
+assert(main.indexOf('registerPlugin(DflApkUpdaterPlugin.class);') < main.indexOf('super.onCreate(savedInstanceState);'))
+assert(manifest.includes('android.permission.REQUEST_INSTALL_PACKAGES'))
+assert(manifest.includes('com.dflfinance.app.DflApkFileProvider'))
+assert(manifest.includes('${applicationId}.dflapkprovider'))
+assert(manifest.includes('android:exported="false"'))
+assert(manifest.includes('@xml/dfl_apk_paths'))
+assert(provider.includes('extends FileProvider'))
+assert(paths.includes('files-path') && paths.includes('dfl-apk-updates/'))
+for(const t of ['MessageDigest','getPackageArchiveInfo','GET_SIGNING_CERTIFICATES','canRequestPackageInstalls','FLAG_GRANT_READ_URI_PERMISSION'])assert(plugin.includes(t),t)
+console.log('R464_NATIVE_VERIFY_OK: ponte, integridade, assinatura e instalador Android consentido.')

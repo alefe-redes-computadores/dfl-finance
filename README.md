@@ -61,3 +61,12 @@ Verificar a alternância Empresa/Pessoal, conciliação e saldos, pesquisa, aler
 - O resumo usa paginação por UUID e verifica a contagem das páginas; leituras parciais ou com volume excessivo bloqueiam indicadores e operações. O carregamento **não é uma transação com snapshot simultâneo**; para auditoria concorrente de alta escala, utilizar agregação transacional no servidor após homologação específica.
 - Os nomes físicos de novos comprovantes seguem o MIME aceito. Arquivos JPEG/JFIF antigos continuam elegíveis para OCR somente por URL assinada e propriedade autenticada.
 - Nenhuma atualização da R462 muda o webhook financeiro ou movimenta contas; atualizações Android continuam manuais e exigem Action aprovada.
+
+
+## Atualizações nativas R464
+
+O Android usa `versionCode = GITHUB_RUN_NUMBER` e **assinatura estável**. Após os testes e a compilação, uma job isolada com permissão `contents: write` publica o APK em GitHub Releases. A API pública retorna metadados e digest SHA-256, associados à Action aprovada do mesmo commit.
+
+A ponte `DflApkUpdaterPlugin.java` é instalada no Android efêmero pelo script `scripts/apply-r464-native-updater.mjs` após o patch de barras. Ela baixa na pasta privada, verifica tamanho, SHA-256, `com.dflfinance.app`, incremento de versão e **certificado de assinatura**, e abre o instalador do sistema com `FileProvider`. Nunca usa instalação silenciosa. O app solicita autorização da origem apenas no ato da atualização, quando o Android exigir.
+
+A primeira versão com a ponte R464 precisa ser instalada manualmente. Depois, a Central de Atualizações oferece download direto. Caso a release não esteja disponível, o acesso à Action permanece como recuperação. PWA não usa o instalador Android. Não publicar builds não homologados nem armazenar tokens no APK.

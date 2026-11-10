@@ -233,6 +233,11 @@ jobs:
           node scripts/check-r463-premium-ui.mjs
           node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/r463PremiumUi.test.ts
 
+      - name: R464 Native APK Download and Installer Contracts
+        run: |
+          node scripts/check-r464-native-updater.mjs
+          node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/nativeApkUpdateR464.test.ts
+
       - name: Generate canonical web icons
         run: npm run icons:generate
 
@@ -468,6 +473,11 @@ jobs:
       - name: Verify native edge-to-edge contract
         run: node scripts/test-android-system-bars-v15.mjs
 
+      - name: R464 Apply verified APK native bridge
+        run: |
+          node scripts/apply-r464-native-updater.mjs
+          node scripts/verify-r464-native-updater.mjs
+
       - name: Enforce Android notification permission
         run: node scripts/patch-android-notification-permission-v28.mjs
 
@@ -650,3 +660,44 @@ jobs:
           path: out/
           if-no-files-found: error
           retention-days: 1
+
+  release:
+    name: Publish verified APK
+    needs: android
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Obtain APK from successful Android job
+        uses: actions/download-artifact@v4
+        with:
+          name: DFL-Finance-App
+          path: approved-apk
+
+      - name: Check APK and publish direct release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -Eeuo pipefail
+          SOURCE='approved-apk/app-debug.apk'
+          test -s "$SOURCE"
+          BUILD="${GITHUB_RUN_NUMBER}"
+          TAG="finance-android-${BUILD}"
+          mkdir -p signed-release
+          APK="signed-release/DFL-Finance-${BUILD}.apk"
+          cp "$SOURCE" "$APK"
+          (cd signed-release && sha256sum "DFL-Finance-${BUILD}.apk" > "DFL-Finance-${BUILD}.sha256")
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "BLOQUEADO: versão já publicada; não sobrescrever o APK assinado."
+            exit 1
+          fi
+          gh release create "$TAG" "$APK" "signed-release/DFL-Finance-${BUILD}.sha256" \
+            --target "$GITHUB_SHA" \
+            --title "DFL Finance Android #${BUILD}" \
+            --notes "APK do commit ${GITHUB_SHA}, aprovado na Action Android #${BUILD}. Instalação requer consentimento do Android." \
+            --latest
+          gh release view "$TAG" --json tagName,targetCommitish,assets
+          echo "R464_RELEASE_OK: $TAG"

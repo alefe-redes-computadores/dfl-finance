@@ -2,6 +2,14 @@
 
 Este histórico descreve **funcionalidades do código**, não garante que a pessoa usuária já tenha o APK correspondente. O número de build Android é o `run_number` da Action de publicação, não o valor histórico `0.1.0` de `package.json`.
 
+## R464 — Distribuição nativa e atualização consentida (candidata local)
+
+- GitHub Actions só publica APK direto no GitHub Releases após sucesso dos gates e da compilação assinada; o artefato histórico de Actions permanece disponível.
+- Android recebe download no próprio aplicativo, progresso, conferência SHA-256, packageId, versionCode e identidade de assinatura, com FileProvider privado.
+- Instalação continua exigindo confirmação explícita do sistema; fluxo de autorização de origem é indicado ao usuário quando necessário.
+- Browser/PWA recebe links comuns sem permissão Android. Há fallback manual para falha de rede, incompatibilidade ou falta do primeiro APK com a ponte R464.
+- Sem mudança no bot WhatsApp, Supabase, dados financeiros ou motor de sincronização. Ação CI e homologação no dispositivo ainda necessárias.
+
 ## R463 — Acabamento premium mobile-first (candidata local)
 
 - Transações: cabeçalho integral deixa de usar sticky; rola junto com extrato, eliminando sobreposição em listas longas.

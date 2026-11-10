@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { Browser } from '@capacitor/browser'
+import { useRouter } from 'next/navigation'
 import { Download, Sparkles, X } from 'lucide-react'
 import { useApkUpdate } from '@/hooks/useApkUpdate'
 import { formatApkExpiry } from '@/lib/mobileUpdatePolicy'
@@ -12,6 +12,7 @@ const SNOOZE_HOURS = 12
 export default function AppUpdateBanner() {
   const { latest, updateAvailable } = useApkUpdate()
   const pathname = usePathname()
+  const router = useRouter()
   const [snoozed, setSnoozed] = useState(false)
   const latestBuild = latest?.build
 
@@ -50,10 +51,10 @@ export default function AppUpdateBanner() {
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-bold text-slate-900 dark:text-slate-50">Atualização do Finance disponível</p>
           <p className="mt-0.5 text-[11px] leading-4 text-slate-600 dark:text-slate-300">
-            APK #{latest.build} · disponível para baixar até {formatApkExpiry(latest.expiresAt)} (Brasília).
+            APK #{latest.build} · {latest.expiresAt ? `disponível para baixar até ${formatApkExpiry(latest.expiresAt)} (Brasília)` : 'download direto disponível na Central de Atualizações'}.
           </p>
           <p className="mt-1 text-[10px] leading-4 text-slate-500 dark:text-slate-400">
-            O prazo é do download no GitHub, não uma obrigação de instalação.
+            A instalação exige confirmação do Android. Nenhum download é automático.
           </p>
         </div>
         <button type="button" onClick={snooze} aria-label="Lembrar atualização mais tarde"
@@ -62,9 +63,9 @@ export default function AppUpdateBanner() {
         </button>
       </div>
       <div className="mt-2.5 flex flex-wrap gap-2">
-        <button type="button" onClick={() => { void Browser.open({ url: latest.pageUrl }).catch(() => { /* Página disponível na Central de Atualizações. */ }) }}
+        <button type="button" onClick={() => router.push('/updates')}
           className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-[13px] bg-teal-600 px-3 text-[12px] font-bold text-white active:scale-[0.98]">
-          <Download size={15} /> Ver APK no GitHub
+          <Download size={15} /> Atualizar no Finance
         </button>
         <button type="button" onClick={snooze}
           className="min-h-10 rounded-[13px] border border-slate-200 px-3 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">

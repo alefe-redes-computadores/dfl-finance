@@ -7,6 +7,8 @@ import { ArrowLeft, CheckCircle2, Download, RefreshCw, ShieldCheck, Smartphone }
 import { useApkUpdate } from '@/hooks/useApkUpdate'
 import { APK_ACTIONS_URL, formatApkExpiry } from '@/lib/mobileUpdatePolicy'
 import { FINANCE_RELEASE_NOTES } from '@/lib/financeReleaseNotes'
+import { getNativeApkUpdater } from '@/lib/nativeApkUpdater'
+import type { ApkRelease } from '@/lib/mobileUpdatePolicy'
 import { fetchApkWorkflowHealth } from '@/lib/mobileUpdateService'
 import type { WorkflowHealth } from '@/lib/apkWorkflowDiagnostics'
 
@@ -15,6 +17,9 @@ export default function AppUpdatesPage() {
   const { android, installedBuild, latest, state, refresh, updateAvailable } = useApkUpdate(true)
   const [workflow, setWorkflow] = useState<WorkflowHealth | null>(null)
   const [workflowError, setWorkflowError] = useState(false)
+  const [nativePhase, setNativePhase] = useState<'idle' | 'downloading' | 'verified' | 'installing' | 'permission' | 'error'>('idle')
+  const [downloadPercent, setDownloadPercent] = useState(0)
+  const [nativeError, setNativeError] = useState('')
   const checkWorkflow = useCallback(async (force = false) => {
     try {
       const result = await fetchApkWorkflowHealth(force)
@@ -27,6 +32,52 @@ export default function AppUpdatesPage() {
   const open = () => {
     if (android) void Browser.open({ url })
     else window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  const installNow = async (release: ApkRelease) => {
+    const native = getNativeApkUpdater()
+    if (!native || !release.direct) return
+    setNativeError('')
+    setNativePhase('installing')
+    try {
+      const result = await native.installVerified({ build: release.build, sha256: release.direct.sha256 })
+      if (result.permissionRequired) { setNativePhase('permission'); return }
+      if (!result.opened) throw new Error('O Android não abriu a instalação.')
+      setNativePhase('verified') // O sistema poderá fechar o app ao concluir a instalação.
+    } catch (error) {
+      setNativePhase('error')
+      setNativeError(error instanceof Error ? error.message : 'Não foi possível abrir a instalação.')
+    }
+  }
+
+  const downloadAndInstall = async () => {
+    const release = latest
+    const native = getNativeApkUpdater()
+    if (!android || !native || !release?.direct || !updateAvailable || nativePhase === 'downloading') return
+    setNativePhase('downloading')
+    setNativeError('')
+    setDownloadPercent(0)
+    let handler: Awaited<ReturnType<typeof native.addListener>> | null = null
+    try {
+      handler = await native.addListener('downloadProgress', value => {
+        if (value.build === release.build) setDownloadPercent(Math.min(100, Math.max(0, value.percent)))
+      })
+      const result = await native.downloadVerified({ build: release.build, sha256: release.direct.sha256, bytes: release.direct.bytes })
+      if (!result.verified || result.build !== release.build) throw new Error('Arquivo não verificado pelo Android.')
+      setDownloadPercent(100)
+      setNativePhase('verified')
+      await installNow(release)
+    } catch (error) {
+      setNativePhase('error')
+      setNativeError(error instanceof Error ? error.message : 'Download não concluído.')
+    } finally { if (handler) await handler.remove().catch(() => undefined) }
+  }
+
+  const openInstallSettings = async () => {
+    const native = getNativeApkUpdater()
+    if (!native) return
+    try { await native.openInstallSettings() }
+    catch { setNativeError('Abra as configurações do Android para autorizar esta origem.'); setNativePhase('error') }
   }
 
   return (
@@ -72,7 +123,7 @@ export default function AppUpdatesPage() {
           <>
             <p className="text-[21px] font-black tabular-nums text-slate-900 dark:text-white">Build #{latest.build}</p>
             <p className="text-[12px] leading-5 text-slate-500 dark:text-slate-400">
-              Download disponível até <strong className="text-slate-700 dark:text-slate-200">{formatApkExpiry(latest.expiresAt)}</strong> (Brasília).
+              {latest.expiresAt ? <>Download disponível até <strong className="text-slate-700 dark:text-slate-200">{formatApkExpiry(latest.expiresAt)}</strong> (Brasília).</> : 'APK direto publicado no canal de versões, sem expiração de artefato temporário.'}
             </p>
             {android && installedBuild !== null && (
               <p className={`flex items-center gap-2 text-[12px] font-semibold ${updateAvailable ? 'text-teal-700 dark:text-teal-300' : 'text-emerald-700 dark:text-emerald-400'}`}>
@@ -81,10 +132,33 @@ export default function AppUpdatesPage() {
             )}
           </>
         )}
-        <button type="button" onClick={open}
-          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[15px] bg-teal-600 px-3 text-[12px] font-bold text-white active:scale-[0.98]">
-          <Download size={17}/> Abrir GitHub Actions
+        {android && latest?.direct && updateAvailable && <div className="space-y-2">
+          {nativePhase === 'downloading' && <div role="status" aria-live="polite" className="space-y-1.5">
+            <p className="text-[12px] font-semibold text-teal-700 dark:text-teal-300">Baixando APK com segurança… {downloadPercent}%</p>
+            <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+              <div className="h-full rounded-full bg-teal-600 transition-[width]" style={{ width: `${downloadPercent}%` }} />
+            </div>
+          </div>}
+          {nativePhase === 'permission' && <div role="status" className="space-y-2 rounded-2xl bg-amber-50 p-3 text-[12px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+            <p>O APK foi conferido. O Android precisa autorizar a instalação por este aplicativo uma vez.</p>
+            <button type="button" onClick={() => void openInstallSettings()} className="min-h-11 w-full rounded-xl bg-amber-600 px-3 font-bold text-white">Autorizar instalação no Android</button>
+            <button type="button" onClick={() => void installNow(latest)} className="min-h-11 w-full rounded-xl border border-amber-500/40 font-bold">Já autorizei · instalar agora</button>
+          </div>}
+          {nativePhase === 'verified' && <button type="button" onClick={() => void installNow(latest)} className="min-h-11 w-full rounded-xl border border-teal-600/40 text-[12px] font-bold text-teal-700 dark:text-teal-300">Abrir novamente o instalador Android</button>}
+          {nativePhase === 'error' && <p role="alert" className="rounded-xl bg-rose-500/10 p-3 text-[12px] text-rose-600 dark:text-rose-300">{nativeError || 'Falha ao preparar a atualização.'} Use o download manual abaixo se necessário.</p>}
+          <button type="button" onClick={() => void downloadAndInstall()} disabled={nativePhase === 'downloading' || nativePhase === 'installing'}
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[15px] bg-teal-600 px-3 text-[12px] font-bold text-white disabled:opacity-60 active:scale-[0.98]">
+            <Download size={17}/>{nativePhase === 'downloading' ? `Baixando ${downloadPercent}%` : nativePhase === 'installing' ? 'Abrindo instalador…' : 'Baixar e atualizar no aplicativo'}
+          </button>
+        </div>}
+        {!android && latest?.direct && <button type="button" onClick={open}
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[15px] bg-teal-600 px-3 text-[12px] font-bold text-white">Ver APK no GitHub Releases</button>}
+        {android && !latest?.direct && <p className="text-[11px] leading-4 text-slate-500">Esta versão utiliza o download legado. O atualizador nativo funcionará após instalar o primeiro APK compatível com a R464.</p>}
+        <button type="button" onClick={() => { if (android) void Browser.open({ url: APK_ACTIONS_URL }); else window.open(APK_ACTIONS_URL, '_blank', 'noopener,noreferrer') }}
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[15px] border border-slate-200 px-3 text-[12px] font-bold text-slate-600 active:scale-[0.98] dark:border-slate-700 dark:text-slate-300">
+          Abrir GitHub Actions
         </button>
+        {latest?.direct && <button type="button" onClick={open} className="w-full py-1 text-[11px] font-semibold text-slate-500 underline dark:text-slate-400">Alternativa: página de download da versão</button>}
       </section>
 
       <section aria-label="Diagnóstico das Actions" className="space-y-2 rounded-[22px] border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
@@ -121,7 +195,7 @@ export default function AppUpdatesPage() {
 
       <section className="flex gap-3 rounded-[22px] border border-slate-200 bg-slate-50 p-4 text-[11px] leading-5 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
         <ShieldCheck size={19} className="mt-0.5 shrink-0 text-teal-600"/>
-        <p>O Finance só avisa sobre APKs de Actions aprovadas e ainda disponíveis. O download do artefato requer estar conectado ao GitHub. A instalação é manual e depende da confirmação do Android; nenhum dado financeiro é enviado ao GitHub por esta consulta.</p>
+        <p>O Finance só oferece APK da Action aprovada e de release com SHA-256 correspondente. O download nativo usa a pasta privada do aplicativo e o instalador oficial do Android, que sempre exige sua confirmação. A versão atual precisa possuir a ponte R464; nenhuma informação financeira é enviada ao GitHub.</p>
       </section>
     </main>
   )

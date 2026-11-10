@@ -2,7 +2,7 @@
 import { classifyLatestWorkflow, classifyLatestArtifact, type WorkflowHealth } from '@/lib/apkWorkflowDiagnostics'
 import {
   APK_REPOSITORY, APK_WORKFLOW_FILE,
-  parseSuccessfulApkRun, releaseFromArtifacts,
+  parseSuccessfulApkRun, releaseFromArtifacts, parseDirectApkRelease,
   type ApkRelease,
 } from '@/lib/mobileUpdatePolicy'
 
@@ -13,7 +13,7 @@ const REQUEST_TIMEOUT_MS = 12_000
 let recent: { at: number; value: ApkRelease | null } | null = null
 let inFlight: Promise<ApkRelease | null> | null = null
 
-async function githubJson(url: string): Promise<unknown> {
+async function githubJson(url: string, allow404 = false): Promise<unknown> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   try {
@@ -23,6 +23,7 @@ async function githubJson(url: string): Promise<unknown> {
       cache: 'no-store',
       signal: controller.signal,
     })
+    if (allow404 && response.status === 404) return null
     if (!response.ok) throw new Error(`GitHub não respondeu à consulta: ${response.status}`)
     return await response.json()
   } finally {
@@ -39,6 +40,14 @@ async function readLatestRelease(): Promise<ApkRelease | null> {
   const runs = entries.map(parseSuccessfulApkRun)
     .filter((run): run is NonNullable<typeof run> => run !== null)
     .sort((a, b) => b.build - a.build)
+
+  // R464: Release durável, apenas se sua Action aprovada possuir o mesmo build e SHA.
+  // Sem release (primeira instalação) ou sem digest verificável: voltar ao fluxo legado.
+  try {
+    const publicRelease = await githubJson(`${API}/releases/latest`, true)
+    const direct = parseDirectApkRelease(publicRelease, runs)
+    if (direct) return direct
+  } catch { /* Consulta da Release é opcional; fallback aprovado permanece. */ }
 
   // Limite consciente: não consultar dezenas de Actions / evitar rate limit.
   for (const run of runs.slice(0, 4)) {

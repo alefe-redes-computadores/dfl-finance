@@ -7,6 +7,15 @@ export type FinanceReleaseNote = {
 
 export const FINANCE_RELEASE_NOTES: readonly FinanceReleaseNote[] = [
   {
+    version: 'R464',
+    title: 'Atualizações nativas dentro do aplicativo',
+    changes: [
+      'Download direto e verificado de APK aprovado, com progresso dentro do Finance.',
+      'Instalação aberta pelo Android após conferir SHA-256, versão, pacote e assinatura.',
+      'Distribuição durável pelo GitHub Releases e alternativa manual preservada.',
+    ],
+  },
+  {
     version: 'R463',
     title: 'Acabamento premium e rolagem das transações',
     changes: [
