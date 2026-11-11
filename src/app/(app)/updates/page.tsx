@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { App } from '@capacitor/app'
 import { Browser } from '@capacitor/browser'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, CheckCircle2, Download, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react'
@@ -20,6 +21,9 @@ export default function AppUpdatesPage() {
   const [nativePhase, setNativePhase] = useState<'idle' | 'downloading' | 'verified' | 'installing' | 'permission' | 'error'>('idle')
   const [downloadPercent, setDownloadPercent] = useState(0)
   const [nativeError, setNativeError] = useState('')
+  // Somente a volta da tela de autorizacao pode retomar a instalacao.
+  const permissionReturnRef = useRef<ApkRelease | null>(null)
+  const installBusyRef = useRef(false)
   const checkWorkflow = useCallback(async (force = false) => {
     try {
       const result = await fetchApkWorkflowHealth(force)
@@ -34,26 +38,31 @@ export default function AppUpdatesPage() {
     else window.open(url, '_blank', 'noopener,noreferrer')
   }
 
-  const installNow = async (release: ApkRelease) => {
+  const installNow = useCallback(async (release: ApkRelease) => {
     const native = getNativeApkUpdater()
-    if (!native || !release.direct) return
+    if (!native || !release.direct || installBusyRef.current) return
+    installBusyRef.current = true
+    permissionReturnRef.current = null
     setNativeError('')
     setNativePhase('installing')
     try {
+      // A ponte nativa revalida SHA-256, versao, pacote e assinatura em TODA tentativa.
       const result = await native.installVerified({ build: release.build, sha256: release.direct.sha256 })
       if (result.permissionRequired) { setNativePhase('permission'); return }
       if (!result.opened) throw new Error('O Android não abriu a instalação.')
-      setNativePhase('verified') // O sistema poderá fechar o app ao concluir a instalação.
+      setNativePhase('verified') // O sistema ainda pede confirmacao; nao instala silenciosamente.
     } catch (error) {
       setNativePhase('error')
       setNativeError(error instanceof Error ? error.message : 'Não foi possível abrir a instalação.')
+    } finally {
+      installBusyRef.current = false
     }
-  }
+  }, [])
 
   const downloadAndInstall = async () => {
     const release = latest
     const native = getNativeApkUpdater()
-    if (!android || !native || !release?.direct || !updateAvailable || nativePhase === 'downloading') return
+    if (!android || !native || !release?.direct || !updateAvailable || !['idle', 'error'].includes(nativePhase)) return
     setNativePhase('downloading')
     setNativeError('')
     setDownloadPercent(0)
@@ -75,10 +84,45 @@ export default function AppUpdatesPage() {
 
   const openInstallSettings = async () => {
     const native = getNativeApkUpdater()
-    if (!native) return
+    if (!native || !latest?.direct || nativePhase !== 'permission') return
+    // Guardar a release verificada antes que o Android suspenda a Activity.
+    permissionReturnRef.current = latest
     try { await native.openInstallSettings() }
-    catch { setNativeError('Abra as configurações do Android para autorizar esta origem.'); setNativePhase('error') }
+    catch {
+      permissionReturnRef.current = null
+      setNativeError('Não foi possível abrir as configurações do Android.')
+      setNativePhase('error')
+    }
   }
+
+  useEffect(() => {
+    if (android !== true) return
+    let cancelled = false
+    let subscription: { remove: () => Promise<void> } | undefined
+    const resumeFromAndroid = () => {
+      if (document.visibilityState !== 'visible') return
+      const pending = permissionReturnRef.current
+      if (!pending) return
+      // Consumir o retorno ANTES da chamada assíncrona evita dois instaladores.
+      permissionReturnRef.current = null
+      void installNow(pending)
+    }
+    const onVisible = () => { if (document.visibilityState === 'visible') resumeFromAndroid() }
+    // Alguns Androids emitem appStateChange antes de visibilitychange: ouvir os dois.
+    void App.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) resumeFromAndroid()
+    }).then(handle => {
+      if (cancelled) void handle.remove()
+      else subscription = handle
+    }).catch(() => { /* visibilitychange continua como fallback */ })
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      cancelled = true
+      permissionReturnRef.current = null
+      document.removeEventListener('visibilitychange', onVisible)
+      if (subscription) void subscription.remove()
+    }
+  }, [android, installNow])
 
   return (
     <main className="mx-auto max-w-xl space-y-4 px-4 pb-28 pt-5">
@@ -139,17 +183,24 @@ export default function AppUpdatesPage() {
               <div className="h-full rounded-full bg-teal-600 transition-[width]" style={{ width: `${downloadPercent}%` }} />
             </div>
           </div>}
+          {nativePhase === 'installing' && <p role="status" aria-live="polite" className="rounded-xl bg-teal-500/10 p-3 text-[12px] font-semibold text-teal-800 dark:text-teal-200">Conferindo o APK e abrindo o instalador do Android…</p>}
           {nativePhase === 'permission' && <div role="status" className="space-y-2 rounded-2xl bg-amber-50 p-3 text-[12px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
-            <p>O APK foi conferido. O Android precisa autorizar a instalação por este aplicativo uma vez.</p>
-            <button type="button" onClick={() => void openInstallSettings()} className="min-h-11 w-full rounded-xl bg-amber-600 px-3 font-bold text-white">Autorizar instalação no Android</button>
-            <button type="button" onClick={() => void installNow(latest)} className="min-h-11 w-full rounded-xl border border-amber-500/40 font-bold">Já autorizei · instalar agora</button>
+            <p className="font-semibold">O APK está pronto e verificado.</p>
+            <p>Autorize o Finance nas configurações do Android. Ao voltar, continuaremos a instalação automaticamente.</p>
+            <button type="button" onClick={() => void openInstallSettings()} className="min-h-12 w-full rounded-xl bg-amber-600 px-3 font-bold text-white active:scale-[0.98]">Abrir permissões do Android</button>
+            <button type="button" onClick={() => void installNow(latest)} className="min-h-10 w-full text-[11px] font-semibold underline underline-offset-4">Já autorizei, mas não continuou? Tentar instalar</button>
           </div>}
-          {nativePhase === 'verified' && <button type="button" onClick={() => void installNow(latest)} className="min-h-11 w-full rounded-xl border border-teal-600/40 text-[12px] font-bold text-teal-700 dark:text-teal-300">Abrir novamente o instalador Android</button>}
-          {nativePhase === 'error' && <p role="alert" className="rounded-xl bg-rose-500/10 p-3 text-[12px] text-rose-600 dark:text-rose-300">{nativeError || 'Falha ao preparar a atualização.'} Use o download manual abaixo se necessário.</p>}
-          <button type="button" onClick={() => void downloadAndInstall()} disabled={nativePhase === 'downloading' || nativePhase === 'installing'}
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[15px] bg-teal-600 px-3 text-[12px] font-bold text-white disabled:opacity-60 active:scale-[0.98]">
-            <Download size={17}/>{nativePhase === 'downloading' ? `Baixando ${downloadPercent}%` : nativePhase === 'installing' ? 'Abrindo instalador…' : 'Baixar e atualizar no aplicativo'}
-          </button>
+          {nativePhase === 'verified' && <div role="status" className="space-y-2 rounded-2xl bg-emerald-500/10 p-3 text-[12px] text-emerald-800 dark:text-emerald-200">
+            <p className="font-semibold">Instalador do Android solicitado.</p>
+            <p>Confirme a atualização na tela do sistema. Se não apareceu, use a opção abaixo.</p>
+            <button type="button" onClick={() => void installNow(latest)} className="min-h-11 w-full rounded-xl border border-emerald-600/40 font-bold">Abrir instalador novamente</button>
+          </div>}
+          {nativePhase === 'error' && <p role="alert" className="rounded-xl bg-rose-500/10 p-3 text-[12px] text-rose-600 dark:text-rose-300">{nativeError || 'Falha ao preparar a atualização.'} A página da versão continua disponível como alternativa.</p>}
+          {nativePhase === 'error' && downloadPercent === 100 && <button type="button" onClick={() => void installNow(latest)} className="min-h-11 w-full rounded-xl border border-teal-600/40 text-[12px] font-bold text-teal-700 dark:text-teal-300">Tentar abrir o instalador novamente</button>}
+          {(nativePhase === 'idle' || (nativePhase === 'error' && downloadPercent < 100)) && <button type="button" onClick={() => void downloadAndInstall()}
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[15px] bg-teal-600 px-3 text-[12px] font-bold text-white active:scale-[0.98]">
+            <Download size={17}/>{nativePhase === 'error' ? 'Tentar baixar novamente' : 'Baixar e atualizar no aplicativo'}
+          </button>}
         </div>}
         {!android && latest?.direct && <button type="button" onClick={open}
           className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[15px] bg-teal-600 px-3 text-[12px] font-bold text-white">Ver APK no GitHub Releases</button>}

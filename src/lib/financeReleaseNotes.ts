@@ -7,6 +7,15 @@ export type FinanceReleaseNote = {
 
 export const FINANCE_RELEASE_NOTES: readonly FinanceReleaseNote[] = [
   {
+    version: 'R466',
+    title: 'Atualização do APK com retorno automático',
+    changes: [
+      'Ao voltar das permissões do Android, o Finance retoma a instalação pendente sem novo download.',
+      'Um botão principal por etapa e mensagens de instalação mais claras.',
+      'Permanece a verificação nativa do APK e a confirmação obrigatória do Android.',
+    ],
+  },
+  {
     version: 'R465',
     title: 'Obrigações MEI e organização do aplicativo',
     changes: [

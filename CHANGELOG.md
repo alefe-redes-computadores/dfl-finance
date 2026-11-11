@@ -2,6 +2,15 @@
 
 Este histórico descreve **funcionalidades do código**, não garante que a pessoa usuária já tenha o APK correspondente. O número de build Android é o `run_number` da Action de publicação, não o valor histórico `0.1.0` de `package.json`.
 
+## R466 — Retomada inteligente do instalador e fluxo de permissão (candidata local)
+
+- Após abrir as permissões de instalação no Android, ao retornar ao Finance, a tentativa pendente é retomada uma única vez sem repetir o download.
+- O retorno usa os eventos de atividade e visibilidade; um evento duplicado não abre dois instaladores.
+- Quem não conceder permissão recebe novamente a orientação, sem alegar que está autorizado.
+- Uma ação principal por etapa; botão manual de recuperação discreto e tela de confirmação do Android mantida.
+- Nenhuma alteração em Kotlin/Java, SHA-256, assinatura, versão, FileProvider, bot, ledger, Supabase ou dados financeiros.
+- A funcionalidade exige APK com R466 instalado; a transição de R465 para R466 usa o fluxo anterior.
+
 ## R465 — Obrigações assistidas MEI e organização premium (candidata local)
 
 - Gestão comercial: enquadramento declarado pelo usuário, sem inferir MEI a partir do CNPJ.

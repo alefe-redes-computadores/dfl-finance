@@ -243,6 +243,11 @@ jobs:
           node scripts/check-r465-fiscal-ux.mjs
           node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/meiObligationsR465.test.ts src/__tests__/nativeNotificationRules.test.ts
 
+      - name: R466 Native Updater Permission Resume UX
+        run: |
+          node scripts/check-r466-native-resume.mjs
+          node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/nativeApkResumeR466.test.tsx
+
       - name: Generate canonical web icons
         run: npm run icons:generate
 
