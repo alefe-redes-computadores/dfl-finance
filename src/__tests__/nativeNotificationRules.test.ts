@@ -17,7 +17,7 @@ describe('R457 — políticas de notificações 360', () => {
     expect(value.invoices?.overdueEveryDays).toBe(0)
     expect(value.invoices?.overdueMaxDays).toBe(14)
     expect(value.invoices?.minimumAmount).toBe(0)
-    expect(NOTIFICATION_KINDS).toHaveLength(7)
+    expect(NOTIFICATION_KINDS).toHaveLength(8)
   })
   it('mantém regras globais legadas e personaliza uma categoria sem afetar outra', () => {
     const prefs = { notification_hour: 10, notification_lead_days: [3, 1, 0], notification_overdue: true,

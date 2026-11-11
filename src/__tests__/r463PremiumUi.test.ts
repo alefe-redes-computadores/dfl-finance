@@ -24,7 +24,7 @@ describe('R463 — acabamento visual sem mudança financeira', () => {
   test('Mais continua com grupos e destinos acessíveis', () => {
     const code=read('src/app/(app)/more/page.tsx')
     expect(code).toContain('data-r463-menu="compact"')
-    for (const anchor of ['Minha estrutura','Planejamento e acompanhamento','Recursos e inteligência','Aplicativo e dados','href="/commercial"','href="/updates"','href="/conciliation"']) expect(code).toContain(anchor)
+    for (const anchor of ['Contas e empresas','Planejamento e compromissos','Inteligência e relatórios','Sistema, avisos e segurança','href="/commercial"','href="/commercial/mei"','href="/updates"','href="/conciliation"']) expect(code).toContain(anchor)
   })
 
   test('Análises não inventam barras, mantêm cálculos e não cortam eixo', () => {

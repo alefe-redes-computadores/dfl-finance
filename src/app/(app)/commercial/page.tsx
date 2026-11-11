@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Building2, Store, Layers3, Plus,
   RefreshCw, ShieldCheck, Save,
-  ImageIcon, BarChart3, Calculator, BookOpen, FlaskConical, ChevronRight, Pencil, X
+  ImageIcon, BarChart3, Calculator, BookOpen, FlaskConical, ChevronRight, Pencil, X, Landmark, BellRing
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -438,6 +438,8 @@ export default function CommercialPage() {
           { label: 'Simular repasses', hint: 'Taxas e cenários', href: '/commercial/simulation', icon: Calculator },
           { label: 'Ledger', hint: 'Conciliação supervisionada', href: '/commercial/ledger', icon: BookOpen },
           { label: 'Laboratório', hint: 'CSV e simulações · OFF', href: '/commercial/operation', icon: FlaskConical },
+          { label: 'Obrigações MEI', hint: 'Guia oficial e acompanhamento', href: '/commercial/mei', icon: Landmark },
+          { label: 'Lembretes', hint: 'Financeiros e fiscais', href: '/notification-center', icon: BellRing },
         ].map(item => (
           <button key={item.href} type="button" onClick={() => { haptic.light(); router.push(item.href) }}
             className="group min-h-28 rounded-[22px] border border-teal-500/15 bg-white p-3.5 text-left shadow-sm transition active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800/90">

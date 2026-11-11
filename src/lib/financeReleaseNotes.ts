@@ -7,6 +7,16 @@ export type FinanceReleaseNote = {
 
 export const FINANCE_RELEASE_NOTES: readonly FinanceReleaseNote[] = [
   {
+    version: 'R465',
+    title: 'Obrigações MEI e organização do aplicativo',
+    changes: [
+      'Mais reorganizado: empresas, planejamento, inteligência e sistema.',
+      'Enquadramento tributário e DAS mensal com conferência manual, sem alterar saldos.',
+      'Lembretes financeiros separados de fiscais e histórico de avisos com rolagem corrigida.',
+      'Próximo APK elegível a testar a atualização nativa inaugurada na R464.',
+    ],
+  },
+  {
     version: 'R464',
     title: 'Atualizações nativas dentro do aplicativo',
     changes: [

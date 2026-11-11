@@ -729,12 +729,13 @@ export default function MorePage() {
       <div data-r463-menu="compact" className="px-4 space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <details open className="group overflow-hidden rounded-[20px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
           <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 [&::-webkit-details-marker]:hidden">
-            <span className="min-w-0 text-[13px] font-semibold text-gray-800 dark:text-gray-100">Minha estrutura</span>
+            <span className="min-w-0 text-[13px] font-semibold text-gray-800 dark:text-gray-100">Contas e empresas</span>
             <ChevronRight size={16} className="shrink-0 text-gray-400 transition-transform group-open:rotate-90" aria-hidden="true" />
           </summary>
           <div className="px-2 pb-2">
           <div className="space-y-1">
             <MenuItem iconName="store" label="Gestão comercial" href="/commercial" badge="OFF" colorClass="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
+            <MenuItem iconName="landmark" label="Obrigações do negócio · MEI" href="/commercial/mei" colorClass="text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20" />
             <MenuItem iconName="wallet" label="Contas" href="/accounts" colorClass="text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30" />
             <MenuItem iconName="credit-card" label="Cartões de Crédito" href="/cards" colorClass="text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30" />
             <MenuItem iconName="tags" label="Categorias" href="/categories" colorClass="text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/30" />
@@ -745,18 +746,20 @@ export default function MorePage() {
 
         <details className="group overflow-hidden rounded-[20px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
           <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 [&::-webkit-details-marker]:hidden">
-            <span className="min-w-0 text-[13px] font-semibold text-gray-800 dark:text-gray-100">Planejamento e acompanhamento</span>
+            <span className="min-w-0 text-[13px] font-semibold text-gray-800 dark:text-gray-100">Planejamento e compromissos</span>
             <ChevronRight size={16} className="shrink-0 text-gray-400 transition-transform group-open:rotate-90" aria-hidden="true" />
           </summary>
           <div className="px-2 pb-2">
           <div className="space-y-1">
             <MenuItem iconName="activity" label="Radar de Fôlego" href="/cash-pressure" colorClass="text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30" />
-            <MenuItem iconName="piggy-bank" label="Meu plano financeiro" href="/planning" badge="V173" colorClass="text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30" />
-            <MenuItem iconName="gauge" label="Ritmo Financeiro" href="/spending-pulse" badge="NOVO" colorClass="text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
+            <MenuItem iconName="piggy-bank" label="Meu plano financeiro" href="/planning" colorClass="text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30" />
+            <MenuItem iconName="gauge" label="Ritmo Financeiro" href="/spending-pulse" colorClass="text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
             <MenuItem iconName="pie-chart" label="Orçamento" href="/budgets" colorClass="text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30" />
             <MenuItem iconName="target" label="Metas e Caixinhas" href="/goals" colorClass="text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
             <MenuItem iconName="trending-up" label="Projeções" href="/projections" colorClass="text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30" />
             <MenuItem iconName="repeat" label="Recorrências" href="/subscriptions" colorClass="text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30" />
+            <MenuItem iconName="calendar-days" label="Agenda financeira" href="/agenda" colorClass="text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30" />
+            <MenuItem iconName="calendar-clock" label="Compromissos e caixa" href="/commitment-center" colorClass="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
             <MenuItem iconName="file-text" label="Financiamentos" href="/financings" colorClass="text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30" />
             <MenuItem iconName="users" label="Quem me deve" href="/debts" colorClass="text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30" />
             <MenuItem iconName="arrow-right-left" label="Empréstimos PF/PJ" href={appMode === 'full' ? '/loans' : undefined} disabled={appMode === 'personal_only'} colorClass="text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30" />
@@ -766,14 +769,12 @@ export default function MorePage() {
 
         <details className="group overflow-hidden rounded-[20px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
           <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 [&::-webkit-details-marker]:hidden">
-            <span className="min-w-0 text-[13px] font-semibold text-gray-800 dark:text-gray-100">Recursos e inteligência</span>
+            <span className="min-w-0 text-[13px] font-semibold text-gray-800 dark:text-gray-100">Inteligência e relatórios</span>
             <ChevronRight size={16} className="shrink-0 text-gray-400 transition-transform group-open:rotate-90" aria-hidden="true" />
           </summary>
           <div className="px-2 pb-2">
           <div className="space-y-1">
             <MenuItem iconName="bot" label="Assistente financeiro" href="/assistant" badge="IA" colorClass="text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-900/30" />
-            <MenuItem iconName="calendar-days" label="Agenda Financeira 360" href="/agenda" colorClass="text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30" />
-            <MenuItem iconName="calendar-clock" label="Compromissos e Estabilidade de Caixa" href="/commitment-center" colorClass="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
             <MenuItem iconName="brain-circuit" label="Central de Inteligência Financeira" href="/intelligence-center" colorClass="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
             <MenuItem iconName="sparkles" label="Observações do Finance" href="/intelligence-center/observations" colorClass="text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20" />
             <MenuItem iconName="chart-no-axes-combined" label="Tendências Financeiras" href="/financial-trends" colorClass="text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30" />
@@ -801,14 +802,14 @@ export default function MorePage() {
 
         <details className="group overflow-hidden rounded-[20px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
           <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500 [&::-webkit-details-marker]:hidden">
-            <span className="min-w-0 text-[13px] font-semibold text-gray-800 dark:text-gray-100">Aplicativo e dados</span>
+            <span className="min-w-0 text-[13px] font-semibold text-gray-800 dark:text-gray-100">Sistema, avisos e segurança</span>
             <ChevronRight size={16} className="shrink-0 text-gray-400 transition-transform group-open:rotate-90" aria-hidden="true" />
           </summary>
           <div className="px-2 pb-2">
           <div className="space-y-1">
             <MenuItem iconName="search" label="Buscar e comandar" href="/search" colorClass="text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30" />
             <MenuItem iconName="bell" label="Central de Notificações" href="/notifications" colorClass="text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30" />
-            <MenuItem iconName="bell-ring" label="Personalizar alertas financeiros" href="/notification-center" colorClass="text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-900/20" />
+            <MenuItem iconName="bell-ring" label="Programar lembretes financeiros e fiscais" href="/notification-center" colorClass="text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-900/20" />
             <MenuItem iconName="sliders-horizontal" label="Central de Configurações" href="/settings" colorClass="text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-500/10" />
             <MenuItem iconName="settings" label="Aparência e opções rápidas" onClick={() => setShowSettingsModal(true)} colorClass="text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-700" />
             <MenuItem iconName="download" label="Exportar Dados" onClick={() => setShowExportModal(true)} colorClass="text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700" />
@@ -836,7 +837,7 @@ export default function MorePage() {
       </div>
 
       <div className="text-center pb-8 opacity-80 px-4">
-        <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500">DFL Finance • v4.0.0</p>
+        <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500">DFL Finance · Versão do Android em Atualizações</p>
         <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Desenvolvido com ♥ por <span className="font-semibold text-teal-600 dark:text-teal-400">Álefe Jôhsefe</span></p>
       </div>
     </div>

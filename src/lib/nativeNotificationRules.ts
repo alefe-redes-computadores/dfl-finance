@@ -1,7 +1,7 @@
 /** R457 — políticas puras do agendador financeiro. Sem I/O, tokens ou escrita financeira. */
 export const NOTIFICATION_KINDS = [
   'invoices', 'transactions', 'debts', 'financings',
-  'loans', 'subscriptions', 'goals',
+  'loans', 'subscriptions', 'goals', 'taxes',
 ] as const
 
 export type NotificationKind = typeof NOTIFICATION_KINDS[number]

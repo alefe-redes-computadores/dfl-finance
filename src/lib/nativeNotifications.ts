@@ -3,6 +3,7 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
 import { db } from '@/lib/db'
 import { reminderOccurrences, resolveNotificationRule, sameScheduledReminder, type NotificationRuleOverrides } from '@/lib/nativeNotificationRules'
+import { normalizeCommercialTaxProfiles, reminderDasCompetences, estimatedDasDue } from '@/lib/meiObligations'
 
 export const DFL_NOTIFICATION_CHANNEL_ID = 'dfl-financial-alerts'
 const DFL_NOTIFICATION_PRIVATE_CHANNEL_ID = 'dfl-financial-private-v1'
@@ -88,6 +89,7 @@ export interface NotificationCategoryPreferences {
   loans: boolean
   subscriptions: boolean
   goals: boolean
+  taxes: boolean
 }
 
 export interface NativeNotificationPreferences {
@@ -100,6 +102,7 @@ export interface NativeNotificationPreferences {
   notification_categories?: Partial<NotificationCategoryPreferences>
   notification_rules?: NotificationRuleOverrides
   notification_privacy?: 'private' | 'full'
+  commercial_tax_profiles?: unknown
 }
 
 interface ReminderCandidate {
@@ -120,6 +123,7 @@ const DEFAULT_CATEGORIES: NotificationCategoryPreferences = {
   loans: true,
   subscriptions: true,
   goals: true,
+  taxes: false,
 }
 
 export function normalizeNativeNotificationRoute(value: unknown) {
@@ -153,6 +157,7 @@ function enabled(
   preferences: NativeNotificationPreferences,
   category: keyof NotificationCategoryPreferences
 ) {
+  if (category === 'taxes') return preferences.notification_categories?.taxes === true
   return (
     preferences.notification_categories?.[category] ??
     DEFAULT_CATEGORIES[category]
@@ -432,6 +437,27 @@ async function collectReminderCandidates(
     }
   }
 
+  // R465: obrigações fiscais apenas para organização identificada manualmente
+  // como MEI e somente após consentimento explícito da categoria 'taxes'.
+  if (enabled(preferences, 'taxes')) {
+    const taxProfiles = normalizeCommercialTaxProfiles(preferences.commercial_tax_profiles)
+    for (const [organizationId, profile] of Object.entries(taxProfiles)) {
+      for (const competence of reminderDasCompetences(profile)) {
+        const dueDate = estimatedDasDue(competence)
+        if (!dueDate) continue
+        reminders.push({
+          key: `mei-das:${organizationId}:${competence}`,
+          title: 'DAS MEI · confirmar guia oficial',
+          body: `Competência ${competence}: confira a guia e informe o pagamento no Finance.`,
+          amount: 0, // valor real desconhecido: nunca estimar dívida ou emitir boleto
+          dueDate,
+          route: '/commercial/mei',
+          category: 'taxes',
+        })
+      }
+    }
+  }
+
   return reminders
 }
 
@@ -665,7 +691,7 @@ export async function syncNativeFinancialReminders(
       notification_lead_days: defaultLeadDays,
     })
     if (!overdueEnabled) rule.overdueEveryDays = 0
-    if (candidate.amount <= 0 || candidate.amount < rule.minimumAmount) continue
+    if (candidate.category !== 'taxes' && (candidate.amount <= 0 || candidate.amount < rule.minimumAmount)) continue
     for (const occurrence of reminderOccurrences(candidate.dueDate, rule, reference)) {
       append(
         candidate,

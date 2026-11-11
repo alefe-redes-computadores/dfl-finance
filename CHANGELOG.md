@@ -2,6 +2,16 @@
 
 Este histórico descreve **funcionalidades do código**, não garante que a pessoa usuária já tenha o APK correspondente. O número de build Android é o `run_number` da Action de publicação, não o valor histórico `0.1.0` de `package.json`.
 
+## R465 — Obrigações assistidas MEI e organização premium (candidata local)
+
+- Gestão comercial: enquadramento declarado pelo usuário, sem inferir MEI a partir do CNPJ.
+- DAS MEI: competências e vencimento-base estimado, baixa manual e link direto ao serviço oficial; nenhum débito é confirmado ou calculado junto à Receita.
+- DASN-SIMEI: atalho oficial com registro manual de envio.
+- Lembretes: opção fiscal independente, inicialmente desligada; o agendador Android usa a mesma privacidade, limites, consentimento e cancelamento já existentes.
+- Mais: hierarquia revisada e atalhos sem duplicar seções; Caixa de Notificações rola sem cabeçalho fixo excessivo.
+- Mantidos cálculo de saldos, lançamentos, Supabase financeiro, mensageria WhatsApp, assinatura APK e updater R464.
+- A instalação da R465 é a primeira candidata para homologar atualização nativa a partir da R464 instalada. É necessário testar no aparelho.
+
 ## R464 — Distribuição nativa e atualização consentida (candidata local)
 
 - GitHub Actions só publica APK direto no GitHub Releases após sucesso dos gates e da compilação assinada; o artefato histórico de Actions permanece disponível.

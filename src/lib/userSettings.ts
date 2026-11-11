@@ -2,6 +2,7 @@
 import { supabase } from '@/lib/supabase'
 import { normalizeProactiveHistory, type ProactiveHistoryEntry, type ProactiveFrequency } from '@/lib/proactiveObservations'
 import { normalizeNotificationRules, type NotificationRuleOverrides } from '@/lib/nativeNotificationRules'
+import { normalizeCommercialTaxProfiles, type CommercialTaxProfiles } from '@/lib/meiObligations'
 import { normalizePlanningGroups, normalizePlanningReserves, normalizePlanningFlexLimits, type PlanningGroupMap, type PlanningReserve } from '@/lib/financePlanning'
 
 export type ThemePreference = 'light' | 'dark'
@@ -29,6 +30,7 @@ export interface UserPreferences {
   notification_rules: NotificationRuleOverrides
   notification_privacy: 'private' | 'full'
   notification_onboarding_done: boolean
+  commercial_tax_profiles: CommercialTaxProfiles
   proactive_frequency: ProactiveFrequency
   proactive_android_enabled: boolean
   proactive_history: ProactiveHistoryEntry[]
@@ -40,6 +42,7 @@ export interface UserPreferences {
     loans: boolean
     subscriptions: boolean
     goals: boolean
+    taxes: boolean
   }
   email_summary: boolean
   language: 'pt-BR'
@@ -86,6 +89,7 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   notification_rules: {},
   notification_privacy: 'private',
   notification_onboarding_done: false,
+  commercial_tax_profiles: {},
   proactive_frequency: 'daily',
   proactive_android_enabled: false,
   proactive_history: [],
@@ -97,6 +101,7 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
     loans: true,
     subscriptions: true,
     goals: true,
+    taxes: false,
   },
   email_summary: false,
   language: 'pt-BR',
@@ -210,6 +215,7 @@ function normalizePreferences(value: unknown): UserPreferences {
     notification_rules: normalizeNotificationRules(raw.notification_rules),
     notification_privacy: raw.notification_privacy === 'full' ? 'full' : 'private',
     notification_onboarding_done: raw.notification_onboarding_done === true,
+    commercial_tax_profiles: normalizeCommercialTaxProfiles(raw.commercial_tax_profiles),
     proactive_frequency: raw.proactive_frequency === 'weekly' || raw.proactive_frequency === 'off' ? raw.proactive_frequency : 'daily',
     proactive_android_enabled: raw.proactive_android_enabled === true,
     proactive_history: normalizeProactiveHistory(raw.proactive_history),
@@ -220,6 +226,7 @@ function normalizePreferences(value: unknown): UserPreferences {
       !Array.isArray(raw.notification_categories)
         ? raw.notification_categories
         : {}),
+      taxes: (raw.notification_categories as Record<string, unknown> | undefined)?.taxes === true,
     },
     email_summary:
       typeof raw.email_summary === 'boolean'

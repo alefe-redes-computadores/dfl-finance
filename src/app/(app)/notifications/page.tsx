@@ -313,7 +313,7 @@ export default function NotificationsPage() {
       )}
 
       {/* HEADER UNIFICADO */}
-      <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
+      <div className="relative z-10 bg-[#f8f9fa]/92 dark:bg-slate-900/92 px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex items-center gap-2 min-w-0">
@@ -329,7 +329,7 @@ export default function NotificationsPage() {
                   Notificações
                 </h2>
                 <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
-                  Atualizações e alertas do app
+                  Avisos recebidos e histórico do app
                 </p>
               </div>
             </div>
@@ -384,6 +384,9 @@ export default function NotificationsPage() {
       </div>
 
       <div className="px-4 pt-3">
+        <div className="mb-3 rounded-[17px] border border-teal-500/20 bg-teal-500/5 px-3.5 py-3 text-[11px] leading-5 text-slate-600 dark:text-slate-300">
+          Aqui ficam as <strong>notificações recebidas</strong>. Para programar vencimentos financeiros e alertas de MEI, use as regras de lembretes abaixo.
+        </div>
         <NotificationPreferencesCard />
         {loading ? (
           <NotificationsSkeleton />

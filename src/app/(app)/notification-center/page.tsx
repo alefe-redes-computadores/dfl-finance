@@ -31,6 +31,7 @@ const kinds = [
   { id: 'loans', title: 'Empréstimos', subtitle: 'Compromissos não liquidados', Icon: WalletCards },
   { id: 'subscriptions', title: 'Assinaturas', subtitle: 'Cobranças recorrentes ativas', Icon: Repeat2 },
   { id: 'goals', title: 'Metas financeiras', subtitle: 'Prazos de objetivos ainda em andamento', Icon: Target },
+  { id: 'taxes', title: 'MEI · DAS mensal', subtitle: 'Competências MEI registradas e ainda sem confirmação manual', Icon: Landmark },
 ] as const
 
 const leadOptions = [30, 15, 7, 5, 3, 2, 1, 0]
@@ -55,6 +56,7 @@ export default function NotificationCenterSettingsPage() {
   const { light, success, error: hapticError } = useHapticFeedback()
   const [permission, setPermission] = useState<NativeNotificationPermissionState | null>(null)
   const [expanded, setExpanded] = useState<NotificationKind | null>('invoices')
+  const [reminderGroup, setReminderGroup] = useState<'financial' | 'fiscal'>('financial')
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
 
@@ -221,7 +223,19 @@ export default function NotificationCenterSettingsPage() {
         <p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Antecedências diferentes, repetição após o vencimento e valor mínimo por assunto. Toque na categoria para personalizar.</p>
       </div>
 
-      {kinds.map(({ id, title, subtitle, Icon }) => {
+      <nav aria-label="Tipos de lembretes" className="grid grid-cols-2 gap-2">
+        <button type="button" aria-pressed={reminderGroup === 'financial'}
+          onClick={() => { light(); setReminderGroup('financial'); setExpanded('invoices') }}
+          className={pill(reminderGroup === 'financial')}>Financeiros</button>
+        <button type="button" aria-pressed={reminderGroup === 'fiscal'}
+          onClick={() => { light(); setReminderGroup('fiscal'); setExpanded('taxes') }}
+          className={pill(reminderGroup === 'fiscal')}>Fiscais · MEI</button>
+      </nav>
+      {reminderGroup === 'fiscal' && <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-[11px] leading-5 text-slate-500 dark:text-slate-400">
+        Só agenda avisos se você confirmar o enquadramento MEI e a competência inicial na Gestão Comercial. Não confere débitos na Receita.
+      </p>}
+
+      {kinds.filter(item => reminderGroup === 'fiscal' ? item.id === 'taxes' : item.id !== 'taxes').map(({ id, title, subtitle, Icon }) => {
         const active = prefs?.notification_categories[id] !== false
         const open = expanded === id
         const rule = resolveNotificationRule(id, prefs || {})
@@ -267,7 +281,7 @@ export default function NotificationCenterSettingsPage() {
                 className={`${pill(rule.hour === hour)} shrink-0`} onClick={() => void updateRule(id, { hour })}>
                 {String(hour).padStart(2, '0')}:00</button>)}</div>
             </div>
-            <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/60">
+            {id !== 'taxes' && <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/60">
               <label htmlFor={`notification-min-${id}`} className="block text-[11px] font-bold">Valor mínimo para avisar (R$)</label>
               <p className="mt-1 text-[10px] leading-4 text-slate-500 dark:text-slate-400">Zero significa sem limite adicional. Faturas quitadas nunca geram lembretes.</p>
               <input key={`${id}:${rule.minimumAmount}`} id={`notification-min-${id}`} type="number" min="0" max="1000000" step="0.01" inputMode="decimal"
@@ -276,7 +290,7 @@ export default function NotificationCenterSettingsPage() {
                   const value = Number(event.currentTarget.value)
                   if (Number.isFinite(value) && value >= 0 && value !== rule.minimumAmount) void updateRule(id, { minimumAmount: value })
                 }} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13px] font-semibold outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800"/>
-            </div>
+            </div>}
           </div>}
         </section>
       })}
