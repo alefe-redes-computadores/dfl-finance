@@ -4,13 +4,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { App } from '@capacitor/app'
 import { Browser } from '@capacitor/browser'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, CheckCircle2, Download, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react'
+import { ArrowLeft, BellRing, CheckCircle2, Download, RefreshCw, ShieldCheck, Smartphone, XCircle } from 'lucide-react'
 import { useApkUpdate } from '@/hooks/useApkUpdate'
 import { APK_ACTIONS_URL, formatApkExpiry } from '@/lib/mobileUpdatePolicy'
 import { FINANCE_RELEASE_NOTES } from '@/lib/financeReleaseNotes'
 import { getNativeApkUpdater } from '@/lib/nativeApkUpdater'
 import type { ApkRelease } from '@/lib/mobileUpdatePolicy'
 import { fetchApkWorkflowHealth } from '@/lib/mobileUpdateService'
+import { apkUpdateAlertsEnabled, setApkUpdateAlertsEnabled, notifyApkUpdateOnce } from '@/lib/apkUpdateNotifications'
 import type { WorkflowHealth } from '@/lib/apkWorkflowDiagnostics'
 
 export default function AppUpdatesPage() {
@@ -20,6 +21,12 @@ export default function AppUpdatesPage() {
   const [workflowError, setWorkflowError] = useState(false)
   const [nativePhase, setNativePhase] = useState<'idle' | 'downloading' | 'verified' | 'installing' | 'permission' | 'error'>('idle')
   const [downloadPercent, setDownloadPercent] = useState(0)
+  const [downloadBytes, setDownloadBytes] = useState(0)
+  const [downloadCancelling, setDownloadCancelling] = useState(false)
+  const [updateAlertsEnabled, setUpdateAlertsEnabled] = useState(false)
+  const [updateAlertsBusy, setUpdateAlertsBusy] = useState(false)
+  const downloadBusyRef = useRef(false)
+  const cancelRequestedRef = useRef(false)
   const [nativeError, setNativeError] = useState('')
   // Somente a volta da tela de autorizacao pode retomar a instalacao.
   const permissionReturnRef = useRef<ApkRelease | null>(null)
@@ -32,6 +39,7 @@ export default function AppUpdatesPage() {
     } catch { setWorkflowError(true) }
   }, [])
   useEffect(() => { void checkWorkflow() }, [checkWorkflow])
+  useEffect(() => { setUpdateAlertsEnabled(apkUpdateAlertsEnabled()) }, [])
   const url = latest?.pageUrl || APK_ACTIONS_URL
   const open = () => {
     if (android) void Browser.open({ url })
@@ -62,24 +70,59 @@ export default function AppUpdatesPage() {
   const downloadAndInstall = async () => {
     const release = latest
     const native = getNativeApkUpdater()
-    if (!android || !native || !release?.direct || !updateAvailable || !['idle', 'error'].includes(nativePhase)) return
+    if (!android || !native || !release?.direct || !updateAvailable || !['idle', 'error'].includes(nativePhase) || downloadBusyRef.current) return
+    downloadBusyRef.current = true
+    cancelRequestedRef.current = false
+    setDownloadCancelling(false)
     setNativePhase('downloading')
     setNativeError('')
     setDownloadPercent(0)
+    setDownloadBytes(0)
     let handler: Awaited<ReturnType<typeof native.addListener>> | null = null
     try {
       handler = await native.addListener('downloadProgress', value => {
-        if (value.build === release.build) setDownloadPercent(Math.min(100, Math.max(0, value.percent)))
+        if (value.build !== release.build) return
+        setDownloadPercent(Math.min(100, Math.max(0, value.percent)))
+        setDownloadBytes(Math.min(release.direct!.bytes, Math.max(0, value.received)))
       })
+      if (cancelRequestedRef.current) throw new Error('Download cancelado.')
       const result = await native.downloadVerified({ build: release.build, sha256: release.direct.sha256, bytes: release.direct.bytes })
+      // Nao abrir instalador se o usuario pediu cancelamento na conclusao da transferencia.
+      if (cancelRequestedRef.current) throw new Error('Download cancelado.')
       if (!result.verified || result.build !== release.build) throw new Error('Arquivo não verificado pelo Android.')
+      setDownloadBytes(release.direct.bytes)
       setDownloadPercent(100)
       setNativePhase('verified')
       await installNow(release)
     } catch (error) {
       setNativePhase('error')
-      setNativeError(error instanceof Error ? error.message : 'Download não concluído.')
-    } finally { if (handler) await handler.remove().catch(() => undefined) }
+      setNativeError(cancelRequestedRef.current ? 'Download cancelado. Pode tentar novamente quando quiser.'
+        : error instanceof Error ? error.message : 'Download não concluído.')
+    } finally {
+      if (handler) await handler.remove().catch(() => undefined)
+      setDownloadCancelling(false)
+      downloadBusyRef.current = false
+    }
+  }
+
+  const cancelDownload = async () => {
+    const native = getNativeApkUpdater()
+    if (!native || !downloadBusyRef.current || cancelRequestedRef.current) return
+    cancelRequestedRef.current = true
+    setDownloadCancelling(true)
+    try { await native.cancelDownload() }
+    catch { setNativeError('Solicitação enviada. A transferência será encerrada quando a operação de rede responder.') }
+    // A conclusão da promise downloadVerified define o estado final e libera novo download.
+  }
+
+  const toggleUpdateAlerts = async () => {
+    if (updateAlertsBusy) return
+    setUpdateAlertsBusy(true)
+    try {
+      const next = await setApkUpdateAlertsEnabled(!updateAlertsEnabled)
+      setUpdateAlertsEnabled(next)
+      if (next && updateAvailable && latest) void notifyApkUpdateOnce(latest, installedBuild)
+    } finally { setUpdateAlertsBusy(false) }
   }
 
   const openInstallSettings = async () => {
@@ -177,11 +220,15 @@ export default function AppUpdatesPage() {
           </>
         )}
         {android && latest?.direct && updateAvailable && <div className="space-y-2">
-          {nativePhase === 'downloading' && <div role="status" aria-live="polite" className="space-y-1.5">
-            <p className="text-[12px] font-semibold text-teal-700 dark:text-teal-300">Baixando APK com segurança… {downloadPercent}%</p>
-            <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-              <div className="h-full rounded-full bg-teal-600 transition-[width]" style={{ width: `${downloadPercent}%` }} />
+          {nativePhase === 'downloading' && <div role="status" aria-live="polite" className="space-y-2 rounded-2xl border border-teal-500/20 bg-teal-500/[.04] p-3">
+            <div className="flex items-center justify-between gap-2 text-[12px] font-semibold text-teal-700 dark:text-teal-300">
+              <span>{downloadCancelling ? 'Cancelando download…' : 'Baixando APK verificado…'}</span><span className="tabular-nums">{downloadPercent}%</span>
             </div>
+            <div role="progressbar" aria-label="Download do APK" aria-valuenow={downloadPercent} aria-valuemin={0} aria-valuemax={100} className="h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+              <div className="h-full rounded-full bg-teal-600 transition-[width] motion-reduce:transition-none" style={{ width: `${downloadPercent}%` }} />
+            </div>
+            <p className="text-[11px] tabular-nums text-slate-600 dark:text-slate-300">{(downloadBytes / 1048576).toFixed(1).replace('.', ',')} de {(latest.direct.bytes / 1048576).toFixed(1).replace('.', ',')} MB</p>
+            <button type="button" onClick={() => void cancelDownload()} disabled={downloadCancelling} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 px-3 text-[12px] font-semibold text-slate-700 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200"><XCircle size={16}/>{downloadCancelling ? 'Cancelamento solicitado' : 'Cancelar download'}</button>
           </div>}
           {nativePhase === 'installing' && <p role="status" aria-live="polite" className="rounded-xl bg-teal-500/10 p-3 text-[12px] font-semibold text-teal-800 dark:text-teal-200">Conferindo o APK e abrindo o instalador do Android…</p>}
           {nativePhase === 'permission' && <div role="status" className="space-y-2 rounded-2xl bg-amber-50 p-3 text-[12px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
@@ -211,6 +258,14 @@ export default function AppUpdatesPage() {
         </button>
         {latest?.direct && <button type="button" onClick={open} className="w-full py-1 text-[11px] font-semibold text-slate-500 underline dark:text-slate-400">Alternativa: página de download da versão</button>}
       </section>
+
+      {android === true && <section aria-label="Alertas de novas versões" className="rounded-[22px] border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+        <button type="button" onClick={() => void toggleUpdateAlerts()} disabled={updateAlertsBusy} aria-pressed={updateAlertsEnabled} className="flex min-h-12 w-full items-center justify-between gap-3 text-left disabled:opacity-60">
+          <span className="flex items-center gap-2 text-[12px] font-bold text-slate-800 dark:text-slate-100"><BellRing size={18} className="text-teal-600"/> Avisar sobre novos APKs</span>
+          <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${updateAlertsEnabled ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>{updateAlertsBusy ? 'Verificando…' : updateAlertsEnabled ? 'Ativado' : 'Desativado'}</span>
+        </button>
+        <p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Opcional neste aparelho. Ao descobrir uma versão nova, o Finance envia um aviso local uma vez por build. Consulta ao abrir ou retomar o aplicativo; não é push remoto.</p>
+      </section>}
 
       <section aria-label="Diagnóstico das Actions" className="space-y-2 rounded-[22px] border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
         <h2 className="text-[13px] font-bold text-slate-900 dark:text-white">Última Action Android</h2>

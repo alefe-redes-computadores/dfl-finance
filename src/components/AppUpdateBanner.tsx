@@ -6,15 +6,20 @@ import { useRouter } from 'next/navigation'
 import { Download, Sparkles, X } from 'lucide-react'
 import { useApkUpdate } from '@/hooks/useApkUpdate'
 import { formatApkExpiry } from '@/lib/mobileUpdatePolicy'
+import { notifyApkUpdateOnce } from '@/lib/apkUpdateNotifications'
 
 const SNOOZE_HOURS = 12
 
 export default function AppUpdateBanner() {
-  const { latest, updateAvailable } = useApkUpdate()
+  const { latest, installedBuild, updateAvailable } = useApkUpdate()
   const pathname = usePathname()
   const router = useRouter()
   const [snoozed, setSnoozed] = useState(false)
   const latestBuild = latest?.build
+
+  useEffect(() => {
+    if (updateAvailable && latest?.direct) void notifyApkUpdateOnce(latest, installedBuild)
+  }, [latest, installedBuild, updateAvailable])
 
   useEffect(() => {
     if (!latestBuild) return

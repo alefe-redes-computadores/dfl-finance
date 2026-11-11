@@ -1,5 +1,13 @@
 # Histórico de versões — DFL Finance
 
+
+## R467 — Atualizações 360 (candidata local)
+
+- Avisos de novos APKs: opt-in explícito por aparelho, notificação local após descobrir release certificada, no máximo um aviso por build e destino `/updates`.
+- Barra de download detalha porcentagem e MB, com cancelamento nativo que descarta o parcial e impede iniciar instalação após cancelamento.
+- Mantidos: a R466 e seu retorno de permissão, o card da Home, instalação consentida, verificação SHA-256, packageId, versionCode e assinatura.
+- Sem alterações em banco, ledger, bot WhatsApp ou infraestrutura Supabase. APK depende de CI e teste no dispositivo.
+
 Este histórico descreve **funcionalidades do código**, não garante que a pessoa usuária já tenha o APK correspondente. O número de build Android é o `run_number` da Action de publicação, não o valor histórico `0.1.0` de `package.json`.
 
 ## R466 — Retomada inteligente do instalador e fluxo de permissão (candidata local)

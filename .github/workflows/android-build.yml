@@ -248,6 +248,11 @@ jobs:
           node scripts/check-r466-native-resume.mjs
           node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/nativeApkResumeR466.test.tsx
 
+      - name: R467 APK Update Alerts and Native Cancellation
+        run: |
+          node scripts/check-r467-updates.mjs
+          node node_modules/jest/bin/jest.js --config scripts/jest-r449-global.cjs --runInBand --runTestsByPath src/__tests__/apkUpdateAlertPolicyR467.test.ts
+
       - name: Generate canonical web icons
         run: npm run icons:generate
 

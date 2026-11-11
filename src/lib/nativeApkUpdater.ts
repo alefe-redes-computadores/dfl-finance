@@ -7,6 +7,7 @@ export type DflDownloadProgress = { build: number; received: number; total: numb
 export type DflInstallResult = { opened?: boolean; permissionRequired?: boolean }
 export type DflNativeApkUpdater = {
   downloadVerified(options: { build: number; sha256: string; bytes: number }): Promise<{ verified: boolean; build: number }>
+  cancelDownload(): Promise<{ requested: boolean }>
   installVerified(options: { build: number; sha256: string }): Promise<DflInstallResult>
   openInstallSettings(): Promise<void>
   addListener(eventName: 'downloadProgress', listener: (progress: DflDownloadProgress) => void): Promise<PluginListenerHandle>

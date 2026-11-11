@@ -41,6 +41,7 @@ public class DflApkUpdaterPlugin extends Plugin {
   private static final String DIR = "dfl-apk-updates";
   private static final ExecutorService POOL = Executors.newSingleThreadExecutor();
   private final AtomicBoolean downloading = new AtomicBoolean(false);
+  private final AtomicBoolean cancellationRequested = new AtomicBoolean(false);
 
   private int installedBuild() throws Exception {
     PackageInfo info = getContext().getPackageManager().getPackageInfo(getContext().getPackageName(), 0);
@@ -136,6 +137,7 @@ public class DflApkUpdaterPlugin extends Plugin {
       if (build <= installedBuild()) { call.reject("Esta versão já está instalada."); return; }
     } catch (Exception e) { call.reject("Não foi possível conferir a versão instalada."); return; }
     if (!downloading.compareAndSet(false, true)) { call.reject("Download já em andamento."); return; }
+    cancellationRequested.set(false);
 
     POOL.execute(() -> {
       File temp = null;
@@ -157,6 +159,7 @@ public class DflApkUpdaterPlugin extends Plugin {
              FileOutputStream output = new FileOutputStream(temp)) {
           byte[] buffer = new byte[65536]; int n;
           while ((n = input.read(buffer)) != -1) {
+            if (cancellationRequested.get()) throw new Exception("Download cancelado.");
             received += n;
             if (received > MAX_BYTES || received > bytes) throw new SecurityException("Tamanho excedido.");
             output.write(buffer, 0, n);
@@ -173,12 +176,15 @@ public class DflApkUpdaterPlugin extends Plugin {
           }
           output.getFD().sync();
         }
+        if (cancellationRequested.get()) throw new Exception("Download cancelado.");
         if (received != bytes || !hex(digest.digest()).equalsIgnoreCase(expected))
           throw new SecurityException("Falha na integridade SHA-256 do APK.");
         if (target.exists() && !target.delete()) throw new Exception("APK anterior não pôde ser substituído.");
+        if (cancellationRequested.get()) throw new Exception("Download cancelado.");
         if (!temp.renameTo(target)) throw new Exception("Falha ao finalizar download.");
         temp = null;
         verifyPackage(target, build);
+        if (cancellationRequested.get()) throw new Exception("Download cancelado.");
         getContext().getSharedPreferences(PREFS, 0).edit()
           .putInt("build", build).putString("sha256", expected.toLowerCase(Locale.ROOT))
           .putLong("size", bytes).apply();
@@ -191,8 +197,18 @@ public class DflApkUpdaterPlugin extends Plugin {
         if (connection != null) connection.disconnect();
         if (temp != null && temp.exists()) temp.delete();
         downloading.set(false);
+        cancellationRequested.set(false);
       }
     });
+  }
+
+  /** Interrompe leitura e descarta o .partial via finally, sem permitir instalacao. */
+  @PluginMethod
+  public void cancelDownload(PluginCall call) {
+    boolean active = downloading.get();
+    if (active) cancellationRequested.set(true);
+    JSObject response = new JSObject(); response.put("requested", active);
+    call.resolve(response);
   }
 
   @PluginMethod

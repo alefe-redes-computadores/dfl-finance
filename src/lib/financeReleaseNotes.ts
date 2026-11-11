@@ -7,6 +7,15 @@ export type FinanceReleaseNote = {
 
 export const FINANCE_RELEASE_NOTES: readonly FinanceReleaseNote[] = [
   {
+    version: 'R467',
+    title: 'Atualizações 360: avisos e download com controle',
+    changes: [
+      'Aviso Android opcional de nova versão certificada, uma vez por build e com acesso à Central de Atualizações.',
+      'Progresso em MB e porcentagem com cancelamento efetivo do download nativo.',
+      'Atualização automática, integridade SHA-256 e confirmação do Android preservadas.',
+    ],
+  },
+  {
     version: 'R466',
     title: 'Atualização do APK com retorno automático',
     changes: [
